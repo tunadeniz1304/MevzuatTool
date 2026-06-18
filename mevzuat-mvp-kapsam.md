@@ -10,6 +10,17 @@ Akış (özet):
 
 ---
 
+## Yaklaşım (RAG tipi)
+**vanilla RAG** — graph / agentic / advanced RAG değil. Sebep: MVP için en hızlı, en debug'lanabilir ve dockerize'ı en temiz yol; ileri teknikler future work'e bırakılır.
+
+Önemli: Bu MVP, vanilla RAG'ın **retrieval yarısını** kapsar (generation/LLM kuyruğu kapsam dışı). Ama "vanilla'yı doğru yapmak" iki şeyi şart koşar — ikisi de aşağıda var:
+- **madde-seviyesi yapısal chunking** (naive token chunking değil),
+- **hybrid retrieval** (dense + BM25) — hukuk metni terim/sayı yoğun olduğu için lexical eşleşme kritik.
+
+Bunlar "advanced RAG" değildir; sadece vanilla'nın doğru kurulmuş hâlidir.
+
+---
+
 ## Kapsam İçi (yapılacaklar)
 
 **1. Veri çekme (data acquisition)**
