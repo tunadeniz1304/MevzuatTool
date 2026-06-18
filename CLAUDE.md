@@ -10,6 +10,7 @@ mevzuat.gov.tr mevzuatını (kanun, KHK, tüzük, yönetmelik, tebliğ) `mevzuat
 
 ## En kritik sınır — UNUTMA
 - **Pipeline retrieval'da BİTER.** LLM / cevap üretme (generation) **KAPSAM DIŞI.** Generation, en sonda config'le takılan, OpenAI-uyumlu, swap'lanabilir bir endpoint olarak bırakılır — build buna bağımlı değildir.
+- **Yaklaşım = vanilla RAG.** Graph/agentic/advanced RAG **YAPMA** (future work). Bu MVP, vanilla RAG'ın retrieval yarısı. Doğru vanilla = madde-seviyesi yapısal chunking + hybrid (dense+BM25); bunlar "advanced" değil.
 - Yeni bir özellik eklemeden önce **mutlaka** [`compliance.md`](compliance.md) "Kapsam Dışı" listesine bak. Listeye takılıyorsa **yapma**.
 
 ## Değişmez mimari ilkeler

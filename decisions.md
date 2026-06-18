@@ -13,6 +13,12 @@ Güncel mimari görünümü: [`arch.md`](arch.md). Kapsam: [`mevzuat-mvp-kapsam.
 - **Karar:** Pipeline yalnızca retrieval'a kadar kurulur. Generation, en sonda config'le takılan, OpenAI-uyumlu, swap'lanabilir bir endpoint olarak bırakılır.
 - **Sonuç:** Build, LLM kararından bağımsız kalır; modüler sınır korunur.
 
+## ADR-0010 — RAG tipi: vanilla RAG (graph/agentic/advanced değil)
+- **Durum:** Kabul edildi
+- **Bağlam:** RAG'ın birçok varyantı var (graph RAG, agentic RAG, advanced RAG). MVP için en hızlı, en debug'lanabilir ve dockerize'ı en temiz yaklaşım gerekiyor.
+- **Karar:** **Vanilla RAG** kullanılır; graph/agentic/advanced RAG **yapılmaz** (future work). Bu MVP, vanilla RAG'ın yalnız **retrieval yarısını** kapsar.
+- **Sonuç:** "Vanilla'yı doğru yapmak" iki şeyi şart koşar (ikisi de zaten kapsamda): madde-seviyesi yapısal chunking (ADR-0004) ve hybrid retrieval dense+BM25 (ADR-0006). Bunlar advanced RAG değil, vanilla'nın doğru kurulmuş hâlidir.
+
 ## ADR-0002 — Veri kaynağı: mevzuat-mcp API (scraper yok)
 - **Durum:** Kabul edildi
 - **Bağlam:** mevzuat.gov.tr içeriğine erişim için ya scraper yazılır ya hazır API kullanılır.

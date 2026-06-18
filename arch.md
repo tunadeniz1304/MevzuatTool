@@ -55,6 +55,7 @@ mevzuat.gov.tr → mevzuat-mcp API → [yapısal chunker] → [metadata zenginle
 3. **Yürürlük durumu birinci sınıf.** Mülga/yürürlükte ayrımı metadata'da taşınır ve filtrelenebilir.
 4. **Yapı korunur.** Madde/fıkra hiyerarşisi chunk ve metadata boyunca kaybolmaz; naive chunking yok.
 5. **Önce çalıştır, sonra ölçekle.** Dar korpusla uçtan uca çalış, sonra genişlet.
+6. **Vanilla RAG.** Yaklaşım kasıtlı olarak vanilla RAG'tır; graph/agentic/advanced değil. İleri teknikler future work.
 
 ---
 
@@ -62,6 +63,7 @@ mevzuat.gov.tr → mevzuat-mcp API → [yapısal chunker] → [metadata zenginle
 
 | Konu | Seçim | Durum |
 |---|---|---|
+| Yaklaşım (RAG tipi) | vanilla RAG (graph/agentic değil) | ✅ karar |
 | Veri kaynağı | `saidsurucu/mevzuat-mcp` API | ✅ karar |
 | Dil/runtime | Python (varsayılan) | 🟡 örtük varsayım |
 | Embedding | BGE-M3 (aday) | 🟡 öneri |
