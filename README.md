@@ -38,6 +38,7 @@ Detay: [`mevzuat-mvp-kapsam.md`](mevzuat-mvp-kapsam.md).
 | [`CLAUDE.md`](CLAUDE.md) | AI ajan / katkı sağlayıcı için proje hafızası |
 
 ## Teknoloji (planlanan)
+Yaklaşım: **vanilla RAG** (graph/agentic değil), retrieval yarısı.
 Python · `saidsurucu/mevzuat-mcp` · embedding (aday: BGE-M3) · vektör store (Qdrant veya pgvector) · hybrid arama (dense + BM25) · Docker Compose.
 
 ## Kurulum

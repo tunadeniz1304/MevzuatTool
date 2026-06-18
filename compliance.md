@@ -56,7 +56,7 @@ Bu dosya, yapılan her işin [`mevzuat-mvp-kapsam.md`](mevzuat-mvp-kapsam.md) il
 Aşağıdakilerden **herhangi biri** projede iş olarak yapılıyorsa, kapsam ihlali var demektir:
 
 - [ ] 🚫 LLM ile **cevap üretme (generation)** kodlandı mı? → Pipeline retrieval'da bitmeli. (LLM yalnızca en sonda config'le takılan swap'lanabilir endpoint)
-- [ ] 🚫 GraphRAG / atıf grafı, bitemporal versiyonlama, multi-representation index, fine-tuned embedder, RAPTOR gibi ileri RAG teknikleri eklendi mi? → future work
+- [ ] 🚫 GraphRAG / **agentic RAG** / advanced RAG teknikleri (atıf grafı, bitemporal versiyonlama, multi-representation index, fine-tuned embedder, RAPTOR) eklendi mi? → Yaklaşım **vanilla RAG**'tır; bunlar future work.
 - [ ] 🚫 Formal eval / benchmark harness kuruldu mu? → küçük sanity kontrolü hariç, future work
 - [ ] 🚫 PDF / OCR işleme eklendi mi? → kapsam dışı
 - [ ] 🚫 İçtihat / özelge (`yargi-mcp`: Yargıtay, Danıştay, GİB) işleniyor mu? → bu MVP dışı
