@@ -1,0 +1,88 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+develop-eggs/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# ---- Sanal ortamlar ----
+.venv/
+venv/
+env/
+ENV/
+.python-version
+
+# ---- Ortam / gizli ----
+.env
+.env.*
+!.env.example
+*.secret
+secrets/
+
+# ---- Test / tip / lint cache ----
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+
+# ---- Notebooks ----
+.ipynb_checkpoints/
+
+# ---- RAG / veri artifact'leri (versiyonlanmaz) ----
+data/
+raw/
+corpus/*.jsonl
+!corpus/sample.jsonl
+*.parquet
+*.duckdb
+
+# ---- Modeller / embedding cache ----
+models/
+*.bin
+*.gguf
+*.safetensors
+.cache/
+.hf_cache/
+huggingface/
+
+# ---- Vektör store / DB volume'leri ----
+qdrant_storage/
+pgdata/
+*.sqlite
+*.sqlite3
+*.db
+
+# ---- Loglar ----
+*.log
+logs/
+
+# ---- Docker ----
+.docker/
+docker-compose.override.yml
+
+# ---- IDE / OS ----
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
