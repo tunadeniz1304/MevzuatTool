@@ -42,9 +42,20 @@ Fazlar: [`roadmap.md`](roadmap.md) · Kapsam uygunluğu: [`compliance.md`](compl
 
 ## Faz 1 — Veri Çekme 🟡
 - [x] `mevzuat-mcp` entegrasyonu: yerel server + MCP client (ADR-0012) — smoke test ✓
-- [ ] Yapısal eksenler listelendi + örnek başına kapsama (coverage) işaret tablosu oluşturuldu
-- [ ] Başlangıç korpusu seçildi: **yapısal eksen kapsamasına göre** küçük set (~5-8, tür-içi varyasyon dahil) (bkz. decisions.md ADR-0011)
-- [ ] `search_mevzuat → madde_tree → content` akışı çalışıyor (MCP client)
+- [x] Yapısal eksenler listelendi + kapsama (coverage) işaret tablosu oluşturuldu ↓
+- [x] Başlangıç korpusu seçildi: 5 belgelik yapısal-çeşitlilik seti (bkz. decisions.md ADR-0011)
+- [ ] `search_mevzuat` ✓ → `get_mevzuat_madde_tree` ✓ → `get_mevzuat_content` (henüz) — MCP client
+
+### Başlangıç korpusu — seçilen set + kapsama tablosu (2026-06-19)
+| Belge | mevzuatId | Yapı / kapsanan eksen | Düğüm |
+|---|---|---|---|
+| Türk Ceza Kanunu 5237 | 103228 | Derin hiyerarşi (Kitap/Kısım/Bölüm) | 397 |
+| Vergi Usul Kanunu 213 | 103006 | Karışık + dev + çok-değişiklikli (serbest madde + Kitap) | 691 |
+| KVKK 6698 | 104383 | Düz kanun (sadece Bölüm) | 41 |
+| İthalatta Gözetim Tebliği | 350781 | **Ağaç YOK** → content-only edge-case | 0 |
+| Kültür Bak. Yayın Yönetmeliği | 352791 | Düz yönetmelik (KKY) | 26 |
+
+> Doğrulanacak eksenler (ağaçta görünmez, content'te): mülga · ek/mükerrer madde · değişiklik şerhi · 5/A numaralandırma · tablo/EK. → `get_mevzuat_content` çekilince (özellikle VUK).
 - [ ] PDF içerik atlama mantığı
 - [ ] Ham çıktı kaydı
 
