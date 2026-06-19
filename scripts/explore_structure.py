@@ -22,13 +22,13 @@ from mcp.client.stdio import stdio_client
 SERVER_CMD = "mevzuat-mcp"
 OUT_DIR = os.path.join("data", "raw")
 
-# (etiket, search_mevzuat argümanları) — yapısal çeşitliliği hedefleyen adaylar
+# (etiket, search_mevzuat argümanları) — yapısal çeşitliliği hedefleyen KANUN adayları.
+# Kapsam yalnız KANUN (ADR-0013): tüm adaylarda mevzuat_tur="KANUN".
 CANDIDATES = [
     ("Türk Ceza Kanunu 5237 (büyük kodifikasyon)", {"mevzuat_no": "5237", "mevzuat_tur": "KANUN", "page_size": 5}),
     ("Vergi Usul Kanunu 213 (çok değişiklikli/mülga)", {"mevzuat_no": "213", "mevzuat_tur": "KANUN", "page_size": 5}),
     ("KVKK 6698 (modern, orta boy)", {"mevzuat_no": "6698", "mevzuat_tur": "KANUN", "page_size": 5}),
-    ("Bir tebliğ (TEBLIGLER)", {"phrase": "vergi", "mevzuat_tur": "TEBLIGLER", "page_size": 5}),
-    ("Bir kurum yönetmeliği (KKY)", {"phrase": "yönetmelik", "mevzuat_tur": "KKY", "page_size": 5}),
+    ("Gelir Vergisi Kanunu 193 (eski; '1.' fıkra stili)", {"mevzuat_no": "193", "mevzuat_tur": "KANUN", "page_size": 5}),
 ]
 
 # Yapısal eksen ipuçları (ham ağaç metninde, büyük harf Türkçe biçimde aranır)
