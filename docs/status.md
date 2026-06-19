@@ -15,7 +15,7 @@ Fazlar: [`roadmap.md`](roadmap.md) · Kapsam uygunluğu: [`compliance.md`](compl
 |---|---|---|
 | 0 | Kurulum & Yönetişim | 🟡 |
 | 1 | Veri Çekme (data acquisition) | 🟡 |
-| 2 | Yapısal Chunking | ⬜ |
+| 2 | Yapısal Chunking | 🟡 |
 | 3 | Metadata | ⬜ |
 | 4 | Temiz Korpus Artifact | ⬜ |
 | 5 | Embedding + Indexleme | ⬜ |
@@ -61,10 +61,30 @@ Fazlar: [`roadmap.md`](roadmap.md) · Kapsam uygunluğu: [`compliance.md`](compl
 - [ ] PDF içerik atlama mantığı
 - [ ] Ham çıktı kaydı
 
-## Faz 2 — Yapısal Chunking ⬜
-- [ ] Madde bazlı atomik chunk üretimi
-- [ ] Uzun madde → fıkra bölme
-- [ ] Hiyerarşi (`kanun→...→madde→fıkra→bent`) korunuyor
+## Faz 2 — Yapısal Chunking 🟡 (chunker parçaları kuruldu; birleştirme → Faz 4)
+Plan: `docs/superpowers/plans/2026-06-19-structural-chunking.md` · branch `phase-2/structural-chunking` (lokal) · TDD, 5 task, 5/5 test ✓.
+- [x] `normalize_text` — satır kırığı birleştir + tire tek tip
+- [x] `split_articles` — esnek `Madde/MADDE N-` regex (madde bazlı chunk)
+- [x] `split_fikralar` — `(N)` fıkra bölme
+- [x] `extract_status` — `(Mülga: …)` → yürürlük durumu (ADR-0005)
+- [x] `count_tree_articles` + `scripts/eval_chunker.py` — ağaca karşı ground-truth eval
+- [ ] **Birleştirme (assembly):** `split_articles`→fıkra→status'u tek `{id,text,metadata}` chunk'ta toplama → **Faz 4** (parçalar henüz birbirini çağırmıyor)
+- [ ] Hiyerarşi-path (Kitap/Kısım/Bölüm) — MVP'de yok (YAGNI)
+
+### Eval sonucu (chunker madde sayısı vs ağaç ground-truth)
+| Belge | chunker | tree | fark |
+|---|---|---|---|
+| TCK | 345 | 345 | 0 ✓ |
+| KKY | 22 | 22 | 0 ✓ |
+| KVKK | 36 | 33 | +3 |
+| VUK | 480 | 564 | −84 |
+
+> Kök neden (opus final review): **KVKK +3** = `GEÇİCİ MADDE 1-` yanlış-pozitifi (no çakışması); **VUK −84** = prefix/suffix maddeler (Mükerrer/Ek/Geçici, `257/A`) tekil kimlik alamıyor. Tebliğ 350781 ağaçsız → tree-eval dışı (doğru).
+
+### Faz 2 future-work (öncelik sırası)
+1. **Prefix/suffix madde desteği** (Mükerrer/Ek/Geçici Madde, `N/A`) → VUK −84 + KVKK +3'ü birden kapatır.
+2. Birleştirme + metadata → JSONL `{id,text,metadata}` (Faz 4 ile).
+3. Fıkra `(1)`boşluksuz; serbest-metin mülga tespiti; edge-case testleri; eval'e 5. belge.
 
 ## Faz 3 — Metadata ⬜
 - [ ] Temel metadata alanları (ad/no/tür/madde/başlık/fıkra/path/kaynak/R.G.)
