@@ -90,3 +90,6 @@ Thumbs.db
 # ---- Yerel kişisel öğrenme/işleyiş dosyaları (versiyonlanmaz) ----
 progress.md
 UserProgress.md
+
+# ---- Yerel araştırma çıktıları (versiyonlanmaz) ----
+research_outputs/
