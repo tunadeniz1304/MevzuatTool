@@ -25,7 +25,8 @@ Akış:
 ### Faz 1 — Veri Çekme (data acquisition)
 **Hedef:** `saidsurucu/mevzuat-mcp` API'leri üzerinden yapısal içerik çekme.
 - `search_mevzuat → get_mevzuat_madde_tree → get_mevzuat_content` akışı (MCP client olarak; bkz. decisions.md ADR-0012)
-- Dar başlangıç korpusu: türe göre değil **yapısal eksen kapsamasına göre** seçilen küçük set (tür-içi varyasyon dahil, ~5-8 belge) — chunker robustluğu için (bkz. decisions.md ADR-0011)
+- **Yalnızca `KANUN` türü** (`mevzuat_tur=KANUN`); KHK/tüzük/yönetmelik/tebliğ kapsam dışı (ADR-0013)
+- Dar başlangıç korpusu: **kanunlar arasından** yapısal eksen kapsamasına göre seçilen küçük set (tür-içi varyasyon dahil, ~3-5 kanun) — chunker robustluğu için (bkz. decisions.md ADR-0011)
 - Sadece HTML/Markdown içerik; PDF olanlar atlanır
 - Web scraper **yazılmaz** — repo API'leri kullanılır
 **Çıktı:** Ham, yapısal mevzuat içeriği (kaynak madde ağacı + Markdown).
@@ -83,6 +84,7 @@ Akış:
 - Formal eval / benchmark harness (küçük sanity kontrolü hariç)
 - PDF / OCR içerik
 - İçtihat / özelge (`yargi-mcp` alanı)
+- Kanun dışı mevzuat türleri (KHK, tüzük, yönetmelik, tebliğ) — bu MVP yalnız KANUN
 
 ## Definition of Done (MVP)
 Bir sorguyu (atıf veya doğal dil) alıp **ilgili yürürlükteki mevzuat maddelerini** döndüren, dockerize edilmiş bir tool — altında temiz, chunk'lanmış + indexlenmiş korpus.

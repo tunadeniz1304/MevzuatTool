@@ -66,6 +66,7 @@ mevzuat.gov.tr → mevzuat-mcp API → [yapısal chunker] → [metadata zenginle
 |---|---|---|
 | Yaklaşım (RAG tipi) | vanilla RAG (graph/agentic değil) | ✅ karar |
 | Veri kaynağı | `saidsurucu/mevzuat-mcp` (mevzuat.gov.tr + bedesten) | ✅ karar |
+| Kapsam (tür) | yalnız `KANUN` (ADR-0013) | ✅ karar |
 | mevzuat-mcp erişimi | yerel MCP server + MCP client (ADR-0012) | ✅ karar |
 | Dil/runtime | Python (varsayılan) | 🟡 örtük varsayım |
 | Embedding | BGE-M3 (aday) | 🟡 öneri |
