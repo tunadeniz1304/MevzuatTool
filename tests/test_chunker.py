@@ -19,3 +19,16 @@ def test_detects_mulga_else_yururlukte():
     assert extract_status("(Mülga: 1/1/2020-1234 md.) ...") == "mülga"
     assert extract_status("(Değişik: ...) hüküm") == "yürürlükte"
     assert extract_status("normal hüküm") == "yürürlükte"
+
+
+def test_prefix_and_suffix_maddeler_get_unique_no():
+    text = (
+        "Madde 1- (1) Asıl. "
+        "GEÇİCİ MADDE 1- (1) Geçici. "
+        "Ek Madde 2- (1) Ek. "
+        "Mükerrer Madde 257- (1) Mük. "
+        "Madde 257/A- (1) Suffix."
+    )
+    nos = [a.no for a in split_articles(text)]
+    assert nos == ["1", "Geçici 1", "Ek 2", "Mükerrer 257", "257/A"]
+    assert len(nos) == len(set(nos))  # benzersiz, çakışma yok

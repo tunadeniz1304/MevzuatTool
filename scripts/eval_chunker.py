@@ -13,6 +13,7 @@ PAIRS = {"TCK": "103228", "VUK": "103006", "KVKK": "104383", "KKY": "352791"}
 for label, mid in PAIRS.items():
     content = pathlib.Path(f"data/raw/content_{mid}.md").read_text(encoding="utf-8")
     tree = pathlib.Path(f"data/raw/tree_{mid}.txt").read_text(encoding="utf-8")
-    got = len(split_articles(normalize_text(content)))
+    nos = [a.no for a in split_articles(normalize_text(content))]
+    got, uniq = len(nos), len(set(nos))
     exp = count_tree_articles(tree)
-    print(f"{label}: chunker={got} tree={exp} fark={got - exp}")
+    print(f"{label}: chunker={got} unique={uniq} tree={exp} fark={got - exp} dup={got - uniq}")
