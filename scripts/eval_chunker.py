@@ -1,0 +1,18 @@
+"""Chunker'ı 4 ağaçlı örnekte ağaç madde sayısına karşı skorla (ADR-0011 ground-truth)."""
+import pathlib
+import sys
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent / "src"))
+
+from mevzuat_tool.normalize import normalize_text
+from mevzuat_tool.chunker import split_articles
+from mevzuat_tool.eval_tree import count_tree_articles
+
+PAIRS = {"TCK": "103228", "VUK": "103006", "KVKK": "104383", "KKY": "352791"}
+
+for label, mid in PAIRS.items():
+    content = pathlib.Path(f"data/raw/content_{mid}.md").read_text(encoding="utf-8")
+    tree = pathlib.Path(f"data/raw/tree_{mid}.txt").read_text(encoding="utf-8")
+    got = len(split_articles(normalize_text(content)))
+    exp = count_tree_articles(tree)
+    print(f"{label}: chunker={got} tree={exp} fark={got - exp}")
