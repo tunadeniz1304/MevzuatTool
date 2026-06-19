@@ -42,7 +42,7 @@ Fazlar: [`roadmap.md`](roadmap.md) · Kapsam uygunluğu: [`compliance.md`](compl
 
 ## Faz 1 — Veri Çekme ⬜
 - [ ] `mevzuat-mcp` entegrasyonu / istemci
-- [ ] Başlangıç korpusu seçimi (tek alan / sınırlı kanun seti) belirlendi
+- [ ] Başlangıç korpusu seçildi: **yapısal çeşitlilik içeren küçük örnek seti** (tek kanun değil — kodifikasyon/yönetmelik/tebliğ/mülga karışık)
 - [ ] `search_mevzuat → article_tree → article_content` akışı çalışıyor
 - [ ] PDF içerik atlama mantığı
 - [ ] Ham çıktı kaydı

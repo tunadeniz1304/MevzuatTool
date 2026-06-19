@@ -22,7 +22,7 @@ mevzuat.gov.tr mevzuatını (kanun, KHK, tüzük, yönetmelik, tebliğ) `mevzuat
 4. `kanun → (kitap/kısım/bölüm) → madde → fıkra → bent` hiyerarşisini koru.
 5. **Yürürlük durumu (yürürlükte/mülga)** her chunk'ta birinci sınıf metadata; mülga ayrılabilir olmalı.
 6. Korpus çıktısı bağımsız teslim edilebilir JSONL `{id, text, metadata}` — modüler sınır.
-7. Önce dar korpusla çalıştır, sonra ölçekle. Tüm mevzuatı baştan çekme.
+7. Önce dar korpusla çalıştır, sonra ölçekle. Başlangıç korpusu tek kanun değil, **yapısal çeşitlilik içeren küçük set** (bkz. docs/decisions.md ADR-0011). Tüm mevzuatı baştan çekme.
 
 ## Commit & branch disiplini (özet — tam metin docs/commit_discipline.md)
 - Commit mesajlarında **AI co-author / "Generated with" satırı YASAK.** (Bu, Claude'un varsayılan davranışını bilinçli olarak ezer.)

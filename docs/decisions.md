@@ -49,6 +49,12 @@ Güncel mimari görünümü: [`arch.md`](arch.md). Kapsam: [`mevzuat-mvp-kapsam.
 - **Karar:** Dense (embedding) + sparse (BM25) hybrid retrieval kullanılır.
 - **Sonuç:** Hem doğal dil hem atıf-ağırlıklı sorgularda recall/precision dengesi.
 
+## ADR-0011 — Başlangıç korpusu = yapısal çeşitlilik içeren küçük set
+- **Durum:** Kabul edildi
+- **Bağlam:** Mevzuat tek tip değil: derin hiyerarşili kodifikasyonlar (kitap/kısım/bölüm), düz yönetmelik/tebliğler, ek/geçici maddeler, mülga hükümler, farklı madde numaralandırmaları (5/A, 5/1-a). Chunker tek bir kanuna göre yazılırsa farklı yapıdaki bir sonraki kanunda kırılır.
+- **Karar:** Başlangıç korpusu tek kanun DEĞİL; yapısal çeşitliliği temsil eden **küçük bir örnek seti** (ör. 1 büyük kodifikasyon + 1 düz yönetmelik + 1 tebliğ + ek/geçici/mülga madde içeren örnek). "Önce çalıştır, sonra ölçekle" bozulmaz — az ama temsil edici.
+- **Sonuç:** Chunker (ADR-0004) ve metadata (ADR-0005) çeşitliliğe karşı baştan test edilir; robustluk erken doğrulanır.
+
 ---
 
 ## Açık Kararlar (karar bekliyor)
