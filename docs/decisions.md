@@ -56,6 +56,7 @@ Güncel mimari görünümü: [`arch.md`](arch.md). Kapsam: [`mevzuat-mvp-kapsam.
   - **Yapısal eksenler:** (1) hiyerarşi derinliği [düz ↔ kitap/kısım/bölüm], (2) madde içi yapı [paragraf ↔ fıkra ↔ bent listesi], (3) geçici/ek madde [var/yok], (4) mülga hüküm [var/yok], (5) değişiklik şerhleri [(Değişik/Ek/Mülga: …)], (6) numaralandırma [normal / 5/A / mükerrer], (7) tablo/EK/form [var/yok].
   - Her örneğin hangi eksenleri kapsadığı bir **işaret (coverage) tablosu**nda tutulur → kapsama ve boşluk (örneklenmemiş eksen) görünür olur.
 - **Sonuç:** Chunker (ADR-0004) ve metadata (ADR-0005) yapısal çeşitliliğe karşı baştan, az ama temsil edici örnekle test edilir; robustluk ve kapsam boşlukları erken görülür.
+- **Uygulama (2026-06-19):** Seçilen 5 belge — TCK 5237, VUK 213, KVKK 6698, bir tebliğ (ağaç yok), bir KKY yönetmeliği. Kapsama tablosu → status.md. **Yeni eksen keşfi:** bazı mevzuatın madde-ağacı YOK (kısa tebliğ) → o belgelerde `get_mevzuat_content`-only parse gerekir. Ayrıca mülga/ek/mükerrer işaretleri ağaçta değil **content metninde** taşınır (Faz 3 girdisi).
 
 ## ADR-0012 — mevzuat-mcp entegrasyonu: yerel MCP server + MCP client
 - **Durum:** Kabul edildi
