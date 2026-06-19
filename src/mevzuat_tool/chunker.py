@@ -23,3 +23,7 @@ def split_articles(text: str) -> list[Article]:
 def split_fikralar(body: str) -> list[str]:
     parts = re.split(r"(?=\(\d+\)\s)", body.strip())
     return [p.strip() for p in parts if p.strip()]
+
+
+def extract_status(body: str) -> str:
+    return "mülga" if re.search(r"(?i)\(\s*mülga", body) else "yürürlükte"
