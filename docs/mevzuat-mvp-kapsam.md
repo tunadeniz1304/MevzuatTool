@@ -24,7 +24,7 @@ Bunlar "advanced RAG" değildir; sadece vanilla'nın doğru kurulmuş hâlidir.
 ## Kapsam İçi (yapılacaklar)
 
 **1. Veri çekme (data acquisition)**
-- Kaynak: mevzuat.gov.tr, `saidsurucu/mevzuat-mcp` API üzerinden (`search_mevzuat` → `get_mevzuat_article_tree` → `get_mevzuat_article_content`, Markdown çıktı).
+- Kaynak: mevzuat.gov.tr / bedesten.adalet.gov.tr, `saidsurucu/mevzuat-mcp` üzerinden (`search_mevzuat` → `get_mevzuat_madde_tree` → `get_mevzuat_content`, Markdown çıktı). mevzuat-mcp bir **MCP server**'dır; yerelde server koşulur, pipeline ona **MCP client** olarak bağlanır (bkz. decisions.md ADR-0012).
 - Web scraper yazılmaz — repo'nun API'leri kullanılır.
 - Sadece HTML/Markdown gelen içerik. PDF olanlar (ör. çoğu Cumhurbaşkanı kararı) atlanır.
 - Başlangıçta dar bir korpus (seçilmiş tek bir alan / sınırlı kanun seti), tüm mevzuat değil. Önce çalıştır, sonra ölçekle.

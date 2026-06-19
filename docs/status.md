@@ -41,10 +41,10 @@ Fazlar: [`roadmap.md`](roadmap.md) · Kapsam uygunluğu: [`compliance.md`](compl
 - [ ] Python proje iskeleti (paket yapısı, bağımlılık yönetimi) — *Faz 1 öncesi*
 
 ## Faz 1 — Veri Çekme ⬜
-- [ ] `mevzuat-mcp` entegrasyonu / istemci
+- [ ] `mevzuat-mcp` entegrasyonu: yerel server + MCP client (ADR-0012)
 - [ ] Yapısal eksenler listelendi + örnek başına kapsama (coverage) işaret tablosu oluşturuldu
 - [ ] Başlangıç korpusu seçildi: **yapısal eksen kapsamasına göre** küçük set (~5-8, tür-içi varyasyon dahil) (bkz. decisions.md ADR-0011)
-- [ ] `search_mevzuat → article_tree → article_content` akışı çalışıyor
+- [ ] `search_mevzuat → madde_tree → content` akışı çalışıyor (MCP client)
 - [ ] PDF içerik atlama mantığı
 - [ ] Ham çıktı kaydı
 

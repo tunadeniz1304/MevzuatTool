@@ -24,7 +24,7 @@ Akış:
 
 ### Faz 1 — Veri Çekme (data acquisition)
 **Hedef:** `saidsurucu/mevzuat-mcp` API'leri üzerinden yapısal içerik çekme.
-- `search_mevzuat → get_mevzuat_article_tree → get_mevzuat_article_content` akışı
+- `search_mevzuat → get_mevzuat_madde_tree → get_mevzuat_content` akışı (MCP client olarak; bkz. decisions.md ADR-0012)
 - Dar başlangıç korpusu: türe göre değil **yapısal eksen kapsamasına göre** seçilen küçük set (tür-içi varyasyon dahil, ~5-8 belge) — chunker robustluğu için (bkz. decisions.md ADR-0011)
 - Sadece HTML/Markdown içerik; PDF olanlar atlanır
 - Web scraper **yazılmaz** — repo API'leri kullanılır
