@@ -4,6 +4,8 @@ Kaynak kapsam: [`mevzuat-mvp-kapsam.md`](mevzuat-mvp-kapsam.md).
 Bu dosya kapsamı **fazlara** böler. İlerleme takibi: [`status.md`](status.md).
 
 > **Temel ilke:** Pipeline yalnızca **retrieval'a kadar** kurulur. Generation (LLM) kapsam dışıdır; en sonda config'le takılan, swap'lanabilir bir endpoint'tir.
+>
+> **Yaklaşım:** vanilla RAG (graph/agentic/advanced değil) — MVP için en hızlı, debug'lanabilir ve temiz dockerize edilen yol. İleri teknikler future work. Doğru vanilla = madde-seviyesi chunking + hybrid (dense+BM25).
 
 Akış:
 `mevzuat-mcp ile çek → madde chunk + metadata → temiz korpus → embed + index → sorgu/retrieve` → (sonra LLM, kapsam dışı)
