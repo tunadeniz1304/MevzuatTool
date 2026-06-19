@@ -71,20 +71,23 @@ Plan: `docs/superpowers/plans/2026-06-19-structural-chunking.md` · branch `phas
 - [ ] **Birleştirme (assembly):** `split_articles`→fıkra→status'u tek `{id,text,metadata}` chunk'ta toplama → **Faz 4** (parçalar henüz birbirini çağırmıyor)
 - [ ] Hiyerarşi-path (Kitap/Kısım/Bölüm) — MVP'de yok (YAGNI)
 
-### Eval sonucu (chunker madde sayısı vs ağaç ground-truth)
-| Belge | chunker | tree | fark |
-|---|---|---|---|
-| TCK | 345 | 345 | 0 ✓ |
-| KKY | 22 | 22 | 0 ✓ |
-| KVKK | 36 | 33 | +3 |
-| VUK | 480 | 564 | −84 |
+### Eval sonucu (Task 6 fix sonrası — chunker vs ağaç ground-truth)
+| Belge | chunker | unique | tree | dup |
+|---|---|---|---|---|
+| TCK | 348 | 347 | 345 | 1 |
+| KKY | 22 | 22 | 22 | 0 ✓ |
+| KVKK | 36 | 36 | 33 | 0 ✓ |
+| VUK | 492 | 468 | 564 | 24 |
 
-> Kök neden (opus final review): **KVKK +3** = `GEÇİCİ MADDE 1-` yanlış-pozitifi (no çakışması); **VUK −84** = prefix/suffix maddeler (Mükerrer/Ek/Geçici, `257/A`) tekil kimlik alamıyor. Tebliğ 350781 ağaçsız → tree-eval dışı (doğru).
+> **Düzeltildi (Task 6, commit f522f50):** prefix/suffix maddeler (Ek/Geçici/Mükerrer, `N/A`) artık benzersiz `no` alıyor (Türkçe i/İ-güvenli char-class regex). Ana çakışma bug'ı kapandı: **KVKK dup 3→0, VUK dup 104→24.**
+> **Kalan dup'lar gerçek tekrar:** Türk mevzuatında her değişiklik kanununun kendi "Geçici Madde 1"i olur → "Geçici 1" meşru olarak defalarca geçer (VUK 7×). Kod defekti değil; tam benzersizlik için **değişiklik-bağlamı metadata'sı (Faz 3)** gerekir. VUK "215" ×4 anomalisi ayrı incelenecek.
+> `fark` artık birincil metrik değil — chunker, geçici maddeleri ağacın atladığı yerde doğru yakalıyor.
 
 ### Faz 2 future-work (öncelik sırası)
-1. **Prefix/suffix madde desteği** (Mükerrer/Ek/Geçici Madde, `N/A`) → VUK −84 + KVKK +3'ü birden kapatır.
+1. ✅ Prefix/suffix madde desteği + benzersiz no (Task 6) — yapıldı.
 2. Birleştirme + metadata → JSONL `{id,text,metadata}` (Faz 4 ile).
-3. Fıkra `(1)`boşluksuz; serbest-metin mülga tespiti; edge-case testleri; eval'e 5. belge.
+3. Geçici madde tekrarına değişiklik-bağlamı metadata'sı (Faz 3); VUK "215" ×4 anomalisi analizi.
+4. Fıkra `(1)`boşluksuz; serbest-metin mülga tespiti; edge-case testleri; eval'e 5. belge.
 
 ## Faz 3 — Metadata ⬜
 - [ ] Temel metadata alanları (ad/no/tür/madde/başlık/fıkra/path/kaynak/R.G.)
