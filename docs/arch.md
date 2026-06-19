@@ -35,7 +35,8 @@ mevzuat.gov.tr → mevzuat-mcp API → [yapısal chunker] → [metadata zenginle
 
 | Bileşen | Sorumluluk | Durum |
 |---|---|---|
-| **mevzuat-mcp istemci** | API'den madde ağacı + Markdown çekme | ⬜ planlandı |
+| **mevzuat-mcp server (yerel)** | mevzuat/bedesten araçlarını MCP ile sunar (3. parti, docker servisi; ADR-0012) | ⬜ planlandı |
+| **mevzuat-mcp MCP client** | yerel server'a bağlanıp madde ağacı + Markdown çeker | ⬜ planlandı |
 | **Yapısal chunker** | madde/fıkra bazlı, hiyerarşi-bilinçli chunk | ⬜ planlandı (ana iş) |
 | **Metadata zenginleştirici** | yürürlük/mülga, R.G., path, kaynak | ⬜ planlandı |
 | **Korpus artifact** | JSONL `{id, text, metadata}` (modüler sınır) | ⬜ planlandı |
@@ -64,7 +65,8 @@ mevzuat.gov.tr → mevzuat-mcp API → [yapısal chunker] → [metadata zenginle
 | Konu | Seçim | Durum |
 |---|---|---|
 | Yaklaşım (RAG tipi) | vanilla RAG (graph/agentic değil) | ✅ karar |
-| Veri kaynağı | `saidsurucu/mevzuat-mcp` API | ✅ karar |
+| Veri kaynağı | `saidsurucu/mevzuat-mcp` (mevzuat.gov.tr + bedesten) | ✅ karar |
+| mevzuat-mcp erişimi | yerel MCP server + MCP client (ADR-0012) | ✅ karar |
 | Dil/runtime | Python (varsayılan) | 🟡 örtük varsayım |
 | Embedding | BGE-M3 (aday) | 🟡 öneri |
 | Vektör store | Qdrant **veya** pgvector | ⬜ açık |
