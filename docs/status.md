@@ -44,7 +44,7 @@ Fazlar: [`roadmap.md`](roadmap.md) · Kapsam uygunluğu: [`compliance.md`](compl
 - [x] `mevzuat-mcp` entegrasyonu: yerel server + MCP client (ADR-0012) — smoke test ✓
 - [x] Yapısal eksenler listelendi + kapsama (coverage) işaret tablosu oluşturuldu ↓
 - [x] Başlangıç korpusu seçildi: 5 belgelik yapısal-çeşitlilik seti (bkz. decisions.md ADR-0011)
-- [ ] `search_mevzuat` ✓ → `get_mevzuat_madde_tree` ✓ → `get_mevzuat_content` (henüz) — MCP client
+- [x] `search_mevzuat` ✓ → `get_mevzuat_madde_tree` ✓ → `get_mevzuat_content` ✓ — tam zincir MCP client ile çalışıyor
 
 ### Başlangıç korpusu — seçilen set + kapsama tablosu (2026-06-19)
 | Belge | mevzuatId | Yapı / kapsanan eksen | Düğüm |
@@ -55,7 +55,9 @@ Fazlar: [`roadmap.md`](roadmap.md) · Kapsam uygunluğu: [`compliance.md`](compl
 | İthalatta Gözetim Tebliği | 350781 | **Ağaç YOK** → content-only edge-case | 0 |
 | Kültür Bak. Yayın Yönetmeliği | 352791 | Düz yönetmelik (KKY) | 26 |
 
-> Doğrulanacak eksenler (ağaçta görünmez, content'te): mülga · ek/mükerrer madde · değişiklik şerhi · 5/A numaralandırma · tablo/EK. → `get_mevzuat_content` çekilince (özellikle VUK).
+> **Doğrulandı (2026-06-19, content):** mülga/değişik/ek/mükerrer/geçici işaretleri content'te; VUK çok yoğun (mükerrer 290, değişik 272, mülga 91, ek 76, geçici 73), tebliğ/yönetmelik tertemiz.
+>
+> **Adım 12 chunking bulguları (Faz 2 girdisi):** content metni "kirli" — cümle ortası satır kırıkları (`Madde\n1`); madde işareti belgeden belgeye değişir (`Madde 1-` / `MADDE 1-` / `MADDE 1 –`, tire↔en-dash); fıkra = `(N)`; madde başlığı maddeden ÖNCEki satırda; değişiklik/mülga şerhi (`(Değişik: …)`/`(Mülga: …)`) madde no'sundan hemen sonra; tablolar düz metne yayılmış. → chunker **normalize + esnek madde-regex** gerektirir; ağaç olan/olmayan için iki yol denenecek.
 - [ ] PDF içerik atlama mantığı
 - [ ] Ham çıktı kaydı
 
