@@ -2,8 +2,8 @@
 
 Fazlar: [`roadmap.md`](roadmap.md) · Kapsam uygunluğu: [`compliance.md`](compliance.md) · Mimari: [`arch.md`](arch.md)
 
-**Son güncelleme:** 2026-06-18
-**Genel durum:** 🟡 Faz 0 (kurulum) devam ediyor — kod yazımı henüz başlamadı.
+**Son güncelleme:** 2026-06-19
+**Genel durum:** 🟡 Faz 1 (veri çekme) başladı — Python iskeleti kuruldu, mevzuat-mcp MCP client smoke test çalışıyor.
 
 İşaretler: ✅ tamam · 🟡 devam ediyor · ⬜ başlamadı · ⛔ engelli
 
@@ -14,7 +14,7 @@ Fazlar: [`roadmap.md`](roadmap.md) · Kapsam uygunluğu: [`compliance.md`](compl
 | Faz | Ad | Durum |
 |---|---|---|
 | 0 | Kurulum & Yönetişim | 🟡 |
-| 1 | Veri Çekme (data acquisition) | ⬜ |
+| 1 | Veri Çekme (data acquisition) | 🟡 |
 | 2 | Yapısal Chunking | ⬜ |
 | 3 | Metadata | ⬜ |
 | 4 | Temiz Korpus Artifact | ⬜ |
@@ -38,10 +38,10 @@ Fazlar: [`roadmap.md`](roadmap.md) · Kapsam uygunluğu: [`compliance.md`](compl
 - [x] `.gitignore` — Python/RAG
 - [x] `CLAUDE.md` — proje hafızası
 - [ ] GitHub `main` branch protection ayarı (UI'dan — bkz. commit_discipline.md §5.2)
-- [ ] Python proje iskeleti (paket yapısı, bağımlılık yönetimi) — *Faz 1 öncesi*
+- [x] Python proje iskeleti — venv + `src/mevzuat_tool/` + `requirements.txt`
 
-## Faz 1 — Veri Çekme ⬜
-- [ ] `mevzuat-mcp` entegrasyonu: yerel server + MCP client (ADR-0012)
+## Faz 1 — Veri Çekme 🟡
+- [x] `mevzuat-mcp` entegrasyonu: yerel server + MCP client (ADR-0012) — smoke test ✓
 - [ ] Yapısal eksenler listelendi + örnek başına kapsama (coverage) işaret tablosu oluşturuldu
 - [ ] Başlangıç korpusu seçildi: **yapısal eksen kapsamasına göre** küçük set (~5-8, tür-içi varyasyon dahil) (bkz. decisions.md ADR-0011)
 - [ ] `search_mevzuat → madde_tree → content` akışı çalışıyor (MCP client)
