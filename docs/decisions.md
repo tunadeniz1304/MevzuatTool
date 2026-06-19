@@ -49,11 +49,13 @@ Güncel mimari görünümü: [`arch.md`](arch.md). Kapsam: [`mevzuat-mvp-kapsam.
 - **Karar:** Dense (embedding) + sparse (BM25) hybrid retrieval kullanılır.
 - **Sonuç:** Hem doğal dil hem atıf-ağırlıklı sorgularda recall/precision dengesi.
 
-## ADR-0011 — Başlangıç korpusu = yapısal çeşitlilik içeren küçük set
+## ADR-0011 — Başlangıç korpusu: kapsama-odaklı, yapısal eksenlere göre örnekleme
 - **Durum:** Kabul edildi
-- **Bağlam:** Mevzuat tek tip değil: derin hiyerarşili kodifikasyonlar (kitap/kısım/bölüm), düz yönetmelik/tebliğler, ek/geçici maddeler, mülga hükümler, farklı madde numaralandırmaları (5/A, 5/1-a). Chunker tek bir kanuna göre yazılırsa farklı yapıdaki bir sonraki kanunda kırılır.
-- **Karar:** Başlangıç korpusu tek kanun DEĞİL; yapısal çeşitliliği temsil eden **küçük bir örnek seti** (ör. 1 büyük kodifikasyon + 1 düz yönetmelik + 1 tebliğ + ek/geçici/mülga madde içeren örnek). "Önce çalıştır, sonra ölçekle" bozulmaz — az ama temsil edici.
-- **Sonuç:** Chunker (ADR-0004) ve metadata (ADR-0005) çeşitliliğe karşı baştan test edilir; robustluk erken doğrulanır.
+- **Bağlam:** Mevzuat tek tip değil ve yapısal fark yalnız **türler arası** (kanun/yönetmelik/tebliğ) değil, **tür içi**dir de: aynı türden iki belge hiyerarşi, geçici/ek madde, değişiklik şerhi, numaralandırma vb. açısından farklı olabilir. "Her türden bir tane" almak tür-içi varyasyonu kaçırır; chunker farklı yapıdaki ikinci belgede kırılır.
+- **Karar:** Korpus türe göre DEĞİL, **yapısal eksen kapsamasına** göre seçilir. Önce chunker'ı zorlayan eksenler listelenir; sonra bu eksenlerin tümünü vuran **en küçük** belge seti alınır. Yeni bir eksen eklemeyen aday alınmaz. Bazı eksenler aynı türden 2 belge gerektirebilir (tür-içi varyasyon böyle karşılanır). Set küçük ve amaçlı kalır (~5-8 belge); "önce çalıştır, sonra ölçekle" korunur.
+  - **Yapısal eksenler:** (1) hiyerarşi derinliği [düz ↔ kitap/kısım/bölüm], (2) madde içi yapı [paragraf ↔ fıkra ↔ bent listesi], (3) geçici/ek madde [var/yok], (4) mülga hüküm [var/yok], (5) değişiklik şerhleri [(Değişik/Ek/Mülga: …)], (6) numaralandırma [normal / 5/A / mükerrer], (7) tablo/EK/form [var/yok].
+  - Her örneğin hangi eksenleri kapsadığı bir **işaret (coverage) tablosu**nda tutulur → kapsama ve boşluk (örneklenmemiş eksen) görünür olur.
+- **Sonuç:** Chunker (ADR-0004) ve metadata (ADR-0005) yapısal çeşitliliğe karşı baştan, az ama temsil edici örnekle test edilir; robustluk ve kapsam boşlukları erken görülür.
 
 ---
 
