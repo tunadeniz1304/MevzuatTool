@@ -76,9 +76,9 @@ Güncel mimari görünümü: [`arch.md`](arch.md). Kapsam: [`mevzuat-mvp-kapsam.
 - **Karar:** Faz 5 öncesi verilecek. (Etkilenen: arch.md, docker-compose.)
 
 ## ADR-0009 — Reranker kullanılacak mı?
-- **Durum:** Açık (opsiyonel)
-- **Bağlam:** Precision artışı sağlar ama gecikme/komplekslik ekler.
-- **Karar:** MVP'de opsiyonel; önce reranker'sız ölç, gerekirse ekle.
+- **Durum:** Açık (opsiyonel) — **metriğe bağlı**
+- **Bağlam:** Reranker precision/sıralamayı (precision@k, nDCG, MRR) artırır ama recall'u artırmaz; gecikme + komplekslik ekler.
+- **Karar:** MVP'de **opsiyonel kalır.** Önce reranker'sız (hybrid) ölç; precision metrikleri (precision@k / nDCG / MRR) hedefin altındaysa ekle, yeterliyse ekleme. Karar **metriklere göre** verilir.
 
 ---
 
