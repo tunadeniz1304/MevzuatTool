@@ -1,7 +1,9 @@
 # CLAUDE.md — Proje Hafızası
 
 Bu dosya, projede çalışan her AI ajanın (ve insanın) **önce okuması gereken** kalıcı bağlamdır.
-Tek doğruluk kaynakları: kapsam → [`mevzuat-mvp-kapsam.md`](mevzuat-mvp-kapsam.md), kurallar → bu dosya + [`commit_discipline.md`](commit_discipline.md).
+Tek doğruluk kaynakları: kapsam → [`mevzuat-mvp-kapsam.md`](docs/mevzuat-mvp-kapsam.md), kurallar → bu dosya + [`commit_discipline.md`](docs/commit_discipline.md).
+
+> Not: Proje dokümanları `docs/` altındadır. `README.md` ve bu `CLAUDE.md` kökte kalır (GitHub ana sayfa + Claude Code otomatik yükleme için).
 
 ---
 
@@ -11,7 +13,7 @@ mevzuat.gov.tr mevzuatını (kanun, KHK, tüzük, yönetmelik, tebliğ) `mevzuat
 ## En kritik sınır — UNUTMA
 - **Pipeline retrieval'da BİTER.** LLM / cevap üretme (generation) **KAPSAM DIŞI.** Generation, en sonda config'le takılan, OpenAI-uyumlu, swap'lanabilir bir endpoint olarak bırakılır — build buna bağımlı değildir.
 - **Yaklaşım = vanilla RAG.** Graph/agentic/advanced RAG **YAPMA** (future work). Bu MVP, vanilla RAG'ın retrieval yarısı. Doğru vanilla = madde-seviyesi yapısal chunking + hybrid (dense+BM25); bunlar "advanced" değil.
-- Yeni bir özellik eklemeden önce **mutlaka** [`compliance.md`](compliance.md) "Kapsam Dışı" listesine bak. Listeye takılıyorsa **yapma**.
+- Yeni bir özellik eklemeden önce **mutlaka** [`compliance.md`](docs/compliance.md) "Kapsam Dışı" listesine bak. Listeye takılıyorsa **yapma**.
 
 ## Değişmez mimari ilkeler
 1. Veri kaynağı yalnızca `saidsurucu/mevzuat-mcp` API'leri — **kendi scraper'ını yazma**.
@@ -22,7 +24,7 @@ mevzuat.gov.tr mevzuatını (kanun, KHK, tüzük, yönetmelik, tebliğ) `mevzuat
 6. Korpus çıktısı bağımsız teslim edilebilir JSONL `{id, text, metadata}` — modüler sınır.
 7. Önce dar korpusla çalıştır, sonra ölçekle. Tüm mevzuatı baştan çekme.
 
-## Commit & branch disiplini (özet — tam metin commit_discipline.md)
+## Commit & branch disiplini (özet — tam metin docs/commit_discipline.md)
 - Commit mesajlarında **AI co-author / "Generated with" satırı YASAK.** (Bu, Claude'un varsayılan davranışını bilinçli olarak ezer.)
 - `main`'e **doğrudan push YASAK.** Çalışma branch'lerde + PR.
 - Branch adı: **`phase-N/feature-adi`** (ör. `phase-2/structural-chunking`).
@@ -34,13 +36,13 @@ Python · mevzuat-mcp · embedding (aday: BGE-M3) · vektör store **açık kara
 ## Doküman haritası
 | Soru | Dosya |
 |---|---|
-| Kapsam nedir? | `mevzuat-mvp-kapsam.md` |
-| Hangi fazdayız / ne kaldı? | `status.md` |
-| Faz planı? | `roadmap.md` |
-| Kapsama uygun muyum? | `compliance.md` |
-| Mimari bugün ne durumda? | `arch.md` |
-| Bu karar neden böyle? | `decisions.md` |
-| Commit/branch nasıl? | `commit_discipline.md` |
+| Kapsam nedir? | `docs/mevzuat-mvp-kapsam.md` |
+| Hangi fazdayız / ne kaldı? | `docs/status.md` |
+| Faz planı? | `docs/roadmap.md` |
+| Kapsama uygun muyum? | `docs/compliance.md` |
+| Mimari bugün ne durumda? | `docs/arch.md` |
+| Bu karar neden böyle? | `docs/decisions.md` |
+| Commit/branch nasıl? | `docs/commit_discipline.md` |
 
 ## Bugünkü durum (2026-06-18)
 Faz 0 (kurulum/yönetişim). Repo'da yalnız LICENSE + yönetişim dokümanları var; **kod henüz yok.** Sıradaki: Python iskeleti + Faz 1 (mevzuat-mcp entegrasyonu).
