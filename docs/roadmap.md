@@ -25,7 +25,7 @@ Akış:
 ### Faz 1 — Veri Çekme (data acquisition)
 **Hedef:** `saidsurucu/mevzuat-mcp` API'leri üzerinden yapısal içerik çekme.
 - `search_mevzuat → get_mevzuat_article_tree → get_mevzuat_article_content` akışı
-- Dar başlangıç korpusu seçimi (tek alan / sınırlı kanun seti)
+- Dar başlangıç korpusu: tek kanun değil, **yapısal çeşitlilik içeren küçük örnek seti** (kodifikasyon + düz yönetmelik + tebliğ + ek/geçici/mülga madde) — chunker robustluğu için (bkz. decisions.md ADR-0011)
 - Sadece HTML/Markdown içerik; PDF olanlar atlanır
 - Web scraper **yazılmaz** — repo API'leri kullanılır
 **Çıktı:** Ham, yapısal mevzuat içeriği (kaynak madde ağacı + Markdown).
