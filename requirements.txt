@@ -1,0 +1,5 @@
+# MevzuatTool — Python bağımlılıkları
+#
+# Faz 1 (data acquisition): mevzuat-mcp erişimi için paketler buraya eklenecek.
+# Tam liste, mevzuat-mcp'nin nasıl çağrıldığı netleşince doldurulacak
+# (paket import mı / MCP server mı — bkz. docs/roadmap.md Faz 1, docs/status.md).
