@@ -1,6 +1,6 @@
 # MevzuatTool
 
-> Soru × Mevzuat MVP — mevzuat.gov.tr mevzuatını yapısal olarak çekip RAG'a uygun biçimde hazırlayan ve bir soruya/atıfa karşılık **ilgili mevzuat maddelerini getiren**, dockerize edilmiş bir retrieval pipeline'ı.
+> Soru × Mevzuat MVP — mevzuat.gov.tr **kanunlarını** (yalnız `KANUN` türü) yapısal olarak çekip RAG'a uygun biçimde hazırlayan ve bir soruya/atıfa karşılık **ilgili kanun maddelerini getiren**, dockerize edilmiş bir retrieval pipeline'ı.
 
 **Durum:** 🟡 Pre-MVP — kurulum/yönetişim fazı. Kod henüz yok. Bkz. [`status.md`](docs/status.md).
 
@@ -17,10 +17,10 @@ mevzuat-mcp ile çek → madde chunk + metadata → temiz korpus (JSONL) → emb
 > **Sınır:** Pipeline retrieval'da biter. Cevabı yazan LLM (generation) **kapsam dışıdır** — en sonda config'le takılan, swap'lanabilir bir endpoint olarak bırakılmıştır.
 
 ## Kapsam İçi
-Veri çekme (mevzuat-mcp) · yapısal chunking (madde/fıkra) · zengin metadata (yürürlük/mülga, R.G., hiyerarşi) · temiz JSONL korpus · embedding + hybrid index · atıf & doğal dil retrieval · docker-compose.
+**Yalnız `KANUN` türü** · Veri çekme (mevzuat-mcp) · yapısal chunking (madde/fıkra) · zengin metadata (yürürlük/mülga, R.G., hiyerarşi) · temiz JSONL korpus · embedding + hybrid index · atıf & doğal dil retrieval · docker-compose.
 
 ## Kapsam Dışı (future work)
-LLM generation · GraphRAG / ileri RAG · formal eval harness · PDF/OCR · içtihat/özelge (`yargi-mcp`).
+Kanun dışı türler (KHK/tüzük/yönetmelik/tebliğ) · LLM generation · GraphRAG / ileri RAG · formal eval harness · PDF/OCR · içtihat/özelge (`yargi-mcp`).
 Detay: [`mevzuat-mvp-kapsam.md`](docs/mevzuat-mvp-kapsam.md).
 
 ---

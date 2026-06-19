@@ -43,19 +43,19 @@ Fazlar: [`roadmap.md`](roadmap.md) · Kapsam uygunluğu: [`compliance.md`](compl
 ## Faz 1 — Veri Çekme 🟡
 - [x] `mevzuat-mcp` entegrasyonu: yerel server + MCP client (ADR-0012) — smoke test ✓
 - [x] Yapısal eksenler listelendi + kapsama (coverage) işaret tablosu oluşturuldu ↓
-- [x] Başlangıç korpusu seçildi: 5 belgelik yapısal-çeşitlilik seti (bkz. decisions.md ADR-0011)
+- [x] Başlangıç korpusu seçildi: **kanun-only** set (TCK/VUK/KVKK; tebliğ+yönetmelik kapsam dışı — ADR-0013) (bkz. decisions.md ADR-0011)
 - [x] `search_mevzuat` ✓ → `get_mevzuat_madde_tree` ✓ → `get_mevzuat_content` ✓ — tam zincir MCP client ile çalışıyor
 
-### Başlangıç korpusu — seçilen set + kapsama tablosu (2026-06-19)
-| Belge | mevzuatId | Yapı / kapsanan eksen | Düğüm |
+### Başlangıç korpusu — kanun-only set + kapsama tablosu (2026-06-19, ADR-0013)
+| Kanun | mevzuatId | Yapı / kapsanan eksen | Düğüm |
 |---|---|---|---|
 | Türk Ceza Kanunu 5237 | 103228 | Derin hiyerarşi (Kitap/Kısım/Bölüm) | 397 |
 | Vergi Usul Kanunu 213 | 103006 | Karışık + dev + çok-değişiklikli (serbest madde + Kitap) | 691 |
 | KVKK 6698 | 104383 | Düz kanun (sadece Bölüm) | 41 |
-| İthalatta Gözetim Tebliği | 350781 | **Ağaç YOK** → content-only edge-case | 0 |
-| Kültür Bak. Yayın Yönetmeliği | 352791 | Düz yönetmelik (KKY) | 26 |
+| _(aday)_ Gelir Vergisi Kanunu 193 | 103111 | Kısım/Bölüm; `(1)`-siz eski fıkra stili (`1.`) | 187 |
 
-> **Doğrulandı (2026-06-19, content):** mülga/değişik/ek/mükerrer/geçici işaretleri content'te; VUK çok yoğun (mükerrer 290, değişik 272, mülga 91, ek 76, geçici 73), tebliğ/yönetmelik tertemiz.
+> **Kapsam dışı (geçmiş kayıt, ADR-0013):** İlk keşifte alınan İthalatta Gözetim Tebliği (350781) ve Kültür Bak. Yayın Yönetmeliği (352791) artık **kapsam dışı** (kanun değil); eval/bulgulardaki 'KKY' satırı tarihsel.
+> **Doğrulandı (2026-06-19, content):** mülga/değişik/ek/mükerrer/geçici işaretleri content'te; VUK çok yoğun (mükerrer 290, değişik 272, mülga 91, ek 76, geçici 73), KVKK görece temiz.
 >
 > **Adım 12 chunking bulguları (Faz 2 girdisi):** content metni "kirli" — cümle ortası satır kırıkları (`Madde\n1`); madde işareti belgeden belgeye değişir (`Madde 1-` / `MADDE 1-` / `MADDE 1 –`, tire↔en-dash); fıkra = `(N)`; madde başlığı maddeden ÖNCEki satırda; değişiklik/mülga şerhi (`(Değişik: …)`/`(Mülga: …)`) madde no'sundan hemen sonra; tablolar düz metne yayılmış. → chunker **normalize + esnek madde-regex** gerektirir; ağaç olan/olmayan için iki yol denenecek.
 - [ ] PDF içerik atlama mantığı
@@ -75,7 +75,7 @@ Plan: `docs/superpowers/plans/2026-06-19-structural-chunking.md` · branch `phas
 | Belge | chunker | unique | tree | dup |
 |---|---|---|---|---|
 | TCK | 348 | 347 | 345 | 1 |
-| KKY | 22 | 22 | 22 | 0 ✓ |
+| ~~KKY~~ _(kapsam dışı, ADR-0013)_ | 22 | 22 | 22 | 0 ✓ |
 | KVKK | 36 | 36 | 33 | 0 ✓ |
 | VUK | 492 | 468 | 564 | 24 |
 

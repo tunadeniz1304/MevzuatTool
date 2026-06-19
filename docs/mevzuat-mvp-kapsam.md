@@ -1,7 +1,7 @@
 # Soru × Mevzuat MVP — Proje Kapsamı
 
 ## Amaç
-mevzuat.gov.tr'deki mevzuatı (kanun, KHK, tüzük, yönetmelik, tebliğ) yapısal olarak çekip RAG'a uygun biçimde hazırlayan ve bir soruya/atıfa karşılık **ilgili mevzuat maddelerini getiren**, dockerize edilmiş bir MVP.
+mevzuat.gov.tr'deki **kanunları** (yalnız `KANUN` türü) yapısal olarak çekip RAG'a uygun biçimde hazırlayan ve bir soruya/atıfa karşılık **ilgili kanun maddelerini getiren**, dockerize edilmiş bir MVP.
 
 Pipeline yalnızca **retrieval'a kadar** kurulur. Cevabı üreten LLM (generation) bu kapsamın dışındadır — bkz. *Kapsam Dışı*.
 
@@ -25,6 +25,7 @@ Bunlar "advanced RAG" değildir; sadece vanilla'nın doğru kurulmuş hâlidir.
 
 **1. Veri çekme (data acquisition)**
 - Kaynak: mevzuat.gov.tr / bedesten.adalet.gov.tr, `saidsurucu/mevzuat-mcp` üzerinden (`search_mevzuat` → `get_mevzuat_madde_tree` → `get_mevzuat_content`, Markdown çıktı). mevzuat-mcp bir **MCP server**'dır; yerelde server koşulur, pipeline ona **MCP client** olarak bağlanır (bkz. decisions.md ADR-0012).
+- **Yalnızca `KANUN` türü** çekilir (`mevzuat_tur=KANUN`); KHK, tüzük, yönetmelik, tebliğ **kapsam dışı** (bkz. decisions.md ADR-0013).
 - Web scraper yazılmaz — repo'nun API'leri kullanılır.
 - Sadece HTML/Markdown gelen içerik. PDF olanlar (ör. çoğu Cumhurbaşkanı kararı) atlanır.
 - Başlangıçta dar bir korpus (seçilmiş tek bir alan / sınırlı kanun seti), tüm mevzuat değil. Önce çalıştır, sonra ölçekle.
@@ -67,6 +68,7 @@ Bunlar "advanced RAG" değildir; sadece vanilla'nın doğru kurulmuş hâlidir.
 - **Formal eval / benchmark harness** (küçük bir sanity kontrolü dışında) → future work.
 - **PDF / OCR** içerik → dışında.
 - **İçtihat / özelge** (`yargi-mcp` alanı: Yargıtay, Danıştay, GİB vb.) → bu MVP'nin dışında.
+- **Kanun dışı mevzuat türleri** (KHK, tüzük, yönetmelik, tebliğ) → bu MVP yalnız **KANUN** (ADR-0013); diğer türler future work.
 
 ---
 
