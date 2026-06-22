@@ -93,3 +93,6 @@ UserProgress.md
 
 # ---- Yerel araştırma çıktıları (versiyonlanmaz) ----
 research_outputs/
+
+# ---- Kod denetim raporları (yerel, versiyonlanmaz) ----
+docs/reviews/
