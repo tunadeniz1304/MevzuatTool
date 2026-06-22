@@ -1,0 +1,80 @@
+from mevzuat_tool.enrich import _madde_tipi
+from mevzuat_tool.chunker import Article
+from mevzuat_tool.tree import parse_tree
+from mevzuat_tool.enrich import enrich
+
+TREE = parse_tree(
+    "- DÖRDÜNCÜ KISIM - Verginin Tarhı (maddeId:9)\n"
+    "  - BİRİNCİ BÖLÜM - Beyan Esası (maddeId:10)\n"
+    "    - Madde No: 84 - Beyanname çeşitleri: (maddeId:1279029)\n"
+)
+
+TREE_BLEED = parse_tree(
+    "- DÖRDÜNCÜ KISIM - X (maddeId:9)\n"
+    "  - BİRİNCİ BÖLÜM - Beyan Esası (maddeId:10)\n"
+    "    - Madde No: 84 - Beyanname çeşitleri: (maddeId:1279029)\n"
+    "  - YEDİNCİ BÖLÜM - Diğer Kazanç (maddeId:20)\n"
+    "    - Madde No: 85 - Gelire giren: (maddeId:30)\n"
+)
+
+
+def test_madde_tipi_from_no():
+    assert _madde_tipi("84") == "asil"
+    assert _madde_tipi("257/A") == "asil"
+    assert _madde_tipi("Geçici 84") == "gecici"
+    assert _madde_tipi("Ek 2") == "ek"
+    assert _madde_tipi("Mükerrer 80") == "mukerrer"
+
+
+def test_enrich_asil_joins_tree():
+    arts = [Article(no="84", body="Gelir Vergisi beyanları: ...")]
+    m = enrich(arts, TREE)[0]
+    assert m.madde_tipi == "asil"
+    assert m.madde_baslik == "Beyanname çeşitleri"
+    assert m.bolum_no == "BİRİNCİ BÖLÜM"
+    assert m.maddeId == "1279029"
+    assert m.yurutluk == "yürürlükte"
+
+
+def test_enrich_prefixed_inherits_section_and_flags():
+    arts = [
+        Article(no="84", body="asıl madde."),
+        Article(no="Geçici 84", body="(Ek: 3/4/2013) geçici hüküm."),
+    ]
+    g = enrich(arts, TREE)[1]
+    assert g.madde_tipi == "gecici"
+    assert g.maddeId is None
+    assert g.madde_baslik is None
+    assert g.bolum_no == "BİRİNCİ BÖLÜM"   # bir önceki asil maddeden miras
+
+
+def test_enrich_strips_section_header_bleed():
+    arts = [
+        Article(no="84", body="asıl içerik. YEDİNCİ BÖLÜM Diğer Kazanç Gelire giren:"),
+        Article(no="85", body="sonraki."),
+    ]
+    m = enrich(arts, TREE_BLEED)[0]
+    assert "YEDİNCİ BÖLÜM" not in m.body
+    assert m.body == "asıl içerik."
+
+
+def test_enrich_status_uses_clean_body_not_next_madde_bleed():
+    # Sonraki maddenin '(Mülga' bleed'i bu maddenin yürürlüğünü ETKİLEMEMELİ.
+    arts = [
+        Article(no="84", body="bu madde yürürlükte. YEDİNCİ BÖLÜM Diğer Kazanç Gelire giren:"),
+        Article(no="85", body="(Mülga: 1/1/2020) sonraki."),
+    ]
+    m = enrich(arts, TREE_BLEED)[0]
+    assert m.yurutluk == "yürürlükte"
+
+
+def test_enrich_plain_madde_missing_in_tree_does_not_crash():
+    arts = [
+        Article(no="84", body="ağaçtaki."),
+        Article(no="999", body="ağaçta olmayan düz madde."),  # TREE'de yok
+    ]
+    res = enrich(arts, TREE)
+    m = res[1]
+    assert m.madde_tipi == "asil"
+    assert m.maddeId is None          # ağaçta yok → None
+    assert m.bolum_no == "BİRİNCİ BÖLÜM"  # önceki asil maddeden miras
