@@ -2,8 +2,8 @@
 
 Fazlar: [`roadmap.md`](roadmap.md) · Kapsam uygunluğu: [`compliance.md`](compliance.md) · Mimari: [`arch.md`](arch.md)
 
-**Son güncelleme:** 2026-06-18
-**Genel durum:** 🟡 Faz 0 (kurulum) devam ediyor — kod yazımı henüz başlamadı.
+**Son güncelleme:** 2026-06-19
+**Genel durum:** 🟡 Faz 1 (veri çekme) başladı — Python iskeleti kuruldu, mevzuat-mcp MCP client smoke test çalışıyor.
 
 İşaretler: ✅ tamam · 🟡 devam ediyor · ⬜ başlamadı · ⛔ engelli
 
@@ -14,7 +14,7 @@ Fazlar: [`roadmap.md`](roadmap.md) · Kapsam uygunluğu: [`compliance.md`](compl
 | Faz | Ad | Durum |
 |---|---|---|
 | 0 | Kurulum & Yönetişim | 🟡 |
-| 1 | Veri Çekme (data acquisition) | ⬜ |
+| 1 | Veri Çekme (data acquisition) | 🟡 |
 | 2 | Yapısal Chunking | ⬜ |
 | 3 | Metadata | ⬜ |
 | 4 | Temiz Korpus Artifact | ⬜ |
@@ -38,13 +38,26 @@ Fazlar: [`roadmap.md`](roadmap.md) · Kapsam uygunluğu: [`compliance.md`](compl
 - [x] `.gitignore` — Python/RAG
 - [x] `CLAUDE.md` — proje hafızası
 - [ ] GitHub `main` branch protection ayarı (UI'dan — bkz. commit_discipline.md §5.2)
-- [ ] Python proje iskeleti (paket yapısı, bağımlılık yönetimi) — *Faz 1 öncesi*
+- [x] Python proje iskeleti — venv + `src/mevzuat_tool/` + `requirements.txt`
 
-## Faz 1 — Veri Çekme ⬜
-- [ ] `mevzuat-mcp` entegrasyonu / istemci
-- [ ] Yapısal eksenler listelendi + örnek başına kapsama (coverage) işaret tablosu oluşturuldu
-- [ ] Başlangıç korpusu seçildi: **yapısal eksen kapsamasına göre** küçük set (~5-8, tür-içi varyasyon dahil) (bkz. decisions.md ADR-0011)
-- [ ] `search_mevzuat → article_tree → article_content` akışı çalışıyor
+## Faz 1 — Veri Çekme 🟡
+- [x] `mevzuat-mcp` entegrasyonu: yerel server + MCP client (ADR-0012) — smoke test ✓
+- [x] Yapısal eksenler listelendi + kapsama (coverage) işaret tablosu oluşturuldu ↓
+- [x] Başlangıç korpusu seçildi: 5 belgelik yapısal-çeşitlilik seti (bkz. decisions.md ADR-0011)
+- [x] `search_mevzuat` ✓ → `get_mevzuat_madde_tree` ✓ → `get_mevzuat_content` ✓ — tam zincir MCP client ile çalışıyor
+
+### Başlangıç korpusu — seçilen set + kapsama tablosu (2026-06-19)
+| Belge | mevzuatId | Yapı / kapsanan eksen | Düğüm |
+|---|---|---|---|
+| Türk Ceza Kanunu 5237 | 103228 | Derin hiyerarşi (Kitap/Kısım/Bölüm) | 397 |
+| Vergi Usul Kanunu 213 | 103006 | Karışık + dev + çok-değişiklikli (serbest madde + Kitap) | 691 |
+| KVKK 6698 | 104383 | Düz kanun (sadece Bölüm) | 41 |
+| İthalatta Gözetim Tebliği | 350781 | **Ağaç YOK** → content-only edge-case | 0 |
+| Kültür Bak. Yayın Yönetmeliği | 352791 | Düz yönetmelik (KKY) | 26 |
+
+> **Doğrulandı (2026-06-19, content):** mülga/değişik/ek/mükerrer/geçici işaretleri content'te; VUK çok yoğun (mükerrer 290, değişik 272, mülga 91, ek 76, geçici 73), tebliğ/yönetmelik tertemiz.
+>
+> **Adım 12 chunking bulguları (Faz 2 girdisi):** content metni "kirli" — cümle ortası satır kırıkları (`Madde\n1`); madde işareti belgeden belgeye değişir (`Madde 1-` / `MADDE 1-` / `MADDE 1 –`, tire↔en-dash); fıkra = `(N)`; madde başlığı maddeden ÖNCEki satırda; değişiklik/mülga şerhi (`(Değişik: …)`/`(Mülga: …)`) madde no'sundan hemen sonra; tablolar düz metne yayılmış. → chunker **normalize + esnek madde-regex** gerektirir; ağaç olan/olmayan için iki yol denenecek.
 - [ ] PDF içerik atlama mantığı
 - [ ] Ham çıktı kaydı
 

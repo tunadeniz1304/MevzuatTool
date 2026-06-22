@@ -22,7 +22,7 @@ Güncel mimari görünümü: [`arch.md`](arch.md). Kapsam: [`mevzuat-mvp-kapsam.
 ## ADR-0002 — Veri kaynağı: mevzuat-mcp API (scraper yok)
 - **Durum:** Kabul edildi
 - **Bağlam:** mevzuat.gov.tr içeriğine erişim için ya scraper yazılır ya hazır API kullanılır.
-- **Karar:** `saidsurucu/mevzuat-mcp` API'leri kullanılır (`search_mevzuat → get_mevzuat_article_tree → get_mevzuat_article_content`). Kendi scraper'ımız yazılmaz.
+- **Karar:** `saidsurucu/mevzuat-mcp` araçları kullanılır (`search_mevzuat → get_mevzuat_madde_tree → get_mevzuat_content`, bedesten birleşik ailesi). Kendi scraper'ımız yazılmaz. Erişim mekanizması (server/client): bkz. ADR-0012.
 - **Sonuç:** Bakım yükü azalır, yapısal madde ağacı + Markdown hazır gelir. PDF içerik (çoğu Cumhurbaşkanı kararı) atlanır.
 
 ## ADR-0003 — Korpus çıktısı: JSONL `{id, text, metadata}`
@@ -56,6 +56,13 @@ Güncel mimari görünümü: [`arch.md`](arch.md). Kapsam: [`mevzuat-mvp-kapsam.
   - **Yapısal eksenler:** (1) hiyerarşi derinliği [düz ↔ kitap/kısım/bölüm], (2) madde içi yapı [paragraf ↔ fıkra ↔ bent listesi], (3) geçici/ek madde [var/yok], (4) mülga hüküm [var/yok], (5) değişiklik şerhleri [(Değişik/Ek/Mülga: …)], (6) numaralandırma [normal / 5/A / mükerrer], (7) tablo/EK/form [var/yok].
   - Her örneğin hangi eksenleri kapsadığı bir **işaret (coverage) tablosu**nda tutulur → kapsama ve boşluk (örneklenmemiş eksen) görünür olur.
 - **Sonuç:** Chunker (ADR-0004) ve metadata (ADR-0005) yapısal çeşitliliğe karşı baştan, az ama temsil edici örnekle test edilir; robustluk ve kapsam boşlukları erken görülür.
+- **Uygulama (2026-06-19):** Seçilen 5 belge — TCK 5237, VUK 213, KVKK 6698, bir tebliğ (ağaç yok), bir KKY yönetmeliği. Kapsama tablosu → status.md. **Yeni eksen keşfi:** bazı mevzuatın madde-ağacı YOK (kısa tebliğ) → o belgelerde `get_mevzuat_content`-only parse gerekir. Ayrıca mülga/ek/mükerrer işaretleri ağaçta değil **content metninde** taşınır (Faz 3 girdisi).
+
+## ADR-0012 — mevzuat-mcp entegrasyonu: yerel MCP server + MCP client
+- **Durum:** Kabul edildi
+- **Bağlam:** mevzuat-mcp bir **kütüphane değil, MCP server**'dır (PyPI'de yok; git'ten `uvx` ile çalışır, Python 3.11+, FastMCP). Fonksiyonları doğrudan import edilemez; araçlar yalnız MCP protokolü üzerinden çağrılır. Uzak hosted bir endpoint de mevcut (`https://mevzuat.surucu.dev/mcp`).
+- **Karar:** mevzuat-mcp **yerelde** (kendi docker-compose'umuzda) bir MCP server olarak koşulur; ingestion job ona **MCP client** olarak bağlanır. Uzak hosted endpoint'e (Seçenek C) bağımlı kalınmaz → reproducible + dockerize korunur. İç httpx kodunu import etmek (Seçenek B) reddedildi: undocumented + kırılgan.
+- **Sonuç:** Pipeline tasarlanan arayüzü kullanır (iç yapı değişse de dayanıklı), self-contained kalır. Kullanılacak araçlar: `search_mevzuat`, `get_mevzuat_madde_tree`, `get_mevzuat_content` (bedesten ailesi). Bağımlılık: bir MCP client kütüphanesi (Python `mcp` SDK / FastMCP client) — `requirements.txt`'e Faz 1'de eklenir.
 
 ---
 

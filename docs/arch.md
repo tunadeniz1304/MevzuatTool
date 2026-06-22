@@ -1,7 +1,7 @@
 # Mimari Durum (Architecture)
 
-**Son güncelleme:** 2026-06-18
-**Olgunluk:** 🟡 Tasarım netleşiyor — kod henüz yok (yalnız yönetişim dokümanları + LICENSE).
+**Son güncelleme:** 2026-06-19
+**Olgunluk:** 🟡 Faz 1 başladı — Python iskeleti + mevzuat-mcp MCP client smoke test çalışıyor.
 
 Bu dosya **güncel mimari durumu** tutar (bugün ne var, ne kararlaştırıldı, ne açık).
 Kararların **gerekçesi/tarihçesi**: [`decisions.md`](decisions.md). Kapsam: [`mevzuat-mvp-kapsam.md`](mevzuat-mvp-kapsam.md).
@@ -35,7 +35,8 @@ mevzuat.gov.tr → mevzuat-mcp API → [yapısal chunker] → [metadata zenginle
 
 | Bileşen | Sorumluluk | Durum |
 |---|---|---|
-| **mevzuat-mcp istemci** | API'den madde ağacı + Markdown çekme | ⬜ planlandı |
+| **mevzuat-mcp server (yerel)** | mevzuat/bedesten araçlarını MCP ile sunar (3. parti, docker servisi; ADR-0012) | ⬜ planlandı |
+| **mevzuat-mcp MCP client** | yerel server'a bağlanıp madde ağacı + Markdown çeker | ⬜ planlandı |
 | **Yapısal chunker** | madde/fıkra bazlı, hiyerarşi-bilinçli chunk | ⬜ planlandı (ana iş) |
 | **Metadata zenginleştirici** | yürürlük/mülga, R.G., path, kaynak | ⬜ planlandı |
 | **Korpus artifact** | JSONL `{id, text, metadata}` (modüler sınır) | ⬜ planlandı |
@@ -64,7 +65,8 @@ mevzuat.gov.tr → mevzuat-mcp API → [yapısal chunker] → [metadata zenginle
 | Konu | Seçim | Durum |
 |---|---|---|
 | Yaklaşım (RAG tipi) | vanilla RAG (graph/agentic değil) | ✅ karar |
-| Veri kaynağı | `saidsurucu/mevzuat-mcp` API | ✅ karar |
+| Veri kaynağı | `saidsurucu/mevzuat-mcp` (mevzuat.gov.tr + bedesten) | ✅ karar |
+| mevzuat-mcp erişimi | yerel MCP server + MCP client (ADR-0012) | ✅ karar |
 | Dil/runtime | Python (varsayılan) | 🟡 örtük varsayım |
 | Embedding | BGE-M3 (aday) | 🟡 öneri |
 | Vektör store | Qdrant **veya** pgvector | ⬜ açık |
@@ -78,6 +80,7 @@ mevzuat.gov.tr → mevzuat-mcp API → [yapısal chunker] → [metadata zenginle
 ---
 
 ## 5. Bugünkü Gerçek Durum
-- Repo'da yalnız `LICENSE` + bu yönetişim dokümanları + kapsam dosyası var.
-- **Henüz kod, paket iskeleti, bağımlılık tanımı veya docker yapılandırması yok.**
-- Bir sonraki somut adım: Faz 1 öncesi Python proje iskeleti + Faz 1 (mevzuat-mcp entegrasyonu).
+- Python iskeleti (`src/mevzuat_tool/`, venv, `requirements.txt`) kuruldu.
+- mevzuat-mcp yerelde MCP server olarak kuruldu; MCP client smoke test (`scripts/smoke_mcp.py`) `search_mevzuat` ile canlı veri döndürüyor (530 sonuç testi).
+- Henüz: chunking/metadata/embedding/retrieval kodu ve docker-compose yok.
+- Sıradaki: çeşitli örnek setini seç (ADR-0011) + zinciri tamamla (`get_mevzuat_madde_tree` + `get_mevzuat_content`).
