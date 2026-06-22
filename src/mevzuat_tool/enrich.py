@@ -32,3 +32,28 @@ def _madde_tipi(no: str) -> str:
         if no.startswith(prefix + " "):
             return tipi
     return "asil"
+
+
+def enrich(articles, tree):
+    out = []
+    cur_kisim = (None, None)
+    cur_bolum = (None, None)
+    cur_path = None
+    for art in articles:
+        tipi = _madde_tipi(art.no)
+        node = tree.by_no.get(art.no)
+        if node is not None and tipi == "asil":
+            cur_kisim = (node.kisim_no, node.kisim_baslik)
+            cur_bolum = (node.bolum_no, node.bolum_baslik)
+            cur_path = node.hiyerarsi_yolu
+            baslik, maddeId = node.baslik, node.maddeId
+        else:
+            baslik, maddeId = None, None
+        out.append(Madde(
+            no=art.no, body=art.body, madde_tipi=tipi, madde_baslik=baslik,
+            kisim_no=cur_kisim[0], kisim_baslik=cur_kisim[1],
+            bolum_no=cur_bolum[0], bolum_baslik=cur_bolum[1],
+            hiyerarsi_yolu=cur_path, maddeId=maddeId,
+            yurutluk=extract_status(art.body),
+        ))
+    return out
