@@ -86,4 +86,37 @@ Kaynak: `kanun193.pdf` (resmî GVK, 159 sf, ground-truth) ↔ pipeline çıktıs
 ---
 
 **Durum:** #1, #2, #3, #5, #6, #7 phase-3/followup-amendments branch'inde KAPATILDI.
-Açık kalan: #4 (tablolar — zor, ayrı) + Carry-forward maddeleri.
+#4 (tablolar) Faz B'de büyük ölçüde KAPATILDI (aşağı bkz.). Açık kalan: Carry-forward maddeleri.
+
+---
+
+## Faz B — Tümleyici HTML modülü (phase-b/html-structure-analysis)
+
+**Ne yapıldı:** MD omurgaya dokunmadan, ham HTML'den (bedesten_client `get_document_content`)
+(1) **#4 içerik tabloları** `<table>→Markdown` cebine (apendiks blacklist'le 11 içerik tablosu;
+GVK Madde 103 tarifesi dahil), ve (2) **dipnot `#_ftnN` anchor-bağı** pipeline'a eklendi.
+`enrich` iki opsiyonel param kazandı (None-default → mevcut davranış birebir; 62 test yeşil).
+Final whole-branch review (opus): "Ready with minor follow-ups (defer)", sıfır must-fix.
+
+**Faz B gerçek-veri bulguları (gözlem, defer):**
+- **Anchor yolu regex'ten daha eksiksiz:** VUK'ta 52 maddenin content.md gövdesinde `[n]` işareti
+  HİÇ YOK → regex yolu yapısal kör; HTML anchor'ı bu dipnotları kurtarıyor. Bu Faz B'nin değer
+  kanıtı. (Metin-örtüşme oranı: TCK %92, KVKK %88, GVK %89, VUK %53.) Gelecekte VUK'un dipnot
+  apendiks formatı `split_dipnot_apendiksi`'ye eklenebilir, ama anchor yolu zaten kapatıyor.
+- **Dipnot numara uzayları farklı:** HTML `[N]` belge-global (1..221), regex `[n]` madde-yerel.
+  `eval_html.py` bu yüzden sayısal değil **metin-örtüşme** invariant'ı kullanıyor.
+
+**Faz B defer-edilen Minor/Important (whole-branch review triage — merge bloklamaz):**
+- **(fetch_html try/finally)** `scripts/fetch_html.py` 4 doc'tan biri exception atarsa `client.close()`
+  atlanıyor (async client leak). Dev-only cache scripti (çıktı gitignored), etki ~0; `try/finally`
+  ile temizlenebilir. Tek satırlık follow-up.
+- **(eval _overlaps Important→nit)** Aynı maddede aynı kanun/maddeye 2 atıf teorik birleşebilir
+  (+1/madde sınırlı). Eval-gözlem scriptinde, hiçbir teslim artefaktını etkilemez.
+- **(eval total_regex)** Özet satırında global `total_regex` accumulator yok (oran denominatoru
+  `total_anchor` doğru; sadece gözlem boşluğu).
+- **(html_table _TABLE)** non-greedy `.*?` iç içe tabloyu ilk `</table>`'de keser; gerçek veride
+  iç içe tablo yok (`irregular=0`, plan-kabul).
+- **(html_split kozmetik)** `re.DOTALL` inert; `_canon_prefix` ulaşılamaz defansif dal; em-dash
+  `—` testi yok. Hepsi zararsız.
+- **(scripts/inspect_metadata.py)** Faz B diff'inin parçası DEĞİL — önceden var olan untracked
+  scratch. Merge'e yanlışlıkla karışmamalı.
