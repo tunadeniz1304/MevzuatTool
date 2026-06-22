@@ -49,3 +49,15 @@ def test_parse_tree_keeps_full_path_including_kitap():
         "BİRİNCİ KİTAP - Cezalar › İKİNCİ KISIM - Suçlar › "
         "ÜÇÜNCÜ BÖLÜM - Hükümler › Madde 5"
     )
+
+
+def test_parse_tree_handles_gerekceId_suffix():
+    txt = (
+        "- BİRİNCİ KISIM - Amaç (maddeId:100 | gerekceId:500)\n"
+        "  - Madde No: 1 - Amaç ve kapsam: (maddeId:101 | gerekceId:501)\n"
+    )
+    idx = parse_tree(txt)
+    assert "1" in idx.by_no
+    assert idx.by_no["1"].baslik == "Amaç ve kapsam"
+    assert idx.by_no["1"].maddeId == "101"
+    assert idx.by_no["1"].kisim_no == "BİRİNCİ KISIM"

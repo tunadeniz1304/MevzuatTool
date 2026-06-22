@@ -11,10 +11,10 @@ from dataclasses import dataclass
 
 _LEVEL_KW = ("KİTAP", "KISIM", "BÖLÜM", "AYIRIM", "AYRIM")
 _MADDE_RE = re.compile(
-    r"Madde No:\s*(?P<no>\S+?)\s*-\s*(?P<title>.*?)\s*\(maddeId:(?P<mid>\d+)\)\s*$"
+    r"Madde No:\s*(?P<no>\S+?)(?:\s*-\s*(?P<title>.*?))?\s*\(maddeId:(?P<mid>\d+)(?:\s*\|[^)]*)?\)\s*$"
 )
 _LEVEL_RE = re.compile(
-    r"(?P<label>.+?)\s*-\s*(?P<title>.*?)\s*\(maddeId:(?P<mid>\d+)\)\s*$"
+    r"(?P<label>.+?)\s*-\s*(?P<title>.*?)\s*\(maddeId:(?P<mid>\d+)(?:\s*\|[^)]*)?\)\s*$"
 )
 
 
