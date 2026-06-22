@@ -69,6 +69,29 @@ def test_tireless_guard_rejects_number_followed_by_lowercase():
     assert [a.no for a in arts] == ["30"]
 
 
+def test_tireless_guard_rejects_mixedcase_uppercase_reference():
+    # KRİTİK (review bulgusu): KARIŞIK 'Madde N <BÜYÜK kelime>' gövde-içi ATIF madde SAYILMAMALI.
+    # 'Madde 32 Tebliğ...', 'Madde 10 Anayasa...' bir başka maddeye atıftır, başlık değil.
+    # Tiresiz büyük-harf dalı YALNIZ tam-büyük 'MADDE' ile aktif olmalı (gerçek veri: tiresiz
+    # başlıklar hep tam-büyük 'MADDE 428' biçiminde; karışık 'Madde' hep atıf).
+    text = (
+        "Madde 1- (1) Bu husus Madde 32 Tebliğ hükümlerine tabidir. "
+        "İlgili Madde 10 Anayasa'ya uygundur."
+    )
+    arts = split_articles(text)
+    assert [a.no for a in arts] == ["1"]
+
+
+def test_tireless_uppercase_title_requires_full_caps_MADDE():
+    # Tiresiz büyük-harf başlık SADECE tam-büyük 'MADDE' ile (Borçlar 'MADDE 428 İşyerinin').
+    # Karışık 'Madde 428 İşyerinin' tek başına (bağlamsız) yakalanmaz — gerçek dizgi tam-büyük.
+    full = "MADDE 427- (1) X. MADDE 428 İşyerinin devri konusu. MADDE 429- (1) Y."
+    assert [a.no for a in split_articles(full)] == ["427", "428", "429"]
+    # künye paren'i kapitalizasyondan bağımsız çalışır (hem MADDE hem Madde):
+    paren = "Madde 86- (1) X. Madde 87 (Mülga: 1/1/2020-1234 md.) Z. Madde 88- (1) Y."
+    assert [a.no for a in split_articles(paren)] == ["86", "87", "88"]
+
+
 def test_splits_fikralar_on_paren_numbers():
     from mevzuat_tool.chunker import split_fikralar
     body = "(1) Birinci fıkra. (2) İkinci fıkra."
