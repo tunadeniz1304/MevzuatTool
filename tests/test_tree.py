@@ -14,6 +14,20 @@ KITAP_SAMPLE = """- BİRİNCİ KİTAP - Cezalar (maddeId:1)
       - Madde No: 5 - Tanımlar: (maddeId:50)
 """
 
+MESSY_SAMPLE = """Article Tree for mevzuatId: 999
+Total nodes: 1
+
+- BİRİNCİ BÖLÜM - Genel (maddeId:10)
+    - Madde No: 1 - İlk: (maddeId:11)
+- bozuk satır maddeId olmadan
+"""
+
+
+def test_parse_tree_skips_non_data_lines():
+    idx = parse_tree(MESSY_SAMPLE)
+    assert set(idx.by_no.keys()) == {"1"}        # sadece geçerli madde
+    assert idx.by_no["1"].bolum_no == "BİRİNCİ BÖLÜM"
+
 
 def test_parse_tree_joins_madde_to_section():
     idx = parse_tree(SAMPLE)
