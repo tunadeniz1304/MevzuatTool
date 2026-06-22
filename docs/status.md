@@ -42,7 +42,8 @@ Fazlar: [`roadmap.md`](roadmap.md) · Kapsam uygunluğu: [`compliance.md`](compl
 
 ## Faz 1 — Veri Çekme ⬜
 - [ ] `mevzuat-mcp` entegrasyonu / istemci
-- [ ] Başlangıç korpusu seçildi: **yapısal çeşitlilik içeren küçük örnek seti** (tek kanun değil — kodifikasyon/yönetmelik/tebliğ/mülga karışık)
+- [ ] Yapısal eksenler listelendi + örnek başına kapsama (coverage) işaret tablosu oluşturuldu
+- [ ] Başlangıç korpusu seçildi: **yapısal eksen kapsamasına göre** küçük set (~5-8, tür-içi varyasyon dahil) (bkz. decisions.md ADR-0011)
 - [ ] `search_mevzuat → article_tree → article_content` akışı çalışıyor
 - [ ] PDF içerik atlama mantığı
 - [ ] Ham çıktı kaydı
