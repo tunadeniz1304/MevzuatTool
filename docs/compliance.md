@@ -15,6 +15,7 @@ Bu dosya, yapılan her işin [`mevzuat-mvp-kapsam.md`](mevzuat-mvp-kapsam.md) il
 
 ### 1. Veri Çekme
 - [ ] Kaynak yalnızca `mevzuat-mcp` araçları (`search_mevzuat` / `get_mevzuat_madde_tree` / `get_mevzuat_content`), MCP client üzerinden
+- [ ] Yalnızca **`KANUN`** türü çekiliyor (`mevzuat_tur=KANUN`); KHK/tüzük/yönetmelik/tebliğ ALINMIYOR
 - [ ] Kendi web scraper'ımız **yok** (repo API'leri kullanılıyor)
 - [ ] Yalnızca HTML/Markdown içerik alınıyor; PDF'ler atlanıyor
 - [ ] Başlangıçta dar korpus (tüm mevzuat değil)
@@ -60,6 +61,7 @@ Aşağıdakilerden **herhangi biri** projede iş olarak yapılıyorsa, kapsam ih
 - [ ] 🚫 Formal eval / benchmark harness kuruldu mu? → küçük sanity kontrolü hariç, future work
 - [ ] 🚫 PDF / OCR işleme eklendi mi? → kapsam dışı
 - [ ] 🚫 İçtihat / özelge (`yargi-mcp`: Yargıtay, Danıştay, GİB) işleniyor mu? → bu MVP dışı
+- [ ] 🚫 Kanun dışı tür (KHK / tüzük / yönetmelik / tebliğ) işlendi mi? → bu MVP yalnız **KANUN** (ADR-0013)
 - [ ] 🚫 Tüm mevzuatı baştan çekme denemesi mi yapılıyor? → önce dar korpus, sonra ölçekle
 
 > Yukarıdaki kutulardan biri işaretlenirse: **dur, gözden geçir.** Gerçekten gerekliyse `decisions.md`'ye kapsam değişikliği olarak kaydet.

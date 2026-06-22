@@ -15,7 +15,7 @@ Fazlar: [`roadmap.md`](roadmap.md) · Kapsam uygunluğu: [`compliance.md`](compl
 |---|---|---|
 | 0 | Kurulum & Yönetişim | 🟡 |
 | 1 | Veri Çekme (data acquisition) | 🟡 |
-| 2 | Yapısal Chunking | ⬜ |
+| 2 | Yapısal Chunking | 🟡 |
 | 3 | Metadata | ⬜ |
 | 4 | Temiz Korpus Artifact | ⬜ |
 | 5 | Embedding + Indexleme | ⬜ |
@@ -43,28 +43,51 @@ Fazlar: [`roadmap.md`](roadmap.md) · Kapsam uygunluğu: [`compliance.md`](compl
 ## Faz 1 — Veri Çekme 🟡
 - [x] `mevzuat-mcp` entegrasyonu: yerel server + MCP client (ADR-0012) — smoke test ✓
 - [x] Yapısal eksenler listelendi + kapsama (coverage) işaret tablosu oluşturuldu ↓
-- [x] Başlangıç korpusu seçildi: 5 belgelik yapısal-çeşitlilik seti (bkz. decisions.md ADR-0011)
+- [x] Başlangıç korpusu seçildi: **kanun-only** set (TCK/VUK/KVKK; tebliğ+yönetmelik kapsam dışı — ADR-0013) (bkz. decisions.md ADR-0011)
 - [x] `search_mevzuat` ✓ → `get_mevzuat_madde_tree` ✓ → `get_mevzuat_content` ✓ — tam zincir MCP client ile çalışıyor
 
-### Başlangıç korpusu — seçilen set + kapsama tablosu (2026-06-19)
-| Belge | mevzuatId | Yapı / kapsanan eksen | Düğüm |
+### Başlangıç korpusu — kanun-only set + kapsama tablosu (2026-06-19, ADR-0013)
+| Kanun | mevzuatId | Yapı / kapsanan eksen | Düğüm |
 |---|---|---|---|
 | Türk Ceza Kanunu 5237 | 103228 | Derin hiyerarşi (Kitap/Kısım/Bölüm) | 397 |
 | Vergi Usul Kanunu 213 | 103006 | Karışık + dev + çok-değişiklikli (serbest madde + Kitap) | 691 |
 | KVKK 6698 | 104383 | Düz kanun (sadece Bölüm) | 41 |
-| İthalatta Gözetim Tebliği | 350781 | **Ağaç YOK** → content-only edge-case | 0 |
-| Kültür Bak. Yayın Yönetmeliği | 352791 | Düz yönetmelik (KKY) | 26 |
+| _(aday)_ Gelir Vergisi Kanunu 193 | 103111 | Kısım/Bölüm; `(1)`-siz eski fıkra stili (`1.`) | 187 |
 
-> **Doğrulandı (2026-06-19, content):** mülga/değişik/ek/mükerrer/geçici işaretleri content'te; VUK çok yoğun (mükerrer 290, değişik 272, mülga 91, ek 76, geçici 73), tebliğ/yönetmelik tertemiz.
+> **Kapsam dışı (geçmiş kayıt, ADR-0013):** İlk keşifte alınan İthalatta Gözetim Tebliği (350781) ve Kültür Bak. Yayın Yönetmeliği (352791) artık **kapsam dışı** (kanun değil); eval/bulgulardaki 'KKY' satırı tarihsel.
+> **Doğrulandı (2026-06-19, content):** mülga/değişik/ek/mükerrer/geçici işaretleri content'te; VUK çok yoğun (mükerrer 290, değişik 272, mülga 91, ek 76, geçici 73), KVKK görece temiz.
 >
 > **Adım 12 chunking bulguları (Faz 2 girdisi):** content metni "kirli" — cümle ortası satır kırıkları (`Madde\n1`); madde işareti belgeden belgeye değişir (`Madde 1-` / `MADDE 1-` / `MADDE 1 –`, tire↔en-dash); fıkra = `(N)`; madde başlığı maddeden ÖNCEki satırda; değişiklik/mülga şerhi (`(Değişik: …)`/`(Mülga: …)`) madde no'sundan hemen sonra; tablolar düz metne yayılmış. → chunker **normalize + esnek madde-regex** gerektirir; ağaç olan/olmayan için iki yol denenecek.
 - [ ] PDF içerik atlama mantığı
 - [ ] Ham çıktı kaydı
 
-## Faz 2 — Yapısal Chunking ⬜
-- [ ] Madde bazlı atomik chunk üretimi
-- [ ] Uzun madde → fıkra bölme
-- [ ] Hiyerarşi (`kanun→...→madde→fıkra→bent`) korunuyor
+## Faz 2 — Yapısal Chunking 🟡 (chunker parçaları kuruldu; birleştirme → Faz 4)
+Plan: `docs/superpowers/plans/2026-06-19-structural-chunking.md` · branch `phase-2/structural-chunking` (lokal) · TDD, 5 task, 5/5 test ✓.
+- [x] `normalize_text` — satır kırığı birleştir + tire tek tip
+- [x] `split_articles` — esnek `Madde/MADDE N-` regex (madde bazlı chunk)
+- [x] `split_fikralar` — `(N)` fıkra bölme
+- [x] `extract_status` — `(Mülga: …)` → yürürlük durumu (ADR-0005)
+- [x] `count_tree_articles` + `scripts/eval_chunker.py` — ağaca karşı ground-truth eval
+- [ ] **Birleştirme (assembly):** `split_articles`→fıkra→status'u tek `{id,text,metadata}` chunk'ta toplama → **Faz 4** (parçalar henüz birbirini çağırmıyor)
+- [ ] Hiyerarşi-path (Kitap/Kısım/Bölüm) — MVP'de yok (YAGNI)
+
+### Eval sonucu (Task 6 fix sonrası — chunker vs ağaç ground-truth)
+| Belge | chunker | unique | tree | dup |
+|---|---|---|---|---|
+| TCK | 348 | 347 | 345 | 1 |
+| ~~KKY~~ _(kapsam dışı, ADR-0013)_ | 22 | 22 | 22 | 0 ✓ |
+| KVKK | 36 | 36 | 33 | 0 ✓ |
+| VUK | 492 | 468 | 564 | 24 |
+
+> **Düzeltildi (Task 6, commit f522f50):** prefix/suffix maddeler (Ek/Geçici/Mükerrer, `N/A`) artık benzersiz `no` alıyor (Türkçe i/İ-güvenli char-class regex). Ana çakışma bug'ı kapandı: **KVKK dup 3→0, VUK dup 104→24.**
+> **Kalan dup'lar gerçek tekrar:** Türk mevzuatında her değişiklik kanununun kendi "Geçici Madde 1"i olur → "Geçici 1" meşru olarak defalarca geçer (VUK 7×). Kod defekti değil; tam benzersizlik için **değişiklik-bağlamı metadata'sı (Faz 3)** gerekir. VUK "215" ×4 anomalisi ayrı incelenecek.
+> `fark` artık birincil metrik değil — chunker, geçici maddeleri ağacın atladığı yerde doğru yakalıyor.
+
+### Faz 2 future-work (öncelik sırası)
+1. ✅ Prefix/suffix madde desteği + benzersiz no (Task 6) — yapıldı.
+2. Birleştirme + metadata → JSONL `{id,text,metadata}` (Faz 4 ile).
+3. Geçici madde tekrarına değişiklik-bağlamı metadata'sı (Faz 3); VUK "215" ×4 anomalisi analizi.
+4. Fıkra `(1)`boşluksuz; serbest-metin mülga tespiti; edge-case testleri; eval'e 5. belge.
 
 ## Faz 3 — Metadata ⬜
 - [ ] Temel metadata alanları (ad/no/tür/madde/başlık/fıkra/path/kaynak/R.G.)
