@@ -8,11 +8,12 @@ Tek doğruluk kaynakları: kapsam → [`mevzuat-mvp-kapsam.md`](docs/mevzuat-mvp
 ---
 
 ## Proje nedir
-mevzuat.gov.tr mevzuatını (kanun, KHK, tüzük, yönetmelik, tebliğ) `mevzuat-mcp` ile çekip RAG'a uygun yapısal chunk + metadata'ya dönüştüren ve bir soruya/atıfa karşılık **ilgili yürürlükteki mevzuat maddelerini getiren**, dockerize MVP.
+mevzuat.gov.tr **kanunlarını** (yalnız `KANUN` türü) `mevzuat-mcp` ile çekip RAG'a uygun yapısal chunk + metadata'ya dönüştüren ve bir soruya/atıfa karşılık **ilgili yürürlükteki kanun maddelerini getiren**, dockerize MVP.
 
 ## En kritik sınır — UNUTMA
 - **Pipeline retrieval'da BİTER.** LLM / cevap üretme (generation) **KAPSAM DIŞI.** Generation, en sonda config'le takılan, OpenAI-uyumlu, swap'lanabilir bir endpoint olarak bırakılır — build buna bağımlı değildir.
 - **Yaklaşım = vanilla RAG.** Graph/agentic/advanced RAG **YAPMA** (future work). Bu MVP, vanilla RAG'ın retrieval yarısı. Doğru vanilla = madde-seviyesi yapısal chunking + hybrid (dense+BM25); bunlar "advanced" değil.
+- **Yalnız `KANUN` türü.** KHK/tüzük/yönetmelik/tebliğ **YAPMA** — kapsam dışı (ADR-0013). `mevzuat_tur=KANUN`.
 - Yeni bir özellik eklemeden önce **mutlaka** [`compliance.md`](docs/compliance.md) "Kapsam Dışı" listesine bak. Listeye takılıyorsa **yapma**.
 
 ## Değişmez mimari ilkeler
