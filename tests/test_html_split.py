@@ -87,3 +87,21 @@ def test_html_tireless_guard_rejects_lowercase_body_reference():
     html = "<p><span>Madde 1 - (1) Burada madde 10 hükmü ve madde 25 fıkrası uygulanır.</span></p>"
     parts = split_html_articles(html)
     assert set(parts.keys()) == {"1"}
+
+
+def test_html_tireless_guard_rejects_mixedcase_uppercase_reference():
+    # KRİTİK (review bulgusu): karışık 'Madde N <BÜYÜK>' gövde-içi ATIF madde SAYILMAMALI.
+    # Tiresiz büyük-harf dalı YALNIZ tam-büyük 'MADDE' ile (chunker ile simetrik).
+    html = (
+        "<p><span>Madde 1 - (1) Bu husus Madde 32 Tebliğ hükümlerine tabidir; "
+        "Madde 10 Anayasa'ya uygundur.</span></p>"
+    )
+    parts = split_html_articles(html)
+    assert set(parts.keys()) == {"1"}
+
+
+def test_html_dot_after_footnote_marker_still_splits():
+    # Reviewer minor: 'Madde 61[3]. -' (numara + [n] + nokta + tire) — nokta-yeri simetrisi.
+    html = '<p><span>Madde 61<a href="#_ftn3">[3]</a>. - (1) Hakim.</span></p>'
+    parts = split_html_articles(html)
+    assert set(parts.keys()) == {"61"}
