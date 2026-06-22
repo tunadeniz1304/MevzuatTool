@@ -47,3 +47,12 @@ def test_duplicate_markers_dedup_keep_order():
     body = "[7] sonra yine [7] ve [5]."
     bagli = baglanan_dipnotlar(body, tum)
     assert [d.no for d in bagli] == [7, 5]
+
+
+def test_splits_inline_single_line_appendix():
+    # normalize sonrası gerçek senaryo: tek satırda boşlukla ayrık [n] entry'leri
+    body = "Madde gövdesi biter. [1] birinci tanım. [2] ikinci tanım. [3] üçüncü tanım."
+    clean, dipnotlar = split_dipnot_apendiksi(body)
+    assert clean == "Madde gövdesi biter."
+    assert [d.no for d in dipnotlar] == [1, 2, 3]
+    assert dipnotlar[1].text == "ikinci tanım."
