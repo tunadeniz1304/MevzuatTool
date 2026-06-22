@@ -139,10 +139,13 @@ def enrich(articles, tree, kanun_no,
      regex) — gereksiz çift hesap yapmaz. `anchor==regex` karşılaştırması **`eval_html.py`'nin
      işidir** (her iki bağı ayrı çağırıp kıyaslar); `enrich` bu kıyası yapmaz.
 
-**Dipnot-anchor yapısı (workflow kanıtı):**
-- İşaret: `<a href="#_ftnN" name="_ftnrefN"><span class=MsoFootnoteReference>[N]</span></a>`
-- Tanım: `<a name="_ftnN" href="#_ftnrefN">[N]</a>` + serbest metin (kuyrukta, konteyner yok).
-- `parse_anchors`: işaret→`#_ftnN`→tanım, **benzersiz hedef id** ile eşler.
+**Dipnot-anchor yapısı (ham HTML'den DOĞRULANDI, GVK):**
+- İşaret (gövdede): `<a href="#_ftn1" name="_ftnref1" ...><span ...>[1]</span></a>`
+- Tanım (kuyrukta): `<a href="#_ftnref1" name="_ftn1" ...><span ...>[1]</span></a>` + serbest metin.
+  Yani işaret ve tanımda href↔name **yer değiştirir**: işaret `name="_ftnrefN"`, tanım `name="_ftnN"`.
+- HTML `\r\n` satır kırığı ve iç içe `<span>`/`<i>`/`<b>` içerir → regex `re.DOTALL` + tag-toleranslı.
+- `parse_anchors`: işaretin `name="_ftnrefN"`'ini tanımın `name="_ftnN"`'ine (N eşleşmesi) bağlar;
+  tanım metni = tanım anchor'ından sonraki serbest metin. **Benzersiz id** ile eşleşme.
 
 ## 7. HTML erişim & encoding
 
