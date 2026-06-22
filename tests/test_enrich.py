@@ -127,3 +127,31 @@ def test_enrich_links_inline_footnote_to_madde():
     )]
     maddeler, _ = enrich(arts, TREE, "193")
     assert [d.no for d in maddeler[0].dipnotlar] == [2]
+
+
+def test_enrich_backward_compatible_without_html():
+    # html_* verilmezse mevcut davranış birebir: tablolar boş, dipnotlar regex'ten.
+    arts = [Article(no="84", body="(Değişik: 9/4/2003-4842/3 md.) içerik.")]
+    maddeler, _ = enrich(arts, TREE, "193")
+    m = maddeler[0]
+    assert m.tablolar == []
+    assert m.madde_baslik == "Beyanname çeşitleri"  # mevcut tree-join korunur
+
+
+def test_enrich_injects_html_tables():
+    arts = [Article(no="103", body="Tarife metni düz halde.")]
+    html_tables = {"103": ["| dilim | oran |\n| --- | --- |\n| 18.000 TL | %15 |"]}
+    maddeler, _ = enrich(arts, TREE, "193", html_tables=html_tables)
+    m = maddeler[0]
+    assert len(m.tablolar) == 1
+    assert "%15" in m.tablolar[0]
+    assert "| dilim | oran |" in m.body_temiz   # body_temiz'e gömüldü
+
+
+def test_enrich_html_dipnot_overrides_regex():
+    from mevzuat_tool.dipnot import Dipnot
+    arts = [Article(no="5", body="Metin [1] atıf.\n[1] regex-tanımı.\n[2] x.\n[3] y.")]
+    html_dipnotlar = {"5": [Dipnot(no=1, text="ANCHOR-tanımı")]}
+    maddeler, _ = enrich(arts, TREE, "193", html_dipnotlar=html_dipnotlar)
+    m = maddeler[0]
+    assert [d.text for d in m.dipnotlar] == ["ANCHOR-tanımı"]   # anchor asıl
