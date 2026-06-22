@@ -11,7 +11,9 @@ _PREFIX = (
     r")\s+"
 )
 _NUM = r"\d+(?:/[A-Za-zÇĞİÖŞÜçğıöşü]+)?"
-_MADDE = re.compile(rf"\b({_PREFIX})?{_MADDE_KW}\s+({_NUM})\s*-\s*")
+# Numaradan sonra opsiyonel nokta (nadir dizgi varyantı, ör. TCK "MADDE 61. -");
+# tire şartı korunduğu için "5. fıkra" gibi tire'siz numaralar madde sayılmaz.
+_MADDE = re.compile(rf"\b({_PREFIX})?{_MADDE_KW}\s+({_NUM})\.?\s*-\s*")
 
 
 def _canon_prefix(prefix: str) -> str:

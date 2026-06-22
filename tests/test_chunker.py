@@ -8,6 +8,21 @@ def test_splits_on_madde_markers_case_insensitive():
     assert arts[0].body.startswith("(1) Birinci")
 
 
+def test_splits_madde_with_dot_after_number():
+    # Nadir dizgi varyantı: numaradan sonra nokta (TCK Madde 61. / 328.).
+    text = "MADDE 61. - (1) Hakim. Madde 62- (1) Komşu. Madde 328. - (1) Devlet."
+    arts = split_articles(text)
+    assert [a.no for a in arts] == ["61", "62", "328"]
+    assert arts[0].body.startswith("(1) Hakim")
+
+
+def test_dot_tolerance_does_not_match_sentence_number_without_dash():
+    # '5. fıkra' gibi tire'siz numara madde başlığı SAYILMAMALI (yan etki kontrolü).
+    text = "Madde 10- (1) Bu konuda 5. fıkra hükmü uygulanır."
+    arts = split_articles(text)
+    assert [a.no for a in arts] == ["10"]
+
+
 def test_splits_fikralar_on_paren_numbers():
     from mevzuat_tool.chunker import split_fikralar
     body = "(1) Birinci fıkra. (2) İkinci fıkra."
