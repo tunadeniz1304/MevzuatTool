@@ -66,6 +66,7 @@ class Madde:
     fikralar: list = field(default_factory=list)
     degisiklik_gecmisi: list = field(default_factory=list)
     dipnotlar: list = field(default_factory=list)
+    tablolar: list = field(default_factory=list)
 
 
 def _madde_tipi(no: str) -> str:
@@ -75,7 +76,7 @@ def _madde_tipi(no: str) -> str:
     return "asil"
 
 
-def enrich(articles, tree, kanun_no: str):
+def enrich(articles, tree, kanun_no, html_tables=None, html_dipnotlar=None):
     maddeler: list[Madde] = []
     global_dipnotlar: list[Dipnot] = []
     cur_kisim = (None, None)
@@ -119,9 +120,18 @@ def enrich(articles, tree, kanun_no: str):
             degisiklik_gecmisi=kunyeler,
         ))
 
-    # 5. [n]→madde bağı (#2) — global dipnot listesi tamamlandıktan sonra.
+    # İkinci geçiş: dipnot bağı + HTML enjeksiyonu.
     for m in maddeler:
-        m.dipnotlar = baglanan_dipnotlar(m.body, global_dipnotlar)
+        # Dipnot: HTML anchor varsa ASIL, yoksa regex fallback (mevcut).
+        if html_dipnotlar is not None and m.no in html_dipnotlar:
+            m.dipnotlar = html_dipnotlar[m.no]
+        else:
+            m.dipnotlar = baglanan_dipnotlar(m.body, global_dipnotlar)
+        # Tablo: HTML markdown tablolar varsa tablolar alanına + body_temiz'e ekle.
+        if html_tables is not None and m.no in html_tables:
+            m.tablolar = html_tables[m.no]
+            for md in m.tablolar:
+                m.body_temiz = (m.body_temiz + "\n\n" + md).strip()
 
     # 6. Benzersiz id (#7).
     assign_ids(maddeler, kanun_no)
