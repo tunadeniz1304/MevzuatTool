@@ -17,13 +17,12 @@ from mcp.client.stdio import stdio_client
 SERVER_CMD = "mevzuat-mcp"
 OUT_DIR = os.path.join("data", "raw")
 
-# Seçilen 5'li set (ADR-0011) — (etiket, mevzuatId)
+# Kanun-only set (ADR-0013) — (etiket, mevzuatId). Hepsi mevzuat_tur=KANUN.
 DOCS = [
     ("Türk Ceza Kanunu 5237 (derin)", "103228"),
     ("Vergi Usul Kanunu 213 (karışık/çok-değişiklikli)", "103006"),
     ("KVKK 6698 (düz kanun)", "104383"),
-    ("İthalatta Gözetim Tebliği (AĞAÇ YOK)", "350781"),
-    ("Kültür Bak. Yayın Yönetmeliği (düz KKY)", "352791"),
+    ("Gelir Vergisi Kanunu 193 (eski; '1.' fıkra stili)", "103111"),
 ]
 
 
