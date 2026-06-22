@@ -12,8 +12,15 @@ _PREFIX = (
 )
 _NUM = r"\d+(?:/[A-Za-zÇĞİÖŞÜçğıöşü]+)?"
 # Numaradan sonra opsiyonel: [dipnot] işaret(ler)i (ör. Gümrük "Madde 15[14][15] -") + nokta
-# (ör. TCK "MADDE 61. -"). Tire şartı KORUNUR → "5. fıkra" / "5[3] fıkra" madde sayılmaz.
-_MADDE = re.compile(rf"\b({_PREFIX})?{_MADDE_KW}\s+({_NUM})(?:\[\d+\])*\s*\.?\s*-\s*")
+# (ör. TCK "MADDE 61. -").
+# Ayraç iki biçimde kabul edilir:
+#   (a) TİRE  "...{_NUM} - "  → klasik, en yaygın.
+#   (b) TİRESİZ ama hemen ardından '(' künyesi VEYA BÜYÜK-HARF başlık gelirse
+#       (ör. Borçlar "MADDE 428 İşyerinin...", İş "Madde 87 (Mülga:...)").
+# Tiresiz dalda büyük-harf/paren ŞARTI, "madde 10 hükmü" / "5. fıkra" gibi gövde-içi
+# küçük-harf atıfların yanlış-pozitif madde sayılmasını engeller (yan-etki guard'ı).
+_AYRAC = r"(?:\s*-\s*|\s+(?=[(]|[A-ZÇĞİÖŞÜ]))"
+_MADDE = re.compile(rf"\b({_PREFIX})?{_MADDE_KW}\s+({_NUM})(?:\[\d+\])*\s*\.?{_AYRAC}")
 
 
 def _canon_prefix(prefix: str) -> str:

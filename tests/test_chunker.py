@@ -39,6 +39,36 @@ def test_footnote_marker_does_not_break_tireless_guard():
     assert [a.no for a in arts] == ["20"]
 
 
+def test_splits_tireless_madde_with_uppercase_title():
+    # Gerçek dizgi (Borçlar): tire YOK, numaradan sonra BÜYÜK HARF başlık.
+    # 'MADDE 428 İşyerinin...' → 428 yakalanır (büyük-harf başlık koşulu).
+    text = "MADDE 427- (1) Önceki. MADDE 428 İşyerinin tamamı veya bir bölümü devri. MADDE 429- (1) Sonraki."
+    arts = split_articles(text)
+    assert [a.no for a in arts] == ["427", "428", "429"]
+
+
+def test_splits_tireless_madde_with_kunye_paren():
+    # Gerçek dizgi (İş Madde 87): tire YOK, numaradan sonra (Mülga/Değişik künyesi.
+    text = "Madde 86- (1) Önceki. Madde 87 (Mülga: 20/6/2012-6331/37 md.) Gebe kadınlar. Madde 88- (1) Sonraki."
+    arts = split_articles(text)
+    assert [a.no for a in arts] == ["86", "87", "88"]
+
+
+def test_tireless_guard_rejects_inline_lowercase_reference():
+    # KRİTİK yan-etki guard'ı: tiresiz kuralı metin-içi küçük-harf atıfları MADDE SAYMAMALI.
+    # 'madde 10 hükmü', 'madde 5 ve 6' gibi gövde-içi atıflar başlık değil.
+    text = "Madde 1- (1) Bu konuda madde 10 hükmü ve madde 25 fıkrası birlikte uygulanır."
+    arts = split_articles(text)
+    assert [a.no for a in arts] == ["1"]
+
+
+def test_tireless_guard_rejects_number_followed_by_lowercase():
+    # 'Madde 5 fıkra' (küçük harf 'fıkra') tiresiz → madde DEĞİL (küçük harf koşulu reddeder).
+    text = "Madde 30- (1) İlgili madde 5 fıkrasına göre işlem yapılır."
+    arts = split_articles(text)
+    assert [a.no for a in arts] == ["30"]
+
+
 def test_splits_fikralar_on_paren_numbers():
     from mevzuat_tool.chunker import split_fikralar
     body = "(1) Birinci fıkra. (2) İkinci fıkra."
