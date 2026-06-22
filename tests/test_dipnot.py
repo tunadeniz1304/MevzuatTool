@@ -1,4 +1,4 @@
-from mevzuat_tool.dipnot import Dipnot, split_dipnot_apendiksi
+from mevzuat_tool.dipnot import Dipnot, split_dipnot_apendiksi, baglanan_dipnotlar
 
 
 def test_splits_trailing_footnote_block_of_three_or_more():
@@ -27,3 +27,23 @@ def test_no_footnotes_returns_body_unchanged():
     clean, dipnotlar = split_dipnot_apendiksi(body)
     assert clean == body
     assert dipnotlar == []
+
+
+def test_links_inline_markers_to_footnotes():
+    tum = [Dipnot(1, "birinci"), Dipnot(2, "ikinci"), Dipnot(3, "üçüncü")]
+    body = "Bu hüküm [2] ve ayrıca [3] ile değişti."
+    bagli = baglanan_dipnotlar(body, tum)
+    assert [d.no for d in bagli] == [2, 3]
+
+
+def test_unmatched_marker_is_skipped():
+    tum = [Dipnot(1, "birinci")]
+    body = "Atıf [9] global listede yok."
+    assert baglanan_dipnotlar(body, tum) == []
+
+
+def test_duplicate_markers_dedup_keep_order():
+    tum = [Dipnot(5, "beş"), Dipnot(7, "yedi")]
+    body = "[7] sonra yine [7] ve [5]."
+    bagli = baglanan_dipnotlar(body, tum)
+    assert [d.no for d in bagli] == [7, 5]

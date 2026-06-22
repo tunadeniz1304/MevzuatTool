@@ -39,3 +39,18 @@ def split_dipnot_apendiksi(body: str) -> tuple[str, list["Dipnot"]]:
         dipnotlar.append(Dipnot(no=int(m.group(1)), text=m.group(2).strip()))
     clean = "\n".join(lines[:start]).strip()
     return clean, dipnotlar
+
+
+_ISARET = re.compile(r"\[(\d+)\]")
+
+
+def baglanan_dipnotlar(body: str, tum_dipnotlar: list["Dipnot"]) -> list["Dipnot"]:
+    by_no = {d.no: d for d in tum_dipnotlar}
+    out: list[Dipnot] = []
+    gorulen: set[int] = set()
+    for m in _ISARET.finditer(body):
+        no = int(m.group(1))
+        if no in by_no and no not in gorulen:
+            out.append(by_no[no])
+            gorulen.add(no)
+    return out
