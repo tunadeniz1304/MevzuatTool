@@ -23,6 +23,22 @@ def test_dot_tolerance_does_not_match_sentence_number_without_dash():
     assert [a.no for a in arts] == ["10"]
 
 
+def test_splits_madde_with_footnote_marker_before_dash():
+    # Gerçek dizgi (Gümrük): numara ile tire arasında [dipnot] işaret(ler)i.
+    # 'Madde 15[14][15] - ...' → numara 15, dipnot işaretleri tüketilir, tire korunur.
+    text = "Madde 15[14][15] - 1. Gümrük vergileri. Madde 16[16] - 1. Diğer. Madde 111[69] - 1. Rejim."
+    arts = split_articles(text)
+    assert [a.no for a in arts] == ["15", "16", "111"]
+    assert arts[0].body.startswith("1. Gümrük")
+
+
+def test_footnote_marker_does_not_break_tireless_guard():
+    # [n] toleransı tire şartını GEVŞETMEMELİ: tiresiz '5[3] fıkra' madde sayılmaz.
+    text = "Madde 20- (1) Burada 5[3] fıkra hükmü geçerli."
+    arts = split_articles(text)
+    assert [a.no for a in arts] == ["20"]
+
+
 def test_splits_fikralar_on_paren_numbers():
     from mevzuat_tool.chunker import split_fikralar
     body = "(1) Birinci fıkra. (2) İkinci fıkra."
