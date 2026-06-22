@@ -96,3 +96,6 @@ research_outputs/
 
 # ---- Kod denetim raporları (yerel, versiyonlanmaz) ----
 docs/reviews/
+
+# ---- PDF'ler kapsam dışı (CLAUDE.md ilke 2) — yalnız yerel analiz, versiyonlanmaz ----
+*.pdf
