@@ -20,7 +20,15 @@ def _load(mid: str):
     content = pathlib.Path(f"data/raw/content_{mid}.md").read_text(encoding="utf-8")
     tree_txt = pathlib.Path(f"data/raw/tree_{mid}.txt").read_text(encoding="utf-8")
     arts = split_articles(normalize_text(content))
-    return enrich(arts, parse_tree(tree_txt))
+    maddeler, _dipnotlar = enrich(arts, parse_tree(tree_txt), mid)
+    return maddeler
+
+
+def _load_full(mid: str):
+    content = pathlib.Path(f"data/raw/content_{mid}.md").read_text(encoding="utf-8")
+    tree_txt = pathlib.Path(f"data/raw/tree_{mid}.txt").read_text(encoding="utf-8")
+    arts = split_articles(normalize_text(content))
+    return enrich(arts, parse_tree(tree_txt), mid)  # (maddeler, dipnotlar)
 
 
 for label, mid in LAWS.items():
@@ -44,3 +52,31 @@ assert "YEDİNCİ BÖLÜM" not in gvk["79"].body, "Madde 79 sızması temizlenme
 assert gvk["84"].madde_baslik == "Beyanname çeşitleri", f"Madde 84 başlık yanlış: {gvk['84'].madde_baslik!r}"
 assert "Geçici 84" in gvk and gvk["Geçici 84"].madde_tipi == "gecici", "Geçici 84 flag yanlış!"
 print("[OK] GVK invariant'lar geçti (79 sızmasız, 84 başlık='Beyanname çeşitleri', Geçici 84 flag='gecici').")
+
+# --- Faz 3 follow-up invariant'ları (GVK) ---
+gvk_maddeler, gvk_dipnotlar = _load_full("103111")
+gvk = {m.no: m for m in gvk_maddeler}
+
+# #1 dipnot apendiksi: Geçici 5 body_temiz makul boyutta (83K apendiks ayrıldı).
+if "Geçici 5" in gvk:
+    assert len(gvk["Geçici 5"].body_temiz) < 5000, \
+        f"Geçici 5 body_temiz hâlâ şişkin: {len(gvk['Geçici 5'].body_temiz)} krk — dipnot apendiksi ayrılmadı!"
+
+# #2 dipnotlar global listede toplandı.
+assert len(gvk_dipnotlar) > 50, f"GVK global dipnot sayısı düşük: {len(gvk_dipnotlar)} — apendiks ayrıştırma eksik!"
+
+# #5 fıkra/bent: Madde 70 birden çok bent içerir.
+if "70" in gvk:
+    toplam_bent = sum(len(f.bentler) for f in gvk["70"].fikralar)
+    assert toplam_bent >= 5, f"Madde 70 bent sayısı düşük: {toplam_bent} — bent bölme eksik!"
+
+# #3 değişiklik künyeleri: en az bir maddede yapısal künye var.
+assert any(m.degisiklik_gecmisi for m in gvk_maddeler), "GVK'da hiç değişiklik künyesi parse edilmedi!"
+ornek = next(k for m in gvk_maddeler for k in m.degisiklik_gecmisi if k.kanun_no)
+assert ornek.kanun_no, "Değişiklik künyesinde kanun_no boş!"
+
+# #7 benzersiz id: tüm id'ler çakışmasız.
+ids = [m.id for m in gvk_maddeler]
+assert len(ids) == len(set(ids)), "GVK'da çakışan chunk id'leri var — benzersiz id bozuk!"
+
+print("[OK] Follow-up invariant'lar geçti (dipnot ayrıldı, künyeler parse, Madde 70 bentli, id benzersiz).")
