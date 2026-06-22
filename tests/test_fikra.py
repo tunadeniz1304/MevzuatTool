@@ -34,3 +34,17 @@ def test_bent_level_yurutluk():
     f = parse_fikralar(body)[0]
     assert f.bentler[0].yurutluk == "yürürlükte"
     assert f.bentler[1].yurutluk == "mülga"
+
+
+def test_splits_inline_numbered_bentler_single_line():
+    # normalize-sonrası: tek satırda boşlukla ayrık numaralı bentler
+    body = "Şunlar gelirdir: 1. birinci gelir, 2. ikinci gelir, 3. üçüncü gelir."
+    f = parse_fikralar(body)[0]
+    assert [b.isaret for b in f.bentler] == ["1.", "2.", "3."]
+
+
+def test_non_sequential_numbers_are_not_bentler():
+    # '103.' gibi madde/yıl atıfları sıralı 1,2,3 koşusu oluşturmadığı için bent SAYILMAZ
+    body = "103. maddede belirtilen oran ve 1985. yıldan beri uygulanan kural."
+    f = parse_fikralar(body)[0]
+    assert f.bentler == []
