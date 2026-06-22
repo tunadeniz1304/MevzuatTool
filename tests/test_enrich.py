@@ -48,3 +48,15 @@ def test_enrich_strips_section_header_bleed():
     m = enrich(arts, TREE)[0]
     assert "YEDİNCİ BÖLÜM" not in m.body
     assert m.body == "asıl içerik."
+
+
+def test_enrich_plain_madde_missing_in_tree_does_not_crash():
+    arts = [
+        Article(no="84", body="ağaçtaki."),
+        Article(no="999", body="ağaçta olmayan düz madde."),  # TREE'de yok
+    ]
+    res = enrich(arts, TREE)
+    m = res[1]
+    assert m.madde_tipi == "asil"
+    assert m.maddeId is None          # ağaçta yok → None
+    assert m.bolum_no == "BİRİNCİ BÖLÜM"  # önceki asil maddeden miras
