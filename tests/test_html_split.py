@@ -25,3 +25,23 @@ def test_handles_crlf_and_nested_tags():
 
 def test_no_madde_returns_empty():
     assert split_html_articles("<p>başlık metni, madde yok</p>") == {}
+
+
+def test_splits_prefixed_maddeler_with_canonical_keys():
+    html = (
+        "<p><span>Madde 28 - (1) Asıl madde.</span></p>"
+        "<p><span>Mükerrer Madde 28 – (1) Mükerrer gövde.</span></p>"
+        "<p><span>Geçici Madde 5 - (1) Geçici gövde.</span></p>"
+        "<p><span>Ek Madde 2 – (1) Ek gövde.</span></p>"
+    )
+    parts = split_html_articles(html)
+    assert set(parts.keys()) == {"28", "Mükerrer 28", "Geçici 5", "Ek 2"}
+    assert "Asıl madde" in parts["28"]
+    assert "Mükerrer gövde" in parts["Mükerrer 28"]
+    assert "28" in parts and "Mükerrer 28" in parts  # no collision
+
+
+def test_suffix_madde_still_works():
+    html = "<p><span>Madde 257/A – (1) Suffix gövde.</span></p>"
+    parts = split_html_articles(html)
+    assert set(parts.keys()) == {"257/A"}
