@@ -32,12 +32,23 @@ Kaynak: `kanun193.pdf` (resmî GVK, 159 sf, ground-truth) ↔ pipeline çıktıs
 - **Fix yönü:** `degisiklik_gecmisi: list[dict]` alanı → `{tip, tarih, kanun_no, madde, kapsam}`.
   Sağlam parser gerekir: `(Ek cümle: …)`, `(… İptal: Anayasa Mahkemesi …)`, kesik tarih, çoklu `md.`
 
-## 🟠 4. Tablolar (vergi tarifesi) flat metinde bozuluyor
-- **Bulgu:** Madde 103 (gelir vergisi tarifesi) 2B tablo (gelir dilimi × oran). Hem PDF-extract
-  hem bizim gövde bunu **karışık sayı dizisine** çeviriyor (%15/%20/%27/%35 dilimlerden kopmuş;
-  parantez içi güncel değerler `(190.000 TL)` iç içe).
+## 🟠 4. Tablolar (vergi tarifesi) flat metinde bozuluyor — AÇIK, ama KAYNAK BULUNDU (Faz B adayı)
+- **Bulgu:** Madde 103 (gelir vergisi tarifesi) 2B tablo (gelir dilimi × oran). Mevcut pipeline
+  bunu **karışık sayı dizisine** çeviriyor (%15/%20/%27/%35 dilimlerden kopmuş; parantez içi
+  güncel değerler `(190.000 TL)` iç içe).
 - **Etki:** Tarife sorgusunda RAG çöp gövde döner.
-- **Not:** Zor problem (kaynak metin zaten düz); özel tablo-tanıma gerekebilir → düşük öncelik / ayrı.
+- **KÖK NEDEN (2026-06-22 kanıtlandı):** Kaynak metin DÜZ DEĞİL. `mevzuat-mcp` paketinin
+  `bedesten_client.get_document_content(mevzuat_id)` metodu ham `text/html` döndürüyor ve
+  GVK'da tarifeler GERÇEK `<table>`: GVK ham HTML'de 8 `<table>`, 401 `<tr>`, 1361 `<td>`.
+  Madde 103 = temiz 2-sütun (`<td>gelir dilimi</td><td>%oran</td>` per `<tr>`). Tabloyu öldüren
+  şey `bedesten_client._strip_html` (`re.sub(r'<[^>]+>','')`) — MCP tool'u `get_mevzuat_content`
+  bu strip'li yoldan (`get_document_plain_text`) geçiyor; ham HTML expose edilmemiş ama
+  `get_document_content` PUBLIC.
+- **Faz B yönü (HTML-tablo cebi):** MD omurgayı koru; tablolu maddeleri tespit et (`has_table`),
+  o maddelerin ham HTML'inden `<table>→Markdown` çıkar. Erişim = `get_document_content`'i
+  kütüphane olarak import et (Yol 2 — yeni scraper değil, mevzuat-mcp'nin kendi client'ı).
+  ⚠️ ADR-not gerekir: ilke #1 "yalnız mevzuat-mcp API'leri" — bu MCP-tool API'si değil, paketin
+  iç public metodu; küçük gerekçeli sapma. Önceki #4 notu ("kaynak zaten düz, zor") YANLIŞTI.
 
 ## 🟡 5. Fıkra/bent bölme (`1.` / `a)` stili) — ✅ KAPATILDI (phase-3/followup-amendments)
 - **Bulgu:** `split_fikralar` yalnız `(1)` böler; eski GVK `1. 2.` ve `a) b)` kullanır → bölünmez.
