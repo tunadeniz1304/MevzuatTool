@@ -61,6 +61,17 @@ Kaynak: `kanun193.pdf` (resmî GVK, 159 sf, ground-truth) ↔ pipeline çıktıs
 - tree.py `lstrip(" ")` tab girintisi; deepest-match (substring `in` + ilk-eşleşme) — gerçek veride etki yok.
 - enrich.py `_strip_bleed` kısa marker (2-harfli başlık) teorik over-truncation — mevcut korpusta aktif defect yok.
 
+## Faz 3 follow-up branch'inin final review'undan (DEFER, merge bloklamaz)
+- **(N1, #4 ile bağlantılı)** GVK Geçici 5'in apendiks-sonrası gövdesi (~25.8K) hâlâ tablo
+  (CBK/Tebliğ değişiklik geçmişi tablosu — `[n]` işaretsiz, #4 kapsamı) içeriyor. Eval
+  `body_temiz < 30000` eşiği #1'i koruyor ama marjı dar (~4K). İyileştirme: eşiği `< 27000`'e
+  çek + yorum ekle, veya `len(body) < len(ham_madde)*0.4` gibi daha güçlü invariant.
+- **(N2)** #6 (bent-seviyesi yürürlük) ÇALIŞIYOR (gerçek veride 15 mülga bent) ama eval'de
+  hiç #6 assertion'ı yok → sessizce bozulabilir. Öneri: `assert mülga_bent_sayısı > 0` ekle.
+- enrich.py kullanılmayan `from mevzuat_tool.tree import TreeIndex` import'u (T6 review) — fırsat buldukça sil.
+- fikra.py `Fikra.bentler` tip-anotasyonu `list` (eski `list[Bent]`) — forward-ref ile geri kazanılabilir.
+- Diğer kozmetik Minor'lar (dipnot var-adı `l`, ids slug çift-çağrı, künye forward-ref, test kapsama boşlukları) — ledger'da kayıtlı, kozmetik.
+
 ---
 
 **Durum:** #1, #2, #3, #5, #6, #7 phase-3/followup-amendments branch'inde KAPATILDI.
