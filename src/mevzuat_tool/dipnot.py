@@ -7,8 +7,10 @@ işaretlerini ilgili dipnotlara bağlar.
 import re
 from dataclasses import dataclass
 
-_DIPNOT_SATIR = re.compile(r"^\s*\[(\d+)\]\s*(.*)$")
-_ESIK = 3  # apendiks sayılması için min ardışık [n] satırı
+_ISARET_KONUM = re.compile(r"\[(\d+)\]")
+_ENTRY_BOL = re.compile(r"(?=\[\d+\]\s)")
+_ENTRY_PARSE = re.compile(r"\[(\d+)\]\s*(.*)", re.DOTALL)
+_ESIK = 3  # apendiks sayılması için min ardışık [n] işaretçisi
 
 
 @dataclass
@@ -18,26 +20,25 @@ class Dipnot:
 
 
 def split_dipnot_apendiksi(body: str) -> tuple[str, list["Dipnot"]]:
-    lines = body.splitlines()
-    # Kuyruktan geriye, ardışık [n] satırlarının başlangıç indeksini bul.
-    start = len(lines)
-    i = len(lines) - 1
-    while i >= 0:
-        if _DIPNOT_SATIR.match(lines[i]):
-            start = i
-            i -= 1
-        elif lines[i].strip() == "":
-            i -= 1  # boş satırlar bloğu bölmez
-        else:
+    marks = [(m.start(), int(m.group(1))) for m in _ISARET_KONUM.finditer(body)]
+    # Apendiks başlangıcı: no==1 olan ve ardından >=_ESIK işaretçi gelen ilk konum.
+    start = None
+    for k, (pos, no) in enumerate(marks):
+        if no == 1 and len(marks) - k >= _ESIK:
+            start = pos
             break
-    blok = [l for l in lines[start:] if _DIPNOT_SATIR.match(l)]
-    if len(blok) < _ESIK:
+    if start is None:
         return body, []
-    dipnotlar = []
-    for l in blok:
-        m = _DIPNOT_SATIR.match(l)
-        dipnotlar.append(Dipnot(no=int(m.group(1)), text=m.group(2).strip()))
-    clean = "\n".join(lines[:start]).strip()
+    clean = body[:start].strip()
+    apendiks = body[start:]
+    dipnotlar: list[Dipnot] = []
+    for parca in _ENTRY_BOL.split(apendiks):
+        parca = parca.strip()
+        m = _ENTRY_PARSE.match(parca)
+        if m:
+            dipnotlar.append(Dipnot(no=int(m.group(1)), text=m.group(2).strip()))
+    if len(dipnotlar) < _ESIK:
+        return body, []
     return clean, dipnotlar
 
 
