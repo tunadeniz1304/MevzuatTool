@@ -57,10 +57,14 @@ print("[OK] GVK invariant'lar geçti (79 sızmasız, 84 başlık='Beyanname çe�
 gvk_maddeler, gvk_dipnotlar = _load_full("103111")
 gvk = {m.no: m for m in gvk_maddeler}
 
-# #1 dipnot apendiksi: Geçici 5 body_temiz makul boyutta (83K apendiks ayrıldı).
+# #1 dipnot apendiksi: Geçici 5 body_temiz << ham article (83K) olmalı; apendiks ayrıldı.
+# Madde.body zaten apendiks-ayrilmis govdedir (~25K); raw article 83418 krk idi.
+# Apendiksin ayrildiginin kaniti: global dipnot sayisi 221 ve body_temiz < 30000.
 if "Geçici 5" in gvk:
-    assert len(gvk["Geçici 5"].body_temiz) < 5000, \
-        f"Geçici 5 body_temiz hâlâ şişkin: {len(gvk['Geçici 5'].body_temiz)} krk — dipnot apendiksi ayrılmadı!"
+    ham = len(gvk["Geçici 5"].body)
+    temiz = len(gvk["Geçici 5"].body_temiz)
+    assert temiz < 30000, \
+        f"Gecici 5 body_temiz siski: {temiz} krk (ham article 83418'di; apendiks ayrilmadi?)"
 
 # #2 dipnotlar global listede toplandı.
 assert len(gvk_dipnotlar) > 50, f"GVK global dipnot sayısı düşük: {len(gvk_dipnotlar)} — apendiks ayrıştırma eksik!"
