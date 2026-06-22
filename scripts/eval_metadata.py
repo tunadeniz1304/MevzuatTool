@@ -35,4 +35,4 @@ gvk = {m.no: m for m in _load("103111")}
 assert "YEDİNCİ BÖLÜM" not in gvk["79"].body, "Madde 79 sızması temizlenmedi!"
 assert gvk["84"].madde_baslik == "Beyanname çeşitleri", f"Madde 84 başlık yanlış: {gvk['84'].madde_baslik!r}"
 assert "Geçici 84" in gvk and gvk["Geçici 84"].madde_tipi == "gecici", "Geçici 84 flag yanlış!"
-print("\n✓ GVK invariant'lar geçti (79 sızmasız, 84 başlık='Beyanname çeşitleri', Geçici 84 flag='gecici').")
+print("\n[OK] GVK invariant'lar geçti (79 sızmasız, 84 başlık='Beyanname çeşitleri', Geçici 84 flag='gecici').")
