@@ -3,7 +3,6 @@
 Düz maddeler ağaçtan tam metadata alır; Geçici/Ek/Mükerrer maddeler tip flag'i +
 konum-mirası alır. Gövde sonundaki yapısal sızma (sonraki bölüm/madde başlığı) kırpılır.
 """
-import re
 from dataclasses import dataclass
 
 from mevzuat_tool.chunker import Article, extract_status
@@ -11,16 +10,35 @@ from mevzuat_tool.tree import TreeIndex
 
 _TIPI = (("Geçici", "gecici"), ("Ek", "ek"), ("Mükerrer", "mukerrer"))
 
-_HEADER_RE = re.compile(r"[A-ZÇĞİÖŞÜ]{2,}\s+(?:KİTAP|KISIM|BÖLÜM|AYIRIM|AYRIM)\b")
+
+def _bleed_markers(tree, no):
+    """no'dan sonra content'e sızabilecek ağaç-otoriteli string'ler (sonraki level başlıkları
+    + bir sonraki maddenin başlığı)."""
+    idx = None
+    for k, ev in enumerate(tree.ordered):
+        if ev["kind"] == "madde" and ev["node"].no == no:
+            idx = k
+            break
+    if idx is None:
+        return []
+    markers = []
+    for ev in tree.ordered[idx + 1:]:
+        if ev["kind"] == "level":
+            if ev["label"]:
+                markers.append(ev["label"])
+            if ev["title"]:
+                markers.append(ev["title"])
+        else:  # madde → bir sonraki madde, başlığını ekle ve dur
+            if ev["node"].baslik:
+                markers.append(ev["node"].baslik)
+            break
+    return markers
 
 
-def _strip_bleed(body: str, next_title: str | None) -> str:
+def _strip_bleed(body, markers):
     cut = len(body)
-    m = _HEADER_RE.search(body)
-    if m:
-        cut = min(cut, m.start())
-    if next_title:
-        idx = body.find(next_title)
+    for mk in markers:
+        idx = body.find(mk)
         if idx != -1:
             cut = min(cut, idx)
     return body[:cut].strip()
@@ -53,7 +71,7 @@ def enrich(articles, tree):
     cur_kisim = (None, None)
     cur_bolum = (None, None)
     cur_path = None
-    for i, art in enumerate(articles):
+    for art in articles:
         tipi = _madde_tipi(art.no)
         node = tree.by_no.get(art.no)
         if node is not None and tipi == "asil":
@@ -61,13 +79,11 @@ def enrich(articles, tree):
             cur_bolum = (node.bolum_no, node.bolum_baslik)
             cur_path = node.hiyerarsi_yolu
             baslik, maddeId = node.baslik, node.maddeId
+            markers = _bleed_markers(tree, art.no)
         else:
             baslik, maddeId = None, None
-        next_title = None
-        if i + 1 < len(articles):
-            nxt = tree.by_no.get(articles[i + 1].no)
-            next_title = nxt.baslik if nxt else None
-        body = _strip_bleed(art.body, next_title)
+            markers = []
+        body = _strip_bleed(art.body, markers)
         out.append(Madde(
             no=art.no, body=body, madde_tipi=tipi, madde_baslik=baslik,
             kisim_no=cur_kisim[0], kisim_baslik=cur_kisim[1],

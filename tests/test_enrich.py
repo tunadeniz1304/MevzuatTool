@@ -9,6 +9,14 @@ TREE = parse_tree(
     "    - Madde No: 84 - Beyanname çeşitleri: (maddeId:1279029)\n"
 )
 
+TREE_BLEED = parse_tree(
+    "- DÖRDÜNCÜ KISIM - X (maddeId:9)\n"
+    "  - BİRİNCİ BÖLÜM - Beyan Esası (maddeId:10)\n"
+    "    - Madde No: 84 - Beyanname çeşitleri: (maddeId:1279029)\n"
+    "  - YEDİNCİ BÖLÜM - Diğer Kazanç (maddeId:20)\n"
+    "    - Madde No: 85 - Gelire giren: (maddeId:30)\n"
+)
+
 
 def test_madde_tipi_from_no():
     assert _madde_tipi("84") == "asil"
@@ -45,9 +53,19 @@ def test_enrich_strips_section_header_bleed():
         Article(no="84", body="asıl içerik. YEDİNCİ BÖLÜM Diğer Kazanç Gelire giren:"),
         Article(no="85", body="sonraki."),
     ]
-    m = enrich(arts, TREE)[0]
+    m = enrich(arts, TREE_BLEED)[0]
     assert "YEDİNCİ BÖLÜM" not in m.body
     assert m.body == "asıl içerik."
+
+
+def test_enrich_status_uses_clean_body_not_next_madde_bleed():
+    # Sonraki maddenin '(Mülga' bleed'i bu maddenin yürürlüğünü ETKİLEMEMELİ.
+    arts = [
+        Article(no="84", body="bu madde yürürlükte. YEDİNCİ BÖLÜM Diğer Kazanç Gelire giren:"),
+        Article(no="85", body="(Mülga: 1/1/2020) sonraki."),
+    ]
+    m = enrich(arts, TREE_BLEED)[0]
+    assert m.yurutluk == "yürürlükte"
 
 
 def test_enrich_plain_madde_missing_in_tree_does_not_crash():
