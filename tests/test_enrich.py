@@ -38,3 +38,13 @@ def test_enrich_prefixed_inherits_section_and_flags():
     assert g.maddeId is None
     assert g.madde_baslik is None
     assert g.bolum_no == "BİRİNCİ BÖLÜM"   # bir önceki asil maddeden miras
+
+
+def test_enrich_strips_section_header_bleed():
+    arts = [
+        Article(no="84", body="asıl içerik. YEDİNCİ BÖLÜM Diğer Kazanç Gelire giren:"),
+        Article(no="85", body="sonraki."),
+    ]
+    m = enrich(arts, TREE)[0]
+    assert "YEDİNCİ BÖLÜM" not in m.body
+    assert m.body == "asıl içerik."

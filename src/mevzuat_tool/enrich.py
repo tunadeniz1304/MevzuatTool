@@ -11,6 +11,20 @@ from mevzuat_tool.tree import TreeIndex
 
 _TIPI = (("Geçici", "gecici"), ("Ek", "ek"), ("Mükerrer", "mukerrer"))
 
+_HEADER_RE = re.compile(r"[A-ZÇĞİÖŞÜ]{2,}\s+(?:KİTAP|KISIM|BÖLÜM|AYIRIM|AYRIM)\b")
+
+
+def _strip_bleed(body: str, next_title: str | None) -> str:
+    cut = len(body)
+    m = _HEADER_RE.search(body)
+    if m:
+        cut = min(cut, m.start())
+    if next_title:
+        idx = body.find(next_title)
+        if idx != -1:
+            cut = min(cut, idx)
+    return body[:cut].strip()
+
 
 @dataclass
 class Madde:
@@ -39,7 +53,7 @@ def enrich(articles, tree):
     cur_kisim = (None, None)
     cur_bolum = (None, None)
     cur_path = None
-    for art in articles:
+    for i, art in enumerate(articles):
         tipi = _madde_tipi(art.no)
         node = tree.by_no.get(art.no)
         if node is not None and tipi == "asil":
@@ -49,11 +63,16 @@ def enrich(articles, tree):
             baslik, maddeId = node.baslik, node.maddeId
         else:
             baslik, maddeId = None, None
+        next_title = None
+        if i + 1 < len(articles):
+            nxt = tree.by_no.get(articles[i + 1].no)
+            next_title = nxt.baslik if nxt else None
+        body = _strip_bleed(art.body, next_title)
         out.append(Madde(
-            no=art.no, body=art.body, madde_tipi=tipi, madde_baslik=baslik,
+            no=art.no, body=body, madde_tipi=tipi, madde_baslik=baslik,
             kisim_no=cur_kisim[0], kisim_baslik=cur_kisim[1],
             bolum_no=cur_bolum[0], bolum_baslik=cur_bolum[1],
             hiyerarsi_yolu=cur_path, maddeId=maddeId,
-            yurutluk=extract_status(art.body),
+            yurutluk=extract_status(body),
         ))
     return out
