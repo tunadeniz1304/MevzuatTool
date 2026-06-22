@@ -18,10 +18,17 @@ _NUM = r"\d+(?:/[A-Za-zÇĞİÖŞÜçğıöşü]+)?"
 
 # Madde işareti: isteğe bağlı önek (Ek/Geçici/Mükerrer), ardından 'Madde N'.
 # Tag-gömülü olduğu için sadece metin desenini arar (etrafındaki tag'leri umursamaz).
-# Ayraç olarak hem ASCII tire (-) hem en-dash (–) hem em-dash (—) kabul edilir.
-# re.DOTALL: \r\n ve whitespace toleransı için.
+# Numaradan sonra ara-gürültü tüketilir: <a> dipnot tag'leri, [n] işaretleri, boşluk
+# (ör. Gümrük "Madde 15<a href=#_ftn14>[14]</a> -"). Sonra ayraç (chunker ile simetrik):
+#   (a) TİRE  [-–—]  (ASCII/en-dash/em-dash)
+#   (b) TİRESİZ ama hemen ardından '(' künyesi VEYA BÜYÜK-HARF başlık
+#       (ör. Borçlar "MADDE 428 İşyerinin...", İş "Madde 87 (Mülga:...)").
+# Tiresiz dalın büyük-harf/paren şartı, gövde-içi küçük-harf "madde 10 hükmü" atıflarını
+# yanlış-pozitif madde saymaz (yan-etki guard'ı). re.DOTALL: \r\n/whitespace toleransı.
+_ARA = r"(?:\[\d+\]|<[^>]+>|\s)*"
+_AYRAC = r"(?:[-–—]|(?=[(]|[A-ZÇĞİÖŞÜ]))"
 _MADDE_ISARET = re.compile(
-    rf"\b({_PREFIX})?{_MADDE_KW}\s+({_NUM})\.?\s*[-–—]",
+    rf"\b({_PREFIX})?{_MADDE_KW}\s+({_NUM})\.?{_ARA}{_AYRAC}",
     re.DOTALL,
 )
 
