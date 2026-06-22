@@ -19,6 +19,9 @@ from mcp.client.stdio import stdio_client
 
 SERVER_CMD = "mevzuat-mcp"
 WANTED_TOOLS = ("search_mevzuat", "get_mevzuat_madde_tree", "get_mevzuat_content")
+# Kapsam yalnız KANUN (ADR-0013). İleride yazılacak Faz 1 ingestion client'ı da
+# search_mevzuat'ı bu türle çağırmalı (varsayılan mevzuat_tur=KANUN).
+MEVZUAT_TUR = "KANUN"
 
 
 def _text(result) -> str:
@@ -60,11 +63,11 @@ async def main() -> None:
                 print()
 
             # 3) search_mevzuat smoke call (argüman tahmini; hata olursa şemadan düzeltiriz)
-            print("=== search_mevzuat denemesi (phrase) ===")
+            print(f"=== search_mevzuat denemesi (phrase, mevzuat_tur={MEVZUAT_TUR}) ===")
             try:
                 res = await session.call_tool(
                     "search_mevzuat",
-                    {"phrase": "kişisel verilerin korunması", "page_size": 5},
+                    {"phrase": "kişisel verilerin korunması", "mevzuat_tur": MEVZUAT_TUR, "page_size": 5},
                 )
                 print(_text(res)[:2000])
             except Exception as e:  # noqa: BLE001 — smoke test, hatayı görmek istiyoruz

@@ -8,7 +8,8 @@ from mevzuat_tool.normalize import normalize_text
 from mevzuat_tool.chunker import split_articles
 from mevzuat_tool.eval_tree import count_tree_articles
 
-PAIRS = {"TCK": "103228", "VUK": "103006", "KVKK": "104383", "KKY": "352791"}
+# Kanun-only set (ADR-0013). GVK 193 eski kanun: fıkra '(1)' yerine '1.' stili (varyasyon).
+PAIRS = {"TCK": "103228", "VUK": "103006", "KVKK": "104383", "GVK": "103111"}
 
 for label, mid in PAIRS.items():
     content = pathlib.Path(f"data/raw/content_{mid}.md").read_text(encoding="utf-8")
