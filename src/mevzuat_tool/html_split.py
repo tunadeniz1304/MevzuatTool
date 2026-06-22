@@ -14,21 +14,25 @@ _PREFIX = (
     r"|[Mm][Üü][Kk][Ee][Rr][Rr][Ee][Rr]"
     r")\s+"
 )
+_MADDE_FULL = r"MADDE"  # tam-büyük varyant (tiresiz başlıkların gerçek dizgisi)
 _NUM = r"\d+(?:/[A-Za-zÇĞİÖŞÜçğıöşü]+)?"
 
-# Madde işareti: isteğe bağlı önek (Ek/Geçici/Mükerrer), ardından 'Madde N'.
-# Tag-gömülü olduğu için sadece metin desenini arar (etrafındaki tag'leri umursamaz).
-# Numaradan sonra ara-gürültü tüketilir: <a> dipnot tag'leri, [n] işaretleri, boşluk
-# (ör. Gümrük "Madde 15<a href=#_ftn14>[14]</a> -"). Sonra ayraç (chunker ile simetrik):
-#   (a) TİRE  [-–—]  (ASCII/en-dash/em-dash)
-#   (b) TİRESİZ ama hemen ardından '(' künyesi VEYA BÜYÜK-HARF başlık
-#       (ör. Borçlar "MADDE 428 İşyerinin...", İş "Madde 87 (Mülga:...)").
-# Tiresiz dalın büyük-harf/paren şartı, gövde-içi küçük-harf "madde 10 hükmü" atıflarını
-# yanlış-pozitif madde saymaz (yan-etki guard'ı). re.DOTALL: \r\n/whitespace toleransı.
-_ARA = r"(?:\[\d+\]|<[^>]+>|\s)*"
-_AYRAC = r"(?:[-–—]|(?=[(]|[A-ZÇĞİÖŞÜ]))"
+# Madde işareti — chunker.py ile SİMETRİK iki dal (capture: A=1,2 / B=3,4).
+# Numaradan sonra ara-gürültü tüketilir: <a> dipnot tag'leri, [n] işaretleri, boşluk +
+# opsiyonel nokta (ör. Gümrük "Madde 15<a href=#_ftn14>[14]</a> -", TCK "Madde 61[3]. -").
+#  Dal A — karışık 'Madde': ayraç = TİRE veya '(' künyesi (gövde-içi 'madde 10 hükmü' elenir).
+#  Dal B — tam-büyük 'MADDE': ek olarak TİRESİZ büyük-harf başlık (Borçlar "MADDE 428 İşyerinin").
+# Gerçek-veri: tiresiz başlıklar HEP tam-büyük 'MADDE'; karışık 'Madde 32 Tebliğ' her zaman
+# gövde-içi ATIF → büyük-harf ayracı yalnız tam-büyük dalda açılır (karışık-büyük atıf FP'si elenir).
+# re.DOTALL: \r\n/whitespace toleransı.
+# Ara-gürültü: [n] işaretleri, HTML tag'leri, nokta, boşluk — hepsi numara ile ayraç arasında
+# serbestçe tüketilir (ör. "61<a..>[3]</a>. -"). Ayraçtaki -\s- yerine boşlukları _ARA yutar.
+_ARA = r"(?:\[\d+\]|<[^>]+>|\.|\s)*"
+_AYRAC_A = r"(?:-|–|—|(?=[(]))"
+_AYRAC_B = r"(?:-|–|—|(?=[(]|[A-ZÇĞİÖŞÜ]))"
 _MADDE_ISARET = re.compile(
-    rf"\b({_PREFIX})?{_MADDE_KW}\s+({_NUM})\.?{_ARA}{_AYRAC}",
+    rf"\b({_PREFIX})?{_MADDE_KW}\s+({_NUM}){_ARA}{_AYRAC_A}"
+    rf"|\b({_PREFIX})?{_MADDE_FULL}\s+({_NUM}){_ARA}{_AYRAC_B}",
     re.DOTALL,
 )
 
@@ -48,8 +52,9 @@ def split_html_articles(html: str) -> dict[str, str]:
     matches = list(_MADDE_ISARET.finditer(html))
     out: dict[str, str] = {}
     for i, m in enumerate(matches):
-        prefix = m.group(1)
-        number = m.group(2)
+        # Dal A (karışık 'Madde') grup 1,2 — Dal B (tam-büyük 'MADDE') grup 3,4.
+        prefix = m.group(1) or m.group(3)
+        number = m.group(2) or m.group(4)
         if prefix:
             no = f"{_canon_prefix(prefix.strip())} {number}"
         else:
