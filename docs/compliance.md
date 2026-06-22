@@ -14,7 +14,7 @@ Bu dosya, yapılan her işin [`mevzuat-mvp-kapsam.md`](mevzuat-mvp-kapsam.md) il
 ## A. Kapsam İçi — sadakat kontrolü (YAPILMALI)
 
 ### 1. Veri Çekme
-- [ ] Kaynak yalnızca `mevzuat-mcp` API'leri (`search_mevzuat` / `get_mevzuat_article_tree` / `get_mevzuat_article_content`)
+- [ ] Kaynak yalnızca `mevzuat-mcp` araçları (`search_mevzuat` / `get_mevzuat_madde_tree` / `get_mevzuat_content`), MCP client üzerinden
 - [ ] Kendi web scraper'ımız **yok** (repo API'leri kullanılıyor)
 - [ ] Yalnızca HTML/Markdown içerik alınıyor; PDF'ler atlanıyor
 - [ ] Başlangıçta dar korpus (tüm mevzuat değil)

@@ -1,0 +1,6 @@
+# MevzuatTool — Python bağımlılıkları
+#
+# Faz 1 (data acquisition): yerel mevzuat-mcp server'ına MCP client olarak bağlanırız (ADR-0012).
+# mevzuat-mcp server'ın KENDİSİ ayrı kurulur (bu listede değil):
+#   uv tool install git+https://github.com/saidsurucu/mevzuat-mcp
+mcp==1.28.0
