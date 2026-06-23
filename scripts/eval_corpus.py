@@ -20,6 +20,7 @@ from mevzuat_tool.tree import parse_tree
 from mevzuat_tool.enrich import enrich
 from mevzuat_tool.html_table import parse_tables
 from mevzuat_tool.html_dipnot import parse_anchors
+from mevzuat_tool.aralik import islenmis_aralik_maddeleri
 
 IDS_FILE = pathlib.Path("data/raw/_kanun_ids.txt")
 RESULTS  = pathlib.Path("data/raw/_corpus_results.jsonl")  # her kanun bir satır (devam-güvenli)
@@ -81,10 +82,15 @@ async def eval_one(f, no, mid, ad):
     tp,fp,fn = gt&pred, pred-gt, gt-pred
     fake_fp = {x for x in fp if is_fake_fp(x)}
     real_fp = fp - fake_fp
+    # B: 'MADDE N ilâ M ... işlenmiştir' aralık maddeleri içeriksiz → yapay-FN (gerçek kayıp değil).
+    aralik = islenmis_aralik_maddeleri(content)
+    aralik_fn = fn & aralik          # FN'in içeriksiz-aralık kısmı (parse edilemez, kusur değil)
+    gercek_fn = fn - aralik_fn       # asıl kayıp
     # düzeltilmiş precision: sahte-FP'leri TP gibi say (paydadan düşür)
     prec_raw = len(tp)/(len(tp)+len(fp)) if (tp or fp) else 1.0
     prec_adj = len(tp)/(len(tp)+len(real_fp)) if (tp or real_fp) else 1.0
-    rec = len(tp)/(len(tp)+len(fn)) if (tp or fn) else 1.0
+    rec = len(tp)/(len(tp)+len(fn)) if (tp or fn) else 1.0           # ham (aralık dahil)
+    rec_adj = len(tp)/(len(tp)+len(gercek_fn)) if (tp or gercek_fn) else 1.0  # aralık hariç (dürüst)
     # metadata (TP'de)
     byp={m.no:m for m in maddeler}; fld={f[0]:[0,0] for f in FIELDS}
     for n2 in tp:
@@ -99,8 +105,10 @@ async def eval_one(f, no, mid, ad):
         "no":no,"mid":mid,"ad":ad[:60],"deg":is_degisiklik_paketi(ad),
         "gt":len(gt),"pred":len(pred),"tp":len(tp),"fp":len(fp),
         "fake_fp":len(fake_fp),"real_fp":len(real_fp),"fn":len(fn),
-        "prec_raw":round(prec_raw,4),"prec_adj":round(prec_adj,4),"rec":round(rec,4),
-        "fn_ex":sorted(fn)[:6],"real_fp_ex":sorted(real_fp)[:6],
+        "aralik_fn":len(aralik_fn),"gercek_fn":len(gercek_fn),
+        "prec_raw":round(prec_raw,4),"prec_adj":round(prec_adj,4),
+        "rec":round(rec,4),"rec_adj":round(rec_adj,4),
+        "fn_ex":sorted(gercek_fn)[:6],"real_fp_ex":sorted(real_fp)[:6],
         "fld":fld,"n_tablo":sum(len(m.tablolar) for m in maddeler),
         "n_dipnot":sum(len(m.dipnotlar) for m in maddeler),"n_madde":len(maddeler),
         "html_ok": bool(html), "gercek_bos": (len(gt)==0), "content_len": len(content),
