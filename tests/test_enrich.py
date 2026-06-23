@@ -79,6 +79,69 @@ def test_enrich_status_uses_clean_body_not_next_madde_bleed():
     assert m.yurutluk == "yürürlükte"
 
 
+# --- Over-truncation regresyon testleri (gerçek-veri: KVKK M23, 7405 M30, 7315 M3, 7071 M1) ---
+# Kök neden: _strip_bleed marker'ı gövdenin HER YERİNDE arıyordu; bleed yalnız SONDA olur.
+
+# Sonraki maddenin başlığı 'Başkan' — KVKK M23 gerçek deseni (başlık gövdenin İÇİNDE tekrar eder).
+_TREE_OT = parse_tree(
+    "- Madde No: 23 - Kurulun çalışma esasları: (maddeId:23)\n"
+    "- Madde No: 24 - Başkan: (maddeId:24)\n"
+)
+
+
+def test_enrich_does_not_truncate_on_midbody_marker_repeat():
+    # KVKK M23: 'Başkan' kelimesi gövde içinde geçiyor; over-truncate ETMEMELİ (tüm gövde korunur).
+    body = ("(1) Kurulun toplantı günlerini ve gündemini Başkan belirler. "
+            "(2) Kurul, başkan dâhil en az altı üye ile toplanır ve karar alır.")
+    arts = [Article(no="23", body=body), Article(no="24", body="(1) Başkan seçilir.")]
+    m = _maddeler(arts, _TREE_OT)[0]
+    assert "altı üye ile toplanır" in m.body          # gövdenin sonu KORUNDU
+    assert len(m.body) > 100                            # %96 silinmedi
+
+
+# Sonraki başlık = bu maddenin de konusu (7315 M3 'Arşiv araştırması' — gövde onunla başlıyor).
+_TREE_OT2 = parse_tree(
+    "- Madde No: 3 - Genel esaslar: (maddeId:3)\n"
+    "- Madde No: 4 - Arşiv araştırması: (maddeId:4)\n"
+)
+
+
+def test_enrich_does_not_truncate_when_body_starts_with_next_title():
+    body = "(1) Arşiv araştırması, statü gereği yapılan inceleme ve değerlendirmedir; sonuçları saklanır."
+    arts = [Article(no="3", body=body), Article(no="4", body="(1) İçerik.")]
+    m = _maddeler(arts, _TREE_OT2)[0]
+    assert "saklanır" in m.body                          # baştan kesilmedi
+    assert len(m.body) > 50
+
+
+# Tek-karakter / salt-rakam marker (7071 M1: marker '4', gövdedeki 442'de kesiyordu).
+_TREE_OT3 = parse_tree(
+    "- Madde No: 1 - Kapsam: (maddeId:1)\n"
+    "- Madde No: 2 - 4: (maddeId:2)\n"
+)
+
+
+def test_enrich_ignores_too_short_marker():
+    body = "(1) Bu Kanun, 18/3/1924 tarihli ve 442 sayılı Köy Kanununu kapsar."
+    arts = [Article(no="1", body=body), Article(no="2", body="(1) Sonraki.")]
+    m = _maddeler(arts, _TREE_OT3)[0]
+    assert "442 sayılı Köy Kanununu kapsar" in m.body    # '4'te kesilmedi
+
+
+def test_enrich_madde_marker_bleed_at_tail_IS_stripped():
+    # POZİTİF kesim (review açığı): madde-başlığı marker'ı gövdenin SON %15'inde GERÇEK kuyruk-bleed
+    # olarak dururken kırpılmalı. 'Görevler' sonraki madde başlığı, gövde sonuna sızmış.
+    body = "(1) Kurul kararları kesin niteliktedir ve derhâl uygulanır; itiraz yolu kapalıdır. Görevler"
+    arts = [Article(no="5", body=body), Article(no="6", body="(1) İçerik.")]
+    tree = parse_tree(
+        "- Madde No: 5 - Karar: (maddeId:5)\n"
+        "- Madde No: 6 - Görevler: (maddeId:6)\n"
+    )
+    m = _maddeler(arts, tree)[0]
+    assert m.body.endswith("itiraz yolu kapalıdır.")     # kuyruk-bleed 'Görevler' kırpıldı
+    assert "Görevler" not in m.body
+
+
 def test_enrich_plain_madde_missing_in_tree_does_not_crash():
     arts = [
         Article(no="84", body="ağaçtaki."),

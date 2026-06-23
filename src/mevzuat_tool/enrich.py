@@ -5,6 +5,7 @@ konum-mirası alır. Gövde sonundaki yapısal sızma kırpılır. Ek olarak: di
 ayrılır (#1), [n]→madde bağlanır (#2), değişiklik künyeleri yapısallaştırılır (#3),
 fıkra/bent ağacı + bent yürürlük (#5, #6), benzersiz id (#7).
 """
+import re
 from dataclasses import dataclass, field
 
 from mevzuat_tool.chunker import Article, extract_status
@@ -17,33 +18,67 @@ from mevzuat_tool.ids import assign_ids
 _TIPI = (("Geçici", "gecici"), ("Ek", "ek"), ("Mükerrer", "mukerrer"))
 
 
+def _is_guvenilir_marker(mk: str) -> bool:
+    """Bleed marker'ı güvenilir mi? Çok kısa / salt rakam-noktalama olanlar gövdede rastgele
+    eşleşir (ör. '4' -> '442 sayılı'da kesim) → marker sayma."""
+    mk = (mk or "").strip()
+    if len(mk) < 5:                       # 'A.', 'I.', '4', 'a)' gibi kısa etiketler güvenilmez
+        return False
+    if not re.search(r"[A-Za-zÇĞİÖŞÜçğıöşü]", mk):  # salt sayı/noktalama
+        return False
+    return True
+
+
+_LEVEL_KW = ("KİTAP", "KISIM", "BÖLÜM", "AYIRIM", "AYRIM", "FASIL")
+
+
+def _is_level_marker(mk: str) -> bool:
+    """Yapısal seviye başlığı mı (KISIM/BÖLÜM...)? Bunlar güçlü bleed sinyali — gövdede rastgele
+    tekrar etmez, nerede eşleşirse kesilebilir. Madde-başlığı marker'ları ise zayıf (gövdede
+    tekrar edebilir) → yalnız gövde kuyruğunda kesilir."""
+    return any(kw in mk.upper() for kw in _LEVEL_KW)
+
+
 def _bleed_markers(tree, no):
+    """(level_markerlar, madde_baslik_markerlar) — ikisi farklı güven seviyesinde kullanılır."""
     idx = None
     for k, ev in enumerate(tree.ordered):
         if ev["kind"] == "madde" and ev["node"].no == no:
             idx = k
             break
     if idx is None:
-        return []
-    markers = []
+        return [], []
+    level, madde = [], []
     for ev in tree.ordered[idx + 1:]:
         if ev["kind"] == "level":
-            if ev["label"]:
-                markers.append(ev["label"])
-            if ev["title"]:
-                markers.append(ev["title"])
+            for t in (ev["label"], ev["title"]):
+                if t and _is_guvenilir_marker(t):
+                    (level if _is_level_marker(t) else madde).append(t)
         else:
-            if ev["node"].baslik:
-                markers.append(ev["node"].baslik)
+            if ev["node"].baslik and _is_guvenilir_marker(ev["node"].baslik):
+                madde.append(ev["node"].baslik)
             break
-    return markers
+    return level, madde
 
 
-def _strip_bleed(body, markers):
+# Bleed yalnız gövdenin SONUNDA olur (split bir sonraki 'Madde N-'e kadar alır; sızan başlık
+# gövde kuyruğuna gelir). İki güven seviyesi:
+#  - LEVEL marker (KISIM/BÖLÜM): güçlü sinyal, gövdede rastgele tekrar etmez → her yerde kes.
+#  - MADDE-başlığı marker ('Başkan', 'Arşiv araştırması'): zayıf, gövdede/bentte tekrar edebilir
+#    → yalnız gövdenin son %15'inde ve sonrasında çok az metin kalıyorsa kes (gerçek kuyruk-bleed).
+_MADDE_MARKER_SON_ORAN = 0.85   # madde-başlığı marker'ı yalnız gövdenin son %15'inde kesebilir
+
+
+def _strip_bleed(body, level_markers, madde_markers):
     cut = len(body)
-    for mk in markers:
+    for mk in level_markers:                # güçlü: her konumda kes
         idx = body.find(mk)
         if idx != -1:
+            cut = min(cut, idx)
+    esik = int(len(body) * _MADDE_MARKER_SON_ORAN)
+    for mk in madde_markers:                # zayıf: yalnız son %15'te kes
+        idx = body.rfind(mk)
+        if idx != -1 and idx >= esik:
             cut = min(cut, idx)
     return body[:cut].strip()
 
@@ -95,13 +130,13 @@ def enrich(articles, tree, kanun_no, html_tables=None, html_dipnotlar=None):
             cur_bolum = (node.bolum_no, node.bolum_baslik)
             cur_path = node.hiyerarsi_yolu
             baslik, maddeId = node.baslik, node.maddeId
-            markers = _bleed_markers(tree, art.no)
+            level_mk, madde_mk = _bleed_markers(tree, art.no)
         else:
             baslik, maddeId = None, None
-            markers = []
+            level_mk, madde_mk = [], []
 
-        # 2. Sızma kırpma (mevcut mantık) — apendiks ayrılmış gövde üzerinde.
-        body = _strip_bleed(body_no_apdx, markers)
+        # 2. Sızma kırpma — level marker güçlü (her yerde), madde-başlığı zayıf (yalnız kuyrukta).
+        body = _strip_bleed(body_no_apdx, level_mk, madde_mk)
 
         # 3. Değişiklik künyeleri (#3) + temiz gövde.
         kunyeler = parse_kunyeler(body)
