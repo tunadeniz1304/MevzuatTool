@@ -14,11 +14,13 @@ def agg(rs):
     tp=sum(r["tp"] for r in rs); fp=sum(r["fp"] for r in rs)
     ffp=sum(r["fake_fp"] for r in rs); rfp=sum(r["real_fp"] for r in rs)
     fn=sum(r["fn"] for r in rs)
+    afn=sum(r.get("aralik_fn",0) for r in rs); gfn=sum(r.get("gercek_fn", r["fn"]) for r in rs)
     rec=tp/(tp+fn) if (tp+fn) else 1.0
+    rec_adj=tp/(tp+gfn) if (tp+gfn) else 1.0
     praw=tp/(tp+fp) if (tp+fp) else 1.0
     padj=tp/(tp+rfp) if (tp+rfp) else 1.0
     return dict(n=len(rs),gt=gt,pred=pred,tp=tp,fp=fp,fake_fp=ffp,real_fp=rfp,fn=fn,
-                rec=rec,praw=praw,padj=padj)
+                aralik_fn=afn,gercek_fn=gfn,rec=rec,rec_adj=rec_adj,praw=praw,padj=padj)
 
 esas=[r for r in rows if not r["deg"]]
 deg =[r for r in rows if r["deg"]]
@@ -33,10 +35,11 @@ print(f"  Esas kanun: {len(esas)}  |  Değişiklik-paketi: {len(deg)}  |  "
 
 def show(label, a):
     print(f"\n{label}  (n={a['n']})")
-    print(f"  GT={a['gt']}  Pred={a['pred']}  TP={a['tp']}  FN={a['fn']}  "
+    print(f"  GT={a['gt']}  Pred={a['pred']}  TP={a['tp']}  "
+          f"FN={a['fn']} (aralık={a['aralik_fn']} gerçek={a['gercek_fn']})  "
           f"FP={a['fp']} (sahte={a['fake_fp']} gerçek={a['real_fp']})")
-    print(f"  RECALL={a['rec']:.4f}  |  precision_ham={a['praw']:.4f}  |  "
-          f"precision_DÜZELTİLMİŞ(sahte-FP filtreli)={a['padj']:.4f}")
+    print(f"  recall_ham={a['rec']:.4f}  recall_DÜRÜST(aralık-FN hariç)={a['rec_adj']:.4f}")
+    print(f"  precision_ham={a['praw']:.4f}  precision_DÜZELTİLMİŞ(sahte-FP hariç)={a['padj']:.4f}")
 
 print("\n"+"="*94); print("A) MADDE-SET — micro confusion + P/R/F1"); print("="*94)
 show("TÜM KORPUS", agg(rows))
