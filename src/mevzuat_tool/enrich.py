@@ -120,6 +120,7 @@ def enrich(articles, tree, kanun_no, html_tables=None, html_dipnotlar=None):
 
     for art in articles:
         # 1. Dipnot apendiksini gövde kuyruğundan ayır (#1).
+        # Yoğunluk kontrolü madde-içi yayılmış '[n]' referanslarını apendiks sanmaz (7174 M8).
         body_no_apdx, apdx = split_dipnot_apendiksi(art.body)
         global_dipnotlar.extend(apdx)
 

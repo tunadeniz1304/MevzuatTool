@@ -56,3 +56,26 @@ def test_splits_inline_single_line_appendix():
     assert clean == "Madde gövdesi biter."
     assert [d.no for d in dipnotlar] == [1, 2, 3]
     assert dipnotlar[1].text == "ikinci tanım."
+
+
+# --- Yoğunluk-bazlı apendiks ayrımı (7174 M8 over-split bug) ---
+# Gerçek apendiks: kuyrukta TOPLU '[1] tanım. [2] tanım.' bloğu — işaretler YOĞUN (kısa aralıklı).
+# Yayılmış-referans: '[1]'..'[2]'..'[3]' madde gövdesine binlerce karakter arayla dağılmış (her biri
+# bir fıkranın değişiklik-dipnotu REFERANSI, tanım değil) → apendiks SAYILMAMALI, gövde korunur.
+
+def test_spread_references_are_not_appendix():
+    # 7174 M8 deseni: [1],[2],[3] uzun gövdeye binlerce karakter arayla yayılmış (referanslar).
+    seg = "A" * 2000
+    body = (f"(1) Cezalar uygulanır.[1] {seg} (2) Devam eder.[2] {seg} (3) Son fıkra.[3] {seg}")
+    clean, dip = split_dipnot_apendiksi(body)
+    # Yayılmış işaretler apendiks başı sayılmamalı; gövdenin tamamı (3. fıkra dahil) korunmalı.
+    assert "Son fıkra" in clean
+    assert len(clean) > 5000          # gövde kesilmedi
+
+
+def test_dense_trailing_block_is_appendix():
+    # Gerçek apendiks: kuyrukta yoğun blok (kısa aralıklı) → ayrılır.
+    body = "Madde gövdesi uzun metin burada biter. [1] birinci tanım. [2] ikinci tanım. [3] üçüncü tanım."
+    clean, dip = split_dipnot_apendiksi(body)
+    assert clean == "Madde gövdesi uzun metin burada biter."
+    assert [d.no for d in dip] == [1, 2, 3]
