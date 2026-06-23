@@ -23,8 +23,11 @@ _FN = r"(?:\[\d+\])*"  # numara sonrası [dipnot] işaretleri (ör. Gümrük "Ma
 #    böylece karışık-büyük atıflar yanlış-pozitif madde SAYILMAZ.
 # Ortak son-ek: numara sonrası [dipnot] + opsiyonel nokta (TCK "MADDE 61. -").
 _TAIL = rf"{_FN}\s*\.?"
+# Dal B tiresiz başlık lookahead'i: '(' künyesi VEYA TITLE-CASE kelime (Başharf büyük + küçük
+# harf devam, ör. 'İşyerinin'). Tümü-büyük kelime ('KAPSAMINDA') gövde-içi ATIF işaretidir →
+# title-case şartı bu atıfları eler (gerçek veri: tiresiz başlıklar title-case, atıflar all-caps).
 _AYRAC_A = r"(?:\s*-\s*|\s+(?=[(]))"
-_AYRAC_B = r"(?:\s*-\s*|\s+(?=[(]|[A-ZÇĞİÖŞÜ]))"
+_AYRAC_B = r"(?:\s*-\s*|\s+(?=[(]|[A-ZÇĞİÖŞÜ][a-zçğıöşü]))"
 _MADDE = re.compile(
     rf"\b({_PREFIX})?{_MADDE_KW}\s+({_NUM}){_TAIL}{_AYRAC_A}"
     rf"|\b({_PREFIX})?{_MADDE_FULL}\s+({_NUM}){_TAIL}{_AYRAC_B}"

@@ -105,3 +105,21 @@ def test_html_dot_after_footnote_marker_still_splits():
     html = '<p><span>Madde 61<a href="#_ftn3">[3]</a>. - (1) Hakim.</span></p>'
     parts = split_html_articles(html)
     assert set(parts.keys()) == {"61"}
+
+
+def test_html_tireless_guard_rejects_allcaps_body_reference():
+    # KRİTİK (2. review turu): tümü-büyük 'MADDE N KAPSAMINDA' gövde-içi ATIF madde SAYILMAMALI.
+    # Tiresiz başlık title-case ('İşyerinin'); atıf all-caps → reddedilir (chunker ile simetrik).
+    html = "<p><span>MADDE 1 - (1) BU MADDE 5 KAPSAMINDA değerlendirilir.</span></p>"
+    parts = split_html_articles(html)
+    assert set(parts.keys()) == {"1"}
+
+
+def test_html_tireless_title_titlecase_still_splits():
+    # Gerçek tiresiz başlık (Borçlar): tam-büyük MADDE + title-case kelime → yakalanır.
+    html = (
+        "<p><span>MADDE 428 İşyerinin tamamı devri.</span></p>"
+        "<p><span>MADDE 429 - (1) Sonraki.</span></p>"
+    )
+    parts = split_html_articles(html)
+    assert set(parts.keys()) == {"428", "429"}
