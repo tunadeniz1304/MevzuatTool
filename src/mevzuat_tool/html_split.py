@@ -28,8 +28,10 @@ _NUM = r"\d+(?:/[A-Za-zÇĞİÖŞÜçğıöşü]+)?"
 # Ara-gürültü: [n] işaretleri, HTML tag'leri, nokta, boşluk — hepsi numara ile ayraç arasında
 # serbestçe tüketilir (ör. "61<a..>[3]</a>. -"). Ayraçtaki -\s- yerine boşlukları _ARA yutar.
 _ARA = r"(?:\[\d+\]|<[^>]+>|\.|\s)*"
+# Dal B tiresiz başlık lookahead'i: '(' künyesi VEYA TITLE-CASE kelime (Başharf büyük + küçük
+# devam). Tümü-büyük kelime gövde-içi ATIF işaretidir → title-case şartı atıfları eler.
 _AYRAC_A = r"(?:-|–|—|(?=[(]))"
-_AYRAC_B = r"(?:-|–|—|(?=[(]|[A-ZÇĞİÖŞÜ]))"
+_AYRAC_B = r"(?:-|–|—|(?=[(]|[A-ZÇĞİÖŞÜ][a-zçğıöşü]))"
 _MADDE_ISARET = re.compile(
     rf"\b({_PREFIX})?{_MADDE_KW}\s+({_NUM}){_ARA}{_AYRAC_A}"
     rf"|\b({_PREFIX})?{_MADDE_FULL}\s+({_NUM}){_ARA}{_AYRAC_B}",

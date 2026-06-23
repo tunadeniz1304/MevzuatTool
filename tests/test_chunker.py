@@ -92,6 +92,24 @@ def test_tireless_uppercase_title_requires_full_caps_MADDE():
     assert [a.no for a in split_articles(paren)] == ["86", "87", "88"]
 
 
+def test_tireless_guard_rejects_allcaps_body_reference():
+    # KRİTİK (2. review turu): tümü-büyük 'MADDE N KAPSAMINDA' gövde-içi ATIF madde SAYILMAMALI.
+    # Gerçek tiresiz başlık ilk kelimesi karışık-kapitalizasyon (Borçlar 'MADDE 428 İşyerinin' →
+    # 'İşyerinin' Başharf+küçük). Atıf ardından tümü-büyük kelime gelir → tiresiz dal reddetmeli.
+    text = (
+        "MADDE 1- (1) BU MADDE 5 KAPSAMINDA değerlendirilir; "
+        "İLGİLİ MADDE 10 HÜKMÜ uygulanır."
+    )
+    arts = split_articles(text)
+    assert [a.no for a in arts] == ["1"]
+
+
+def test_tireless_title_first_word_must_be_titlecase():
+    # Gerçek tiresiz başlık: Başharf büyük + en az bir küçük harf ('İşyerinin'). Yakalanmalı.
+    title = "MADDE 428 İşyerinin devri. MADDE 429- (1) X."
+    assert [a.no for a in split_articles(title)] == ["428", "429"]
+
+
 def test_splits_fikralar_on_paren_numbers():
     from mevzuat_tool.chunker import split_fikralar
     body = "(1) Birinci fıkra. (2) İkinci fıkra."
