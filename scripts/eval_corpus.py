@@ -24,7 +24,7 @@ from mevzuat_tool.aralik import islenmis_aralik_maddeleri
 
 IDS_FILE = pathlib.Path("data/raw/_kanun_ids.txt")
 RESULTS  = pathlib.Path("data/raw/_corpus_results.jsonl")  # her kanun bir satır (devam-güvenli)
-_LEVEL_KW = ("KİTAP","KISIM","BÖLÜM","AYIRIM","AYRIM","FASIL")
+_LEVEL_KW = ("KİTAP","KISIM","BÖLÜM","AYIRIM","AYRIM","FASIL","BAŞLANGIÇ")
 _PREFIX_NO = ("Ek","Geçici","Mükerrer")
 
 def is_degisiklik_paketi(ad: str) -> bool:
@@ -46,15 +46,17 @@ def serialize_tree(nodes) -> str:
             t=f" - {b}" if b else ""
             lines.append(f"{ind}- Madde No: {n.madde_no}{t} (maddeId:{n.madde_id})")
         elif is_level(n):
-            # label = bölüm/kısım NO ('ÜÇÜNCÜ BÖLÜM'); başlık = madde_baslik'in 'NO - ' sonrası
-            # GERÇEK metni ('Haklar ve Yükümlülükler'). madde_baslik 'NO - BAŞLIK' biçiminde gelir;
-            # ayraç yoksa (başlıksız bölüm) başlık = label (no). title (sadece no) tek başına
-            # başlığı kaybediyordu — madde_baslik'ten kurtarılır.
+            # label = seviye NO ('ÜÇÜNCÜ BÖLÜM'); GERÇEK başlık = madde_baslik'in 'NO - ' sonrası
+            # ('Haklar ve Yükümlülükler'). Ayraç yoksa (Medeni: başlıksız bölüm) başlık YOK → sadece
+            # label yazılır. No-tekrarı ('NO - NO') YAPILMAZ: parse_tree null-başlık tutar (RAG'da
+            # anlamsal sinyal olmayan no-tekrarı gürültüdür). parse_tree ayraçsız satırı zaten işler.
             lbl=(n.title or n.madde_baslik or "BÖLÜM").strip()
             mb=(n.madde_baslik or "").strip()
             parts=mb.split(" - ", 1)
-            baslik=parts[1].strip() if len(parts)>1 and parts[1].strip() else lbl
-            lines.append(f"{ind}- {lbl} - {baslik} (maddeId:{n.madde_id})")
+            baslik=parts[1].strip() if len(parts)>1 and parts[1].strip() else ""
+            line=f"{ind}- {lbl} - {baslik} (maddeId:{n.madde_id})" if baslik else \
+                 f"{ind}- {lbl} (maddeId:{n.madde_id})"
+            lines.append(line)
         cd=depth+1 if (n.madde_no is None and is_level(n)) else depth
         for ch in (n.children or []): walk(ch, cd)
     for n in nodes: walk(n,0)

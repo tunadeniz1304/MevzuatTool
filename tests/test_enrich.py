@@ -201,6 +201,38 @@ def test_enrich_plain_madde_missing_in_tree_does_not_crash():
     assert m.bolum_no == "BİRİNCİ BÖLÜM"
 
 
+def test_enrich_propagates_kitap_and_ayirim_fields():
+    # #1+#2: KİTAP ve AYIRIM tree'den Madde'ye ayrı alan olarak akmalı (hiyerarşi_yolu'na ek olarak).
+    tree = parse_tree(
+        "- BİRİNCİ KİTAP - Kişiler Hukuku (maddeId:1)\n"
+        "  - İKİNCİ KISIM - Aile (maddeId:2)\n"
+        "    - BİRİNCİ BÖLÜM - Nişanlanma (maddeId:3)\n"
+        "      - BİRİNCİ AYIRIM - Koşullar (maddeId:4)\n"
+        "        - Madde No: 118 - Nişanlanma: (maddeId:1180)\n"
+    )
+    m = _maddeler([Article(no="118", body="(1) Nişanlanma evlenme vaadiyle olur.")], tree)[0]
+    assert m.kitap_no == "BİRİNCİ KİTAP"
+    assert m.kitap_baslik == "Kişiler Hukuku"
+    assert m.ayirim_no == "BİRİNCİ AYIRIM"
+    assert m.ayirim_baslik == "Koşullar"
+    assert m.kisim_no == "İKİNCİ KISIM"
+    assert m.bolum_no == "BİRİNCİ BÖLÜM"
+
+
+def test_enrich_titleless_levels_keep_null_baslik():
+    # null-tutma kararı: ayraçsız (başlıksız) seviyelerde *_baslik None (no-tekrarı YOK). Medeni 4721.
+    tree = parse_tree(
+        "- BİRİNCİ KİTAP (maddeId:1)\n"
+        "  - BİRİNCİ KISIM (maddeId:2)\n"
+        "    - BİRİNCİ BÖLÜM (maddeId:3)\n"
+        "      - Madde No: 8 - Hak ehliyeti: (maddeId:80)\n"
+    )
+    m = _maddeler([Article(no="8", body="(1) Her insanın hak ehliyeti vardır.")], tree)[0]
+    assert m.kitap_no == "BİRİNCİ KİTAP" and m.kitap_baslik is None
+    assert m.kisim_no == "BİRİNCİ KISIM" and m.kisim_baslik is None
+    assert m.bolum_no == "BİRİNCİ BÖLÜM" and m.bolum_baslik is None
+
+
 def test_enrich_populates_new_fields():
     arts = [Article(no="84", body="(Değişik: 9/4/2003-4842/3 md.) (1) Birinci fıkra.")]
     m = _maddeler(arts, TREE)[0]

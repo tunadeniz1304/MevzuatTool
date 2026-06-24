@@ -106,10 +106,14 @@ class Madde:
     body: str
     madde_tipi: str
     madde_baslik: str | None
+    kitap_no: str | None
+    kitap_baslik: str | None
     kisim_no: str | None
     kisim_baslik: str | None
     bolum_no: str | None
     bolum_baslik: str | None
+    ayirim_no: str | None
+    ayirim_baslik: str | None
     hiyerarsi_yolu: str | None
     maddeId: str | None
     yurutluk: str
@@ -131,8 +135,10 @@ def _madde_tipi(no: str) -> str:
 def enrich(articles, tree, kanun_no, html_tables=None, html_dipnotlar=None):
     maddeler: list[Madde] = []
     global_dipnotlar: list[Dipnot] = []
+    cur_kitap = (None, None)
     cur_kisim = (None, None)
     cur_bolum = (None, None)
+    cur_ayirim = (None, None)
     cur_path = None
 
     for art in articles:
@@ -144,8 +150,10 @@ def enrich(articles, tree, kanun_no, html_tables=None, html_dipnotlar=None):
         tipi = _madde_tipi(art.no)
         node = tree.by_no.get(art.no)
         if node is not None and tipi == "asil":
+            cur_kitap = (node.kitap_no, node.kitap_baslik)
             cur_kisim = (node.kisim_no, node.kisim_baslik)
             cur_bolum = (node.bolum_no, node.bolum_baslik)
+            cur_ayirim = (node.ayirim_no, node.ayirim_baslik)
             cur_path = node.hiyerarsi_yolu
             baslik, maddeId = node.baslik, node.maddeId
             level_mk, madde_mk = _bleed_markers(tree, art.no)
@@ -177,8 +185,10 @@ def enrich(articles, tree, kanun_no, html_tables=None, html_dipnotlar=None):
 
         maddeler.append(Madde(
             no=art.no, body=body, madde_tipi=tipi, madde_baslik=baslik,
+            kitap_no=cur_kitap[0], kitap_baslik=cur_kitap[1],
             kisim_no=cur_kisim[0], kisim_baslik=cur_kisim[1],
             bolum_no=cur_bolum[0], bolum_baslik=cur_bolum[1],
+            ayirim_no=cur_ayirim[0], ayirim_baslik=cur_ayirim[1],
             hiyerarsi_yolu=cur_path, maddeId=maddeId,
             yurutluk=yurutluk,
             body_temiz=body_temiz, fikralar=fikralar,
