@@ -109,12 +109,19 @@ _KISMI_MULGA = re.compile(
 # Mülga/İptal markeri: parantez içinde 'Mülga' veya AYM 'İptal' (';' sonrası dâhil).
 _MULGA_MARKER = re.compile(r"(?i)\(\s*mülga|;\s*mülga|\(\s*iptal\s*:|;\s*iptal\s*:")
 
-# Madde 'açılış künye bölgesi': gövde başındaki ardışık künye parantezleri
-# ('(Değişik:...)','(Ek:...)','(Mülga:...)','(İptal:...)') + aralarındaki boşluk. Gerçek içerik
-# (künye-olmayan metin VEYA '(1)' fıkra numarası) başlayınca biter. Künye-içi parantezler künye
-# anahtar kelimesiyle başlar; fıkra '(1)' rakamla başlar → içerik sayılır (künye bölgesini bitirir).
+# Madde 'açılış künye bölgesi': gövde başındaki ardışık künye parantezleri + aralarındaki boşluk.
+# İki künye biçimi:
+#  (a) anahtar kelime: '(Değişik:...)','(Ek:...)','(Mülga:...)','(İptal:...)','(Yeniden düzenleme:..)'
+#  (b) TARİH/ATIF ile başlayan: '(2/1/1961- 203/2 md. ile gelen ... teselsül ettirilmiştir.; Mülga:..)'
+#      — 657 Ek2/Geçici1 gibi maddelerde künye tarihle başlar; anahtar kelime aramak yetmez.
+# Gerçek içerik (künye-olmayan metin VEYA '(1)' fıkra numarası) başlayınca biter. Fıkra '(1)'
+# rakam+KAPANIŞ-paren'dir ')' → tarih-künye '(2/1/1961-...' slash'lı, karışmaz.
 _KUNYE_PAREN = re.compile(
-    r"(?i)^\s*(?:\(\s*(?:değişik|ek|mülga|iptal|yeniden\s+düzenleme|mülga\s+ve\s+yeniden)[^)]*\)\s*)+"
+    r"(?i)^\s*(?:\(\s*(?:"
+    r"(?:değişik|ek|mülga|iptal|yeniden\s+düzenleme|mülga\s+ve\s+yeniden)"   # (a) anahtar kelime
+    r"|\d+/\d+/\d+"                                                          # (b) tarih ile başlar
+    r"|\d+\s+sayılı"                                                         # (c) 'NNNN sayılı ...'
+    r")[^)]*\)\s*)+"
 )
 
 
