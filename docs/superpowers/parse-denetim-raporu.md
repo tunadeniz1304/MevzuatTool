@@ -146,9 +146,31 @@ geniş recheck (10 kanun, yeni-bozulan dahil) bunu yakaladı.
 
 ---
 
+## İkinci denetim turu (20 kanun) — kalan kusurlar bulundu ve düzeltildi
+
+İlk turdan sonra 20-kanun geniş denetimi (Haiku) + Opus'un ham-veri teyidi, **ilk turun
+kaçırdığı** kusurları ortaya çıkardı (önceki "3402 temiz" hükmü dump'ın baş/sonuna bakıp ortasını
+taramadığı için eksikti — geniş tarama dar spot-check'ten fazlasını buldu). 4 açık kusur HTML'e
+karşı tek tek teyit edilip TDD ile düzeltildi:
+
+| Kusur | Commit | Sonuç | Yöntem-doğrulama |
+|---|---|---|---|
+| **B3 hayalet chunk** ('İŞLENEMEYEN madde eki') | `0618834` | 6183 Geçici 1: 5→1; 400 hayalet madde düştü (121 kanun) | madde-sayı kontrollü |
+| **C 657 statü kaçırma** (tarih/'NNNN sayılı' künye) | `93b18b1` | 657 Ek2/Geçici1/Geçici2 → mülga; 220 madde | yanlış-pozitif 0 |
+| **B P1a seviye-başlık bleed** ('X. BÖLÜM/KISIM') | `b54377d` | 2618 madde/307 kanun temizlendi | madde-sayı değişimi 0 |
+
+**Hâlâ açık (bilinen-sınır):**
+- **A' 5283 M5 numarasız çok-paragraf:** `(1)` ile başlamayan, düz paragraflı maddeler tek `None`
+  fıkra kalıyor (4648 krk tek blok). Fıkra granülaritesi kayıp (içerik kayıp DEĞİL). Henüz açık.
+- **Kolon-suz tek başlık bleed** ('Harcırah' gibi): güvenli ayırt-edici sinyal olmadığı için
+  (gerçek cümle-sonu ile karışır) kapsanmadı. ~Az sayıda kanun.
+- **Seviye-başlık kopuk-dizgi varyantları** (~56 madde): Roma rakamı 'III.', kopuk-harf 'N İKİNCİ'.
+  Nadir; düzeltme regex'ini kırılgan büyütmemek için bırakıldı.
+
 ## Durum
 
-Tüm iddialar ham veriyle teyit edildi (2026-06-24). **4 hata sınıfı (C2, C1, A, B) + gövde-başı
-sızma + statü-regresyon** TDD ile düzeltildi, her biri ayrı atomik commit + tam korpus regresyon
-doğrulaması ile. madde-11 düzeltme gerektirmedi (zaten doğru sınıflanıyor). pytest: 101 → 124
-passed. Madde keşfi/sayısı tüm düzeltmelerde korundu (916 kanunda madde-sayı değişimi 0).
+Tüm iddialar ham veriyle teyit edildi (2026-06-24). **7 hata sınıfı** TDD ile düzeltildi
+(C2, C1, A, B + gövde-başı sızma + statü-regresyon + hayalet-chunk + 657-statü + seviye-başlık),
+her biri ayrı atomik commit + tam korpus regresyon + yanlış-pozitif kontrolü ile. madde-11
+düzeltme gerektirmedi. pytest: 101 → 130 passed. Madde keşfi/sayısı tüm düzeltmelerde korundu
+(916 kanunda madde-sayı değişimi 0). Kalan kusurlar düşük-RAG-etkili, bilinen-sınır.
