@@ -1,0 +1,113 @@
+# Parse Doğruluğu Denetim Raporu — 10 Rastgele Kanun
+
+**Tarih:** 2026-06-24
+**Branch:** `phase-c/data-ingest`
+**Yöntem:** 10 kanun (7 esas + 3 değişiklik paketi) için ham HTML ↔ pipeline çıktısı
+(madde→fıkra→bent→alt-bent + metadata) yan yana denetlendi. 10 paralel denetçi + her kusur
+iddiası adversaryal şüpheci tarafından çürütülmeye çalışıldı + sentez. **Tüm kritik bulgular
+ayrıca ham veriye karşı `.venv` python'uyla tek tek teyit edildi (aşağıda "Kanıt" satırları).**
+
+> Bu denetim, madde-seviyesi ölçümden ([916-korpus-raporu.md](916-korpus-raporu.md), recall 0.999)
+> **daha derin bir katmanı** açar: madde-altı yapı (fıkra/bent) + yürürlük statüsü doğruluğu.
+> İki katman çelişmez — madde keşfi isabetli, ama madde-altı yapı ve statüde sistematik hatalar var.
+
+---
+
+## Genel yargı
+
+Parser madde keşfi ve sınır tespitinde çoğunlukla isabetli, ama **üç sistematik hata sınıfı**
+madde-altı yapı ve statü güvenilirliğini zedeliyor. 10 kanundan: 1 temiz, 1 küçük-kusur,
+8 ciddi-kusur. Toplam **5 doğrulanmış hata sınıfı** (her biri ham veriyle teyitli).
+
+## Kanun bazlı tablo
+
+| No | Kanun | Durum | Kusur sınıfı |
+|---|---|---|---|
+| 5637 | Kaldırılan Kanunlar | ✅ temiz | 0 |
+| 4743 | Mali Sektör | 🟡 küçük | C1 (kısmi-mülga yayılması) |
+| 3402 | Kadastro | 🔴 ciddi | C1 (M3 mülga) + gövde-taşma |
+| 5651 | İnternet | 🔴 ciddi | C2 (M9 AYM iptali kaçmış) |
+| 5564 | Kimyasal Silahlar | 🔴 ciddi | A (cetvel atıfları fıkra sanılmış) |
+| 7326 | Bazı Alacaklar | 🔴 ciddi | A (M5 çapraz-atıf → 29 sahte fıkra) |
+| 657 | Harita | 🔴 ciddi | C2 (Ek1/Ek2 mülga kaçmış) |
+| 6756 | OHAL Tedbirler | 🔴 ciddi | B (gövde-taşma) + madde-11 kaybı |
+| 2629 | Uçuş/Paraşüt | 🔴 ciddi | B (M1/M2 sonraki başlığı yutmuş) |
+| 7080 | OHAL Personel | 🔴 ciddi | A ("Ekli (1)" → sahte fıkralar) |
+
+---
+
+## Üç hata sınıfı (hepsi ham veriyle DOĞRULANDI)
+
+### A. Fıkra yanlış-bölme (en yaygın — en az 4 kanun)
+Metin-içi `(n)` atıflarını fıkra başlangıcı sanıyor.
+
+- **Kanıt 5564 M3:** Tek hüküm `"(1) Toksik kimyasal maddeler...bu Kanunun eki (1), (2) ve (3)
+  sayılı cetvellerde gösterilmiştir."` → pipeline **3 fıkraya** bölmüş: `['(1)','(2)','(3)']`.
+  `(2)` ve `(3)` aslında cetvel atfı, fıkra değil.
+- **Kanıt 7326 M5:** → **29 "fıkra"** çıkmış: `['(1)','(2)','(1)','(11)','(13)','(2)','(5)',...]`.
+  Tekrarlı ve sıra-dışı no'lar (`(11)`,`(13)`) = çapraz-atıflar fıkra sanılmış.
+
+**Önemli nüans:** `7326 M5`'in **ilk `(1)` GERÇEK fıkra** (`(1) Mükellefler, bu fıkrada belirtilen
+şartlar...`). Yani çözüm "tüm `(n)`'leri reddet" OLAMAZ — gerçek fıkraları kaçırır (yanlış-negatif).
+Çözüm: sıralılık + konum (cümle-sonu sonrası, paragraf başı) kontrolü; "sayılı cetvelde",
+"Ekli (n)", "(n) numaralı bendi" bağlamlarını dışla.
+
+### B. Gövde-taşma (en az 2 kanun)
+Bir maddenin gövdesi, bir sonraki maddenin **başlığını** yutuyor.
+
+- **Kanıt 2629:** `M1` gövdesi `"...uygulanır. Amaç:"` ile bitiyor — "Amaç:" aslında M2'nin başlığı.
+  `M2` gövdesi `"...düzenlenmesidir. Tanımlar:[3]"` ile bitiyor — "Tanımlar:" M3'ün başlığı.
+- İçeriği yok etmiyor ama madde sınırını ve başlık ayrımını bozuyor.
+
+### C. Mülga/iptal statü — iki zıt hata
+
+**C1 — aşırı-genişletme:** Kısmi mülga, tüm maddeyi mülga sanıyor.
+- **Kanıt 3402 M3:** pipeline statü = `mülga`, ama gövde baştan-mülga DEĞİL. Madde normal
+  başlıyor (`"Kadastro ekibi; en az iki kadastro teknisyeni..."`), ortada `(Mülga **son fıkra**:
+  11/10/2011-KHK-666/1 md.)` var. Yani sadece son fıkra mülga, madde yürürlükte — ama tüm madde
+  mülga işaretlenmiş.
+
+**C2 — kaçırma:** Gerçek mülga/iptal'i göremiyor. `extract_status` yalnız `(mülga` ile
+**başlayan** deseni arıyor; parantez-ortası `; Mülga:` ve AYM `İptal:`'i görmüyor.
+- **Kanıt (sentetik):** `extract_status("(Ek:...) hüküm; Mülga: ...md.)")` → `'yürürlükte'` (yanlış).
+- **Kanıt (sentetik):** `extract_status("(İptal: Anayasa Mahkemesinin...)")` → `'yürürlükte'` (yanlış).
+- **Kanıt gerçek 5651 M9:** statü = `yürürlükte`, ama gövdede `(İptal:Anayasa Mahkemesinin
+  11/10/2023 tarihli...)` var → AYM iptali kaçmış.
+
+---
+
+## Ayrı kalem: madde-11 kaybı (6756) — DOĞRULANDI
+
+İçeriksiz aralık satırları komşu maddeye sızıyor → bir madde tamamen kayboluyor.
+- **Kanıt 6756:** madde no listesi `['1','2',...,'9','10','33','43',...]` → **madde 11 YOK**.
+  M10 gövdesi `"...Personel Kanunu ile ilgili olup yerine işlenmiştir.)"` ile bitiyor (sızıntı).
+- Kök neden: `MADDE 11-`/`MADDE 12 ila 20` gibi içeriksiz işlenmiş-aralık satırları chunker'ın
+  madde sınırını şaşırtıyor. (Not: bu `aralik.py`'nin eval-metrik tespitinden FARKLI bir katman —
+  burada chunker'ın gerçek sınır-tespit sorunu.)
+
+---
+
+## Sahte-alarm notu (önemli — kusur DEĞİL)
+
+"Fazladan madde" gibi görünen Ek/Geçici/`X/A` girdileri **kusur değil** — HTML'de gerçek
+maddeler; sorun bedesten ağacının onları içermemesi (önceki raporda "sahte-FP" olarak ayrıldı).
+Bunları "uydurma madde" sanma. ([916-korpus-raporu.md](916-korpus-raporu.md) Bölüm 5c.)
+
+---
+
+## Öncelikli aksiyonlar (kanıtlı kusurlar)
+
+| Öncelik | Aksiyon | Risk | Gerekçe |
+|---|---|---|---|
+| **P0a** | **C2 statü-kaçırma genişlet** — `extract_status`'a `; Mülga:` + AYM `İptal:` desenleri ekle | DÜŞÜK (genişletme) | En güvenli; mülga/iptal maddeler doğru işaretlenir. Yanlış-pozitif riski düşük. |
+| **P0b** | **A fıkra-bölücü sıkılaştır** — `(n)`'i yalnız cümle-sonu + paragraf başında fıkra say; cetvel/bent/atıf bağlamlarını dışla | ORTA-YÜKSEK | En çok madde etkiler ama sıkılaştırma gerçek fıkrayı kaçırabilir (yanlış-negatif) → en çok regresyon testi gerekir |
+| **P1** | **C1 aşırı-mülga sınırla** — "Mülga son/N. fıkra" gibi nitelikli mülgayı alt-düğüme uygula, maddeyi yürürlükte bırak | ORTA | Madde-statüsü ile fıkra-statüsü ayrışmalı |
+| **P2** | **B gövde-taşma + madde-11 sınır** — komşu başlık ayrımı + tek `N-` içeriksiz satır sınır tespiti | YÜKSEK | Chunker sınır mantığına dokunur → geniş regresyon riski |
+
+---
+
+## Durum
+
+Tüm iddialar ham veriyle teyit edildi (2026-06-24). Düzeltmeler bu rapordan sonra TDD ile,
+risk sırasına göre (düşükten yükseğe), her biri ayrı atomik commit olarak yapılacak. Her
+düzeltme öncesi ilgili iddia tekrar veriye karşı doğrulanacak.
