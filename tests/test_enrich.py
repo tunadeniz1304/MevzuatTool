@@ -43,6 +43,34 @@ def test_enrich_asil_joins_tree():
     m = _maddeler(arts, TREE)[0]
     assert m.madde_tipi == "asil"
     assert m.madde_baslik == "Beyanname çeşitleri"
+
+
+def test_enrich_strips_leading_islenmis_aralik_note():
+    # Gövde başı içeriksiz-aralık yönlendirme notu ('11- (...işlenmiştir.)') gerçek içerik DEĞİL,
+    # bir sonraki içeriksiz maddenin notu. Gövdeden kırpılmalı. Gerçek veri: 6756 M10.
+    body = ("11- (4/1/1961 tarihli ve 211 sayılı Türk Silahlı Kuvvetleri İç Hizmet Kanunu ile "
+            "ilgili olup yerine işlenmiştir.) MADDE 12 ila 20 - (26/10/1963 tarihli ve 357 sayılı "
+            "Askeri Hakimler Kanunu ile ilgili olup yerine işlenmiştir.)")
+    arts = [Article(no="10", body=body)]
+    m = _maddeler(arts, TREE)[0]
+    assert m.body == ""  # tamamı içeriksiz yönlendirme notu → boş kalmalı
+
+
+def test_enrich_keeps_real_body_with_paren_one():
+    # Koruma: '(1)' fıkrasıyla başlayan GERÇEK madde dokunulmaz (içinde MADDE N ila M atfı olsa bile).
+    # Gerçek veri: 6769 M165.
+    body = "(1) Bu Kanunun uygulanmasına ilişkin yönetmelikler Kurum tarafından yürürlüğe konulur."
+    arts = [Article(no="84", body=body)]
+    m = _maddeler(arts, TREE)[0]
+    assert m.body == body  # gerçek içerik korunur
+
+
+def test_enrich_keeps_body_starting_with_text():
+    # Koruma: düz metinle başlayan gerçek madde dokunulmaz. Gerçek veri: 6758 M37 ('Ekli (3)...').
+    body = "Ekli (3) sayılı listede yer alan kadro ihdas edilerek genel kadroya eklenmiştir."
+    arts = [Article(no="84", body=body)]
+    m = _maddeler(arts, TREE)[0]
+    assert m.body == body
     assert m.bolum_no == "BİRİNCİ BÖLÜM"
     assert m.maddeId == "1279029"
     assert m.yurutluk == "yürürlükte"

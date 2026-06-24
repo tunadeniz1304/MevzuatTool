@@ -83,6 +83,23 @@ def _strip_bleed(body, level_markers, madde_markers):
     return body[:cut].strip()
 
 
+# Gövde BAŞINDA içeriksiz-aralık yönlendirme notu: bir sonraki içeriksiz maddenin '11- (...
+# yerine işlenmiştir.)' notu önceki maddenin gövdesine sızmış (chunker 'MADDE' kelimesiz '11-'i
+# madde başı saymaz). Güvenli sinyal: gövde RAKAM-tire-paren ('11- (') ile BAŞLIYOR (gerçek fıkra
+# '(1)' parenle başlar, karışmaz) + 'işlenmiştir'/'ilgili olup' bağlamı var. Yalnız baştaki bu
+# notu (ve devamındaki zinciri) kırp; gerçek içerikli maddelere dokunma (6769 M165 '(1)'le başlar).
+_BAS_ISLENMIS_ARALIK = re.compile(
+    r"^\s*\d+\s*-\s*\([^)]*?(?:işlenmiş|ilgili\s+olup)[^)]*\)"
+    r"(?:\s*MADDE\s+\d+\s+il[aâ]\s+\d+\s*-\s*\([^)]*\))*\s*",
+    re.IGNORECASE,
+)
+
+
+def _strip_leading_islenmis_aralik(body):
+    """Gövde başındaki içeriksiz-aralık yönlendirme notu zincirini kırp (yoksa olduğu gibi)."""
+    return _BAS_ISLENMIS_ARALIK.sub("", body, count=1).strip()
+
+
 @dataclass
 class Madde:
     no: str
@@ -138,6 +155,8 @@ def enrich(articles, tree, kanun_no, html_tables=None, html_dipnotlar=None):
 
         # 2. Sızma kırpma — level marker güçlü (her yerde), madde-başlığı zayıf (yalnız kuyrukta).
         body = _strip_bleed(body_no_apdx, level_mk, madde_mk)
+        # 2b. Gövde başına sızmış içeriksiz-aralık yönlendirme notunu ('11- (...işlenmiştir)') kırp.
+        body = _strip_leading_islenmis_aralik(body)
 
         # 3. Değişiklik künyeleri (#3) + temiz gövde.
         kunyeler = parse_kunyeler(body)
