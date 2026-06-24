@@ -60,6 +60,30 @@ def test_chunk_metadata_embeds_fikra_tree():
     assert [b["isaret"] for b in fk[0]["bentler"]] == ["a)", "b)"]
 
 
+def test_text_excludes_tables_but_metadata_keeps_them():
+    # Tablolar embedding text'ine GİRMEZ (dev tablolar embedding'i aşırır + anlamsal gürültü),
+    # ama metadata.tablolar'da yapısal DURUR (kaybolmaz, erişilebilir). enrich body_temiz'e
+    # tabloyu gömüyor → corpus text üretirken çıkarılır.
+    tablo = "| dilim | oran |\n| --- | --- |\n| 18.000 TL | %15 |\n| 40.000 TL | %20 |"
+    arts = [Article(no="103", body="(1) Gelir vergisi şu tarifeye göre alınır:")]
+    maddeler, _ = enrich(arts, TREE, MID, html_tables={"103": [tablo]})
+    c = madde_to_chunk(maddeler[0], kanun_ad="GVK", kanun_no="193")
+    assert "tarifeye göre alınır" in c["text"]        # gerçek gövde korunur
+    assert "%15" not in c["text"]                      # tablo text'e GİRMEDİ
+    assert "| dilim |" not in c["text"]
+    assert c["metadata"]["tablolar"] == [tablo]        # tablo metadata'da DURUYOR
+
+
+def test_table_only_madde_is_filtered():
+    # Madde gövdesi SADECE tablodan ibaretse (gerçek metin yok), tablo text'ten çıkınca text boş
+    # kalır → chunk korpusa GİRMEZ (anlamsız boş text embedding'e gitmesin).
+    tablo = "| a | b |\n| --- | --- |\n| 1 | 2 |"
+    arts = [Article(no="103", body="")]
+    maddeler, _ = enrich(arts, TREE, MID, html_tables={"103": [tablo]})
+    c = madde_to_chunk(maddeler[0], kanun_ad="X", kanun_no="193")
+    assert c is None                                   # sadece-tablo madde → filtrele
+
+
 def test_chunk_is_json_serializable():
     import json
     m = _madde("11", "(Değişik: 2/3/2024-7499/33 md.) (1) Herkes başvurabilir.")

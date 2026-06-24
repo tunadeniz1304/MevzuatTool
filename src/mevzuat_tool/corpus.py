@@ -27,9 +27,19 @@ def _sadece_islenmis_notu(govde: str) -> bool:
     return bool(_ISLENMIS_NOTU.match(govde.strip()))
 
 
-def _text(m: Madde) -> str:
-    """Embedding girdisi: başlık varsa ilk satır olarak başa, ardından temiz gövde."""
+def _govde_tablosuz(m: Madde) -> str:
+    """body_temiz'den HTML tablolarını çıkar. enrich tabloları body_temiz sonuna '\\n\\n<md>'
+    olarak gömüyor (tablolar alanında da yapısal duruyor). Embedding text'ine dev tablolar
+    girmemeli (boyut aşımı + sayı-yığını anlamsal gürültü); tablo metadata.tablolar'da kalır."""
     govde = (m.body_temiz or m.body or "").strip()
+    for tablo in (m.tablolar or []):
+        govde = govde.replace("\n\n" + tablo, "").replace(tablo, "")
+    return govde.strip()
+
+
+def _text(m: Madde) -> str:
+    """Embedding girdisi: başlık varsa ilk satır olarak başa, ardından temiz gövde (tablosuz)."""
+    govde = _govde_tablosuz(m)
     if m.madde_baslik:
         return f"{m.madde_baslik}\n{govde}".strip()
     return govde
@@ -44,9 +54,13 @@ def madde_to_chunk(m: Madde, kanun_ad: str, kanun_no: str) -> dict | None:
     govde = (m.body_temiz or m.body or "").strip()
     if not govde or _sadece_islenmis_notu(govde):
         return None
+    text = _text(m)
+    # Tablo çıkınca geriye anlamlı metin kalmadıysa (sadece-tablo / sadece-başlık madde) → filtrele.
+    if not _govde_tablosuz(m):
+        return None
     return {
         "id": m.id,
-        "text": _text(m),
+        "text": text,
         "metadata": {
             "kanun_no": kanun_no,
             "kanun_ad": kanun_ad,
