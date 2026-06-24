@@ -123,6 +123,29 @@ def test_detects_mulga_else_yururlukte():
     assert extract_status("normal hüküm") == "yürürlükte"
 
 
+def test_detects_mulga_when_not_at_start():
+    # C2: parantez-ortası '; Mülga:' tüm maddeyi mülga yapar (madde-başı değil ama madde mülga).
+    # Gerçek veri: 657 Harita Ek1/Ek2 '(Ek: ...; Mülga: 2/7/2018-KHK-703 md.)' → mülga olmalı.
+    from mevzuat_tool.chunker import extract_status
+    assert extract_status("(Ek: 1/1/2000-1234 md.; Mülga: 2/7/2018-KHK-703/79 md.)") == "mülga"
+
+
+def test_detects_aym_iptal_as_mulga():
+    # C2: AYM iptali yürürlükten kaldırma anlamına gelir → mülga işaretlenmeli.
+    # Gerçek veri: 5651 M9 '(Değişik: ...) (İptal:Anayasa Mahkemesinin 11/10/2023 ...)'.
+    from mevzuat_tool.chunker import extract_status
+    assert extract_status("(Değişik: 6/2/2014-6518/93 md.) (İptal:Anayasa Mahkemesinin 11/10/2023 tarihli kararı)") == "mülga"
+
+
+def test_partial_mulga_keeps_madde_yururlukte():
+    # C1: nitelikli/kısmi mülga ('Mülga son fıkra', 'Mülga ikinci fıkra') tüm maddeyi mülga YAPMAZ.
+    # Gerçek veri: 3402 M3 madde normal başlıyor, ortada '(Mülga son fıkra: ...)' → madde yürürlükte.
+    from mevzuat_tool.chunker import extract_status
+    body = ("Kadastro ekibi; en az iki kadastro teknisyeni ile üç bilirkişiden oluşur. "
+            "(Mülga son fıkra: 11/10/2011-KHK-666/1 md.)")
+    assert extract_status(body) == "yürürlükte"
+
+
 def test_prefix_and_suffix_maddeler_get_unique_no():
     text = (
         "Madde 1- (1) Asıl. "

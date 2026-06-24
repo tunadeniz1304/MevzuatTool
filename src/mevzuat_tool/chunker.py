@@ -70,5 +70,23 @@ def split_fikralar(body: str) -> list[str]:
     return [p.strip() for p in parts if p.strip()]
 
 
+# Nitelikli/kısmi mülga: yalnızca BİR fıkra/bent mülga → tüm madde mülga DEĞİL (C1).
+# Ör: '(Mülga son fıkra: ...)', '(Mülga ikinci fıkra: ...)', '(Mülga üçüncü cümle: ...)'.
+_KISMI_MULGA = re.compile(
+    r"(?i)\(\s*mülga\s+(?:son|birinci|ikinci|üçüncü|dördüncü|beşinci|altıncı|yedinci|"
+    r"sekizinci|dokuzuncu|onuncu|\d+\s*(?:\.|inci|ıncı|uncu|üncü|nci))\s+"
+    r"(?:fıkra|cümle|bent|paragraf)"
+)
+# Tüm maddeyi yürürlükten kaldıran statü: parantez içinde 'Mülga' (her konumda, ';' sonrası dâhil)
+# veya AYM 'İptal' (Anayasa Mahkemesi iptali = yürürlükten kalkma) (C2).
+_TAM_MULGA = re.compile(r"(?i)\(\s*mülga|;\s*mülga|\(\s*iptal\s*:|;\s*iptal\s*:")
+
+
 def extract_status(body: str) -> str:
-    return "mülga" if re.search(r"(?i)\(\s*mülga", body) else "yürürlükte"
+    # Önce kısmi/nitelikli mülgayı ele (madde yürürlükte kalır); yalnız o varsa yürürlükte say.
+    kismi = list(_KISMI_MULGA.finditer(body))
+    if kismi:
+        # Kısmi mülga işaretlerini metinden düşür, kalanada tam-mülga var mı bak.
+        kalan = _KISMI_MULGA.sub("", body)
+        return "mülga" if _TAM_MULGA.search(kalan) else "yürürlükte"
+    return "mülga" if _TAM_MULGA.search(body) else "yürürlükte"
