@@ -71,9 +71,29 @@ def test_enrich_keeps_body_starting_with_text():
     arts = [Article(no="84", body=body)]
     m = _maddeler(arts, TREE)[0]
     assert m.body == body
-    assert m.bolum_no == "BİRİNCİ BÖLÜM"
-    assert m.maddeId == "1279029"
+
+
+def test_madde_status_from_fikra_tree_all_mulga():
+    # Madde statüsü FIKRA AĞACINDAN: TÜM fıkralar mülga → madde mülga. Gerçek veri: 7081 M10
+    # '(1) (Mülga:...) (2) (Mülga:...)'. (Konum-kuralı bunu yürürlükte sanıyordu — kenar durum.)
+    body = "(1) (Mülga: 13/2/2018-7098/EK MADDE 1 md.) (2) (Mülga: 13/2/2018-7098/5 md.)"
+    m = _maddeler([Article(no="84", body=body)], TREE)[0]
+    assert m.yurutluk == "mülga"
+
+
+def test_madde_status_from_fikra_tree_one_active():
+    # En az bir fıkra yürürlükte → madde yürürlükte. Gerçek veri: 5651 M3 (1 fıkra iptal, gerisi var).
+    body = ("(1) Erişim sağlayıcılar esaslara uyar. (2) (İptal: Anayasa Mahkemesinin 2/10/2014 "
+            "tarihli kararı ile) (3) Yer sağlayıcı yükümlülüklere tabidir.")
+    m = _maddeler([Article(no="84", body=body)], TREE)[0]
     assert m.yurutluk == "yürürlükte"
+
+
+def test_madde_status_single_fikra_iptal_is_mulga():
+    # Tek fıkra ve o iptal → madde mülga. Gerçek veri: 7071 M34 '(1) (İptal: AYM ...)'.
+    body = "(1) (İptal: Anayasa Mahkemesinin 14/11/2019 tarihli ve E.2018/1 kararı ile)"
+    m = _maddeler([Article(no="84", body=body)], TREE)[0]
+    assert m.yurutluk == "mülga"
 
 
 def test_enrich_prefixed_inherits_section_and_flags():

@@ -91,16 +91,41 @@ _KISMI_MULGA = re.compile(
     r"sekizinci|dokuzuncu|onuncu|\d+\s*(?:\.|inci|ıncı|uncu|üncü|nci))\s+"
     r"(?:fıkra|cümle|bent|paragraf)"
 )
-# Tüm maddeyi yürürlükten kaldıran statü: parantez içinde 'Mülga' (her konumda, ';' sonrası dâhil)
-# veya AYM 'İptal' (Anayasa Mahkemesi iptali = yürürlükten kalkma) (C2).
-_TAM_MULGA = re.compile(r"(?i)\(\s*mülga|;\s*mülga|\(\s*iptal\s*:|;\s*iptal\s*:")
+# Mülga/İptal markeri: parantez içinde 'Mülga' veya AYM 'İptal' (';' sonrası dâhil).
+_MULGA_MARKER = re.compile(r"(?i)\(\s*mülga|;\s*mülga|\(\s*iptal\s*:|;\s*iptal\s*:")
+
+# Madde 'açılış künye bölgesi': gövde başındaki ardışık künye parantezleri
+# ('(Değişik:...)','(Ek:...)','(Mülga:...)','(İptal:...)') + aralarındaki boşluk. Gerçek içerik
+# (künye-olmayan metin VEYA '(1)' fıkra numarası) başlayınca biter. Künye-içi parantezler künye
+# anahtar kelimesiyle başlar; fıkra '(1)' rakamla başlar → içerik sayılır (künye bölgesini bitirir).
+_KUNYE_PAREN = re.compile(
+    r"(?i)^\s*(?:\(\s*(?:değişik|ek|mülga|iptal|yeniden\s+düzenleme|mülga\s+ve\s+yeniden)[^)]*\)\s*)+"
+)
 
 
-def extract_status(body: str) -> str:
-    # Önce kısmi/nitelikli mülgayı ele (madde yürürlükte kalır); yalnız o varsa yürürlükte say.
+def _madde_basi_iptal(body: str) -> bool:
+    """Mülga/İptal markeri maddenin AÇILIŞ KÜNYE bölgesinde mi (→ tüm madde mülga)?
+    Gerçek içerik başladıktan sonra geliyorsa bir fıkraya aittir (→ madde yürürlükte)."""
+    m = _KUNYE_PAREN.match(body)
+    kunye_son = m.end() if m else 0
+    mk = _MULGA_MARKER.search(body)
+    return mk is not None and mk.start() < max(kunye_son, 1)
+
+
+def extract_status(body: str, konum_duyarli: bool = False) -> str:
+    """Yürürlük durumu. konum_duyarli=False (varsayılan): metinde Mülga/İptal varsa o birim mülga
+    — fıkra/bent/alt-bent gibi TEK hüküm birimleri için (içindeki Mülga o birime aittir).
+    konum_duyarli=True: MADDE seviyesi için — Mülga/İptal yalnız açılış künye bölgesindeyse tüm
+    madde mülga; gerçek içerik başladıktan sonra geliyorsa bir fıkraya aittir (madde yürürlükte).
+    Bu ayrım 5651 M3/M5/M6 gibi 'içerikte AYM iptali olan ama maddenin kendisi yürürlükte'
+    vakalarını madde-geneline aşırı-yaymayı önler."""
+    # Önce kısmi/nitelikli mülgayı ele (madde/birim yürürlükte kalır); yalnız o varsa yürürlükte say.
     kismi = list(_KISMI_MULGA.finditer(body))
-    if kismi:
-        # Kısmi mülga işaretlerini metinden düşür, kalanada tam-mülga var mı bak.
-        kalan = _KISMI_MULGA.sub("", body)
-        return "mülga" if _TAM_MULGA.search(kalan) else "yürürlükte"
-    return "mülga" if _TAM_MULGA.search(body) else "yürürlükte"
+    kalan = _KISMI_MULGA.sub("", body) if kismi else body
+    mk = _MULGA_MARKER.search(kalan)
+    if mk is None:
+        return "yürürlükte"
+    if not konum_duyarli:
+        return "mülga"      # tek-hüküm birimi: içindeki Mülga/İptal o birimi mülga yapar
+    # Madde seviyesi: marker açılış künye bölgesinde → tüm madde mülga; içerikte → fıkra iptali.
+    return "mülga" if _madde_basi_iptal(kalan) else "yürürlükte"
