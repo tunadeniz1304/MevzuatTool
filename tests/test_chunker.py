@@ -28,6 +28,23 @@ def test_islenemeyen_word_in_normal_content_not_cut():
     assert [a.no for a in arts] == ["1", "2"]
 
 
+def test_body_does_not_swallow_level_heading():
+    # B (seviye-başlık bleed): gövde sonuna sızan 'X. BÖLÜM/KISIM ...' yapısal başlığı kırpılmalı.
+    # Madde içinde yeni BÖLÜM başlamaz — o bir sonraki yapısal birimin başlığıdır. Gerçek veri:
+    # 3402 M34 '...bağlar. ALTINCI BÖLÜM Mali Hükümler...'; 7545 M4 '...edilir. İKİNCİ BÖLÜM...'.
+    text = "MADDE 1- Bu hükümler uygulanır. ALTINCI BÖLÜM Mali Hükümler MADDE 2- İkinci."
+    arts = split_articles(text)
+    assert arts[0].body == "Bu hükümler uygulanır."  # 'ALTINCI BÖLÜM...' yutulmaz
+    assert arts[1].body == "İkinci."
+
+
+def test_ordinal_word_in_content_not_cut():
+    # Koruma: 'ikinci fıkra', 'üçüncü kişi' gibi sıra-sözcüğü BÖLÜM/KISIM olmadan geçerse kesilmez.
+    text = "MADDE 1- Bu maddenin ikinci fıkrası ve üçüncü kişiler hakkında uygulanır."
+    arts = split_articles(text)
+    assert arts[0].body == "Bu maddenin ikinci fıkrası ve üçüncü kişiler hakkında uygulanır."
+
+
 def test_body_does_not_swallow_next_article_title():
     # B (gövde-taşma): HTML'de sonraki maddenin başlığı ('Amaç:') marker'dan önce gelince
     # önceki maddenin gövdesine yapışıyor. Gövde sonundaki '. <Başlık>:' kuyruğu kırpılmalı.
