@@ -51,17 +51,31 @@ class Article:
     body: str
 
 
+# Gövde-taşma: HTML'de sonraki maddenin BAŞLIĞI ('Amaç:') marker'dan önce gelince önceki
+# maddenin gövde kuyruğuna yapışır. Desen: gövde sonu '[.!?] <1-5 Title-Case kelime>:'.
+# Bu yalnız bir sonraki madde VARSA kırpılır (son maddede yutacak başlık yoktur; gerçek
+# 'şunlardır:' liste-başı korunur). Gerçek veri: yutulan başlıklar 'Yürütme','Kapsam',
+# 'Tanımlar' gibi gerçek madde başlıkları; liste-başı kelimesi (şöyledir/şunlardır) hiç görülmedi.
+_BLEED_BASLIK = re.compile(
+    r"(?<=[.!?])\s+[A-ZÇĞİÖŞÜ][\wçğıöşüâî]*(?:\s+[\wçğıöşüâî]+){0,4}:\s*$"
+)
+
+
 def split_articles(text: str) -> list[Article]:
     matches = list(_MADDE.finditer(text))
     out: list[Article] = []
     for i, m in enumerate(matches):
         start = m.end()
-        end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
+        son_madde = i + 1 >= len(matches)
+        end = matches[i + 1].start() if not son_madde else len(text)
         # Dal A (karışık 'Madde') grup 1,2 — Dal B (tam-büyük 'MADDE') grup 3,4.
         prefix = (m.group(1) or m.group(3) or "").strip()
         number = m.group(2) or m.group(4)
         no = f"{_canon_prefix(prefix)} {number}" if prefix else number
-        out.append(Article(no=no, body=text[start:end].strip()))
+        body = text[start:end].strip()
+        if not son_madde:  # sonraki maddenin başlığı gövde kuyruğuna sızmışsa kırp
+            body = _BLEED_BASLIK.sub("", body).strip()
+        out.append(Article(no=no, body=body))
     return out
 
 

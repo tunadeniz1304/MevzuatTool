@@ -8,6 +8,24 @@ def test_splits_on_madde_markers_case_insensitive():
     assert arts[0].body.startswith("(1) Birinci")
 
 
+def test_body_does_not_swallow_next_article_title():
+    # B (gövde-taşma): HTML'de sonraki maddenin başlığı ('Amaç:') marker'dan önce gelince
+    # önceki maddenin gövdesine yapışıyor. Gövde sonundaki '. <Başlık>:' kuyruğu kırpılmalı.
+    # Gerçek veri (2629 M1): '...uygulanır. Amaç: Madde 2 - ...'
+    text = "Madde 1 - Bu Kanun ilgili personel hakkında uygulanır. Amaç: Madde 2 - Bu Kanunun amacı düzenlemektir."
+    arts = split_articles(text)
+    assert [a.no for a in arts] == ["1", "2"]
+    assert arts[0].body == "Bu Kanun ilgili personel hakkında uygulanır."  # 'Amaç:' yutulmamalı
+    assert arts[1].body.startswith("Bu Kanunun amacı")
+
+
+def test_real_body_ending_with_colon_kept_when_last():
+    # Koruma: SON maddede yutacak sonraki madde yok → kırpma yapılmaz (içerik korunur).
+    text = "Madde 1 - Birinci madde. Madde 2 - Aşağıdakiler şunlardır:"
+    arts = split_articles(text)
+    assert arts[1].body == "Aşağıdakiler şunlardır:"  # son madde, kırpılmaz
+
+
 def test_splits_madde_with_dot_after_number():
     # Nadir dizgi varyantı: numaradan sonra nokta (TCK Madde 61. / 328.).
     text = "MADDE 61. - (1) Hakim. Madde 62- (1) Komşu. Madde 328. - (1) Devlet."
