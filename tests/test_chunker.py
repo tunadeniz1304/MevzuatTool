@@ -164,6 +164,38 @@ def test_partial_mulga_keeps_madde_yururlukte():
     assert extract_status(body) == "yürürlükte"
 
 
+def test_iptal_inside_content_keeps_madde_yururlukte():
+    # REGRESYON DÜZELTME (madde seviyesi, konum_duyarli=True): madde GERÇEK İÇERİKLE başlayıp
+    # ortasında AYM iptali geçiyorsa bu bir FIKRANIN iptali — tüm madde mülga DEĞİL. 'maddeye
+    # iptal' değil 'içerikte iptal'. Gerçek veri: 5651 M3/M5/M6.
+    from mevzuat_tool.chunker import extract_status
+    body = ("(1) İçerik, yer ve erişim sağlayıcıları yönetmelikle belirlenen esaslara uyar. "
+            "(Değişik: 10/9/2014-6552/126 md.; İptal: Anayasa Mahkemesinin 2/10/2014 tarihli kararı)")
+    assert extract_status(body, konum_duyarli=True) == "yürürlükte"
+
+
+def test_mulga_inside_content_keeps_madde_yururlukte():
+    # Aynı kural Mülga için: içerik başladıktan sonra gelen '(Mülga: ...)' bir fıkraya aittir.
+    from mevzuat_tool.chunker import extract_status
+    body = "(1) Birinci fıkra yürürlüktedir. (2) (Mülga: 1/1/2020-1234/5 md.)"
+    assert extract_status(body, konum_duyarli=True) == "yürürlükte"
+
+
+def test_madde_basi_iptal_kunyesi_tam_mulga():
+    # Koruma: madde GERÇEK İÇERİK OLMADAN künye ile başlayıp iptal/mülga alıyorsa TAM mülga.
+    # 5651 M9: '(Değişik: ...) (İptal: AYM ...)' → içerik yok, künye bloğu → mülga.
+    from mevzuat_tool.chunker import extract_status
+    body = "(Değişik: 6/2/2014-6518/93 md.) (İptal:Anayasa Mahkemesinin 11/10/2023 kararı)"
+    assert extract_status(body, konum_duyarli=True) == "mülga"
+
+
+def test_bent_level_status_unchanged_by_position():
+    # Koruma: alt-birim (konum_duyarli=False varsayılan) içindeki Mülga o birimi mülga yapar —
+    # konum bakılmaz. Bent 'b) (Mülga:...)' → bent mülga (madde-seviyesi mantığı uygulanmaz).
+    from mevzuat_tool.chunker import extract_status
+    assert extract_status("b) içerik metni (Mülga: 1/1/2020-1234 md.)") == "mülga"
+
+
 def test_prefix_and_suffix_maddeler_get_unique_no():
     text = (
         "Madde 1- (1) Asıl. "

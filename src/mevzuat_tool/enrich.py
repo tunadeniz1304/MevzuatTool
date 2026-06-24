@@ -165,12 +165,22 @@ def enrich(articles, tree, kanun_no, html_tables=None, html_dipnotlar=None):
         # 4. Fıkra/bent ağacı + bent yürürlük (#5, #6).
         fikralar = parse_fikralar(body)
 
+        # 5. Madde yürürlüğü FIKRA AĞACINDAN: birden çok numaralı fıkra varsa, TÜMÜ mülga ise madde
+        #    mülga; en az biri yürürlükte ise madde yürürlükte. (5651 M3: 1 fıkra iptal/çoğu aktif →
+        #    yürürlükte; 7081 M10: tüm fıkralar mülga → mülga.) Numaralı fıkra yoksa (tek paragraf /
+        #    künye-maddesi) konum-duyarlı metin tespitine düş (M9: künye-iptal → mülga).
+        numarali = [f for f in fikralar if f.no is not None]
+        if numarali:
+            yurutluk = "mülga" if all(f.yurutluk == "mülga" for f in numarali) else "yürürlükte"
+        else:
+            yurutluk = extract_status(body, konum_duyarli=True)
+
         maddeler.append(Madde(
             no=art.no, body=body, madde_tipi=tipi, madde_baslik=baslik,
             kisim_no=cur_kisim[0], kisim_baslik=cur_kisim[1],
             bolum_no=cur_bolum[0], bolum_baslik=cur_bolum[1],
             hiyerarsi_yolu=cur_path, maddeId=maddeId,
-            yurutluk=extract_status(body),
+            yurutluk=yurutluk,
             body_temiz=body_temiz, fikralar=fikralar,
             degisiklik_gecmisi=kunyeler,
         ))
