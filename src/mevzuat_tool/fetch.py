@@ -184,14 +184,22 @@ class MevzuatFetcher:
             ids_path.write_text("\n".join(f"{n}\t{m}\t{a}" for n, m, a in uniq), encoding="utf-8")
         return uniq
 
-    async def fetch_tree(self, mid: str) -> list:
-        """Madde ağacı (TreeNode listesi). Boş gelirse gerçek 0-madde (Retry-After yutulmaz)."""
+    async def fetch_tree(self, mid: str, use_cache: bool = True) -> list:
+        """Madde ağacı (TreeNode listesi). Ham API children JSON'unu diske cache'ler (devam-güvenli;
+        tekrar-üretim ucuzlar). Boş gelirse gerçek 0-madde (Retry-After yutulmaz; boş cache YAZILMAZ
+        ki sonraki gerçek çekim engellenmesin)."""
+        path = self.cache / f"treejson_{mid}.json"
+        if use_cache and path.exists():
+            children = json.loads(path.read_text(encoding="utf-8"))
+            return parse_tree_json(children)
         body = await _post_with_retry(self._client, "/mevzuatMaddeTree",
                                       _wrap({"mevzuatId": mid}), self._rate)
         if body.get("metadata", {}).get("FMTY") != "SUCCESS":
             return []
         data = body.get("data") or {}
         children = data.get("children", []) if isinstance(data, dict) else data
+        if children:
+            path.write_text(json.dumps(children, ensure_ascii=False), encoding="utf-8")
         return parse_tree_json(children)
 
     async def fetch_html(self, mid: str, use_cache: bool = True) -> str:
