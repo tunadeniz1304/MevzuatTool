@@ -8,6 +8,26 @@ def test_splits_on_madde_markers_case_insensitive():
     assert arts[0].body.startswith("(1) Birinci")
 
 
+def test_stops_at_islenemeyen_appendix():
+    # B3 hayalet chunk: '... SAYILI ... KANUNA İŞLENEMEYEN ...' başlığı, başka kanunlara ait
+    # işlenememiş maddelerin ekidir — bu kanunun maddesi DEĞİL. Buradan sonrası madde üretmemeli.
+    # Gerçek veri: 6183, '...İŞLENEMEYEN GEÇİCİ MADDELER' sonrası Geçici 1 beş kez doğuyordu.
+    text = ("MADDE 1- Asıl hüküm. MADDE 2- İkinci hüküm. "
+            "21/7/1953 TARİHLİ VE 6183 SAYILI ANA KANUNA İŞLENEMEYEN GEÇİCİ MADDELER "
+            "GEÇİCİ MADDE 1- Başka kanundan. GEÇİCİ MADDE 2- Yine başka.")
+    arts = split_articles(text)
+    assert [a.no for a in arts] == ["1", "2"]  # İŞLENEMEYEN sonrası hayalet maddeler yok
+    assert "İŞLENEMEYEN" not in arts[-1].body.upper()  # son maddeye de yutturulmaz
+
+
+def test_islenemeyen_word_in_normal_content_not_cut():
+    # Koruma: 'işlenemeyen' kelimesi normal madde içeriğinde (başlık deseni OLMADAN) geçerse
+    # kesim yapılmaz. (Yanlış-pozitif önleme.)
+    text = "MADDE 1- Sisteme işlenemeyen kayıtlar reddedilir. MADDE 2- İkinci hüküm."
+    arts = split_articles(text)
+    assert [a.no for a in arts] == ["1", "2"]
+
+
 def test_body_does_not_swallow_next_article_title():
     # B (gövde-taşma): HTML'de sonraki maddenin başlığı ('Amaç:') marker'dan önce gelince
     # önceki maddenin gövdesine yapışıyor. Gövde sonundaki '. <Başlık>:' kuyruğu kırpılmalı.

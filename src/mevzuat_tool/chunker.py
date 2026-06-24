@@ -61,7 +61,22 @@ _BLEED_BASLIK = re.compile(
 )
 
 
+# Kanun-sonu 'işlenemeyen madde eki': '(TARİHLİ VE NNNN) SAYILI ... KANUNA İŞLENEMEYEN ...'
+# başlığı. Başka kanunlarla bu kanuna eklenmek istenip işlenememiş maddelerin listesidir — bu
+# kanunun maddesi DEĞİL. Buradan sonrası madde olarak parse edilmemeli (yoksa tekrarlı 'Geçici 1'
+# hayalet chunk'lar doğar: 6183'te 5 kez). Başlığı tarihiyle birlikte kes (önceki maddenin
+# gövdesine '... TARİHLİ VE NNNN' kuyruğu kalmasın). 'işlenemeyen' kelimesinin normal içerikte
+# geçmesinden ('sisteme işlenemeyen kayıt') ayırmak için 'SAYILI ... KANUN[uA] İŞLENEMEYEN' şart.
+_ISLENEMEYEN_EKI = re.compile(
+    r"(?i)(?:\d+/\d+/\d+\s+)?(?:tarihli\s+ve\s+\d+\s+)?sayılı\s+.{0,40}?kanun[ua]?\s+işlenemeyen"
+)
+
+
 def split_articles(text: str) -> list[Article]:
+    # Kanun-sonu işlenemeyen-madde ekini at (başka kanunlara ait; hayalet chunk kaynağı).
+    eki = _ISLENEMEYEN_EKI.search(text)
+    if eki:
+        text = text[:eki.start()]
     matches = list(_MADDE.finditer(text))
     out: list[Article] = []
     for i, m in enumerate(matches):
