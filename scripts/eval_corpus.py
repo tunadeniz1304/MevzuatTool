@@ -46,8 +46,15 @@ def serialize_tree(nodes) -> str:
             t=f" - {b}" if b else ""
             lines.append(f"{ind}- Madde No: {n.madde_no}{t} (maddeId:{n.madde_id})")
         elif is_level(n):
+            # label = bölüm/kısım NO ('ÜÇÜNCÜ BÖLÜM'); başlık = madde_baslik'in 'NO - ' sonrası
+            # GERÇEK metni ('Haklar ve Yükümlülükler'). madde_baslik 'NO - BAŞLIK' biçiminde gelir;
+            # ayraç yoksa (başlıksız bölüm) başlık = label (no). title (sadece no) tek başına
+            # başlığı kaybediyordu — madde_baslik'ten kurtarılır.
             lbl=(n.title or n.madde_baslik or "BÖLÜM").strip()
-            lines.append(f"{ind}- {lbl} - {lbl} (maddeId:{n.madde_id})")
+            mb=(n.madde_baslik or "").strip()
+            parts=mb.split(" - ", 1)
+            baslik=parts[1].strip() if len(parts)>1 and parts[1].strip() else lbl
+            lines.append(f"{ind}- {lbl} - {baslik} (maddeId:{n.madde_id})")
         cd=depth+1 if (n.madde_no is None and is_level(n)) else depth
         for ch in (n.children or []): walk(ch, cd)
     for n in nodes: walk(n,0)
