@@ -10,7 +10,10 @@ from dataclasses import dataclass, field
 
 from mevzuat_tool.chunker import extract_status
 
-_FIKRA_BOL = re.compile(r"(?=\(\d+\)\s)")
+# Fıkra başı '(n)' YALNIZ metnin başında VEYA cümle-sonu (. : ! ?) / satır-sonu sonrasında.
+# Cümle-ortası '(n)' (örn. 'eki (1), (2) sayılı cetveller', 'fıkrasının (2) bendi') fıkra DEĞİL,
+# atıftır (A hatası). Lookbehind: başlangıç | noktalama+boşluk | yeni satır.
+_FIKRA_BOL = re.compile(r"(?=(?:(?<=[.:!?]\s)|(?<=\n))\(\d+\)\s)")
 _FIKRA_NO = re.compile(r"^(\(\d+\))")
 # Boşluk-sınırlı (normalize-sonrası tek-satır metin) bent işaretçileri:
 _BENT_NUM_ISARET = re.compile(r"(?:(?<=\s)|^)(\d+)\.\s")
