@@ -48,3 +48,28 @@ def test_non_sequential_numbers_are_not_bentler():
     body = "103. maddede belirtilen oran ve 1985. yıldan beri uygulanan kural."
     f = parse_fikralar(body)[0]
     assert f.bentler == []
+
+
+def test_splits_alt_bentler_within_bent():
+    # Resmî hiyerarşi: madde → fıkra → bent → alt bent. Alt-bent işareti '1)' '2)' (parantez-rakam),
+    # bent ('a)') içinde yer alır. Gerçek veri ([7528] M13): 'a) ... : 1) ... 2) ...'.
+    body = "(1) Disiplin:\na) Çalışma usulü: 1) birinci alt bent 2) ikinci alt bent\nb) Karar şekli"
+    f = parse_fikralar(body)[0]
+    assert [b.isaret for b in f.bentler] == ["a)", "b)"]
+    abent = f.bentler[0].alt_bentler
+    assert [a.isaret for a in abent] == ["1)", "2)"]
+    assert abent[0].text.startswith("1) birinci alt bent")
+
+
+def test_bent_without_alt_bentler_has_empty_list():
+    # Alt-bent içermeyen bent → alt_bentler boş liste (alan her zaman var).
+    body = "Liste:\na) basit bent\nb) ikinci basit bent"
+    f = parse_fikralar(body)[0]
+    assert f.bentler[0].alt_bentler == []
+
+
+def test_alt_bent_non_sequential_not_split():
+    # Bent metnindeki '1) ... 5) ...' sıralı koşu değilse alt-bent SAYILMAZ (yıl/atıf gürültüsü).
+    body = "a) 1) tek başına bir alt bent ama 7) atlamalı numara, alt-bent değil"
+    f = parse_fikralar(body)[0]
+    assert f.bentler[0].alt_bentler == []
