@@ -119,9 +119,36 @@ Bunları "uydurma madde" sanma. ([916-korpus-raporu.md](916-korpus-raporu.md) B�
 
 ---
 
+## Statü düzeltmesinde REGRESYON ve nihai çözüm (recheck workflow + kullanıcı yakaladı)
+
+İlk statü düzeltmesi (`e9cb766`) **regresyon üretti**: `_TAM_MULGA` regex'i konum-duyarsızdı →
+maddenin İÇERİĞİNDE (bir fıkrada) geçen AYM iptali/Mülga'yı **tüm maddeye yaydı**. Etki: 5651
+M3/M5/M6 gibi maddeler (gerçek içerikle başlayıp ortasında fıkra-iptali olan) yanlışlıkla mülga
+oldu — TAM 916'da **1525 madde** yanlış mülga. Bu, raporun "seviye-duyarsız statü atama"
+teşhisiyle birebir örtüştü.
+
+**Kök neden (kullanıcının ifadesiyle):** "madde contentinde iptal diyor, maddeye iptal demiyor."
+Marker maddenin açılış künyesinde mi (→ tüm madde) yoksa bir fıkra içinde mi (→ o fıkra) ayrımı yok.
+
+**Nihai çözüm (`2158ea7`) — fıkra-ağacından statü:** Madde yürürlüğü artık `parse_fikralar`
+ağacından hesaplanıyor: numaralı fıkralar varsa **TÜMÜ mülga ise madde mülga**, en az biri
+yürürlükte ise madde yürürlükte. Numaralı fıkra yoksa (künye-maddesi) konum-duyarlı metin
+tespitine düşer. `extract_status`'a `konum_duyarli` parametresi eklendi (fıkra/bent/alt-bent
+alt-birim çağrıları eski "içindeki Mülga o birime aittir" davranışında kaldı).
+
+**6/6 gerçek vaka doğru:** 5651 M3/M5/M6 yürürlükte (kısmi iptal); 5651 M9 (künye-iptal),
+7081 M10 (tüm fıkra mülga), 7071 M34 (tek fıkra iptal) → mülga. TAM 916: %9.5 mülga
+(yörünge: konumsuz-regex 4567 → konum-duyarlı 3042 → fıkra-ağacı 3107).
+
+**Öğrenme:** İlk "düzeltme tamam" değerlendirmesi dar bir spot-check'e dayanıyordu (sadece
+düzelen 3 şeye bakıldı, yeni bozulan aranmadı). Regresyon her zaman bakılmayan yerdedir;
+geniş recheck (10 kanun, yeni-bozulan dahil) bunu yakaladı.
+
+---
+
 ## Durum
 
-Tüm iddialar ham veriyle teyit edildi (2026-06-24). **4 hata sınıfı (C2, C1, A, B) TDD ile
-düzeltildi**, her biri ayrı atomik commit + tam korpus regresyon doğrulaması ile. madde-11
-düzeltme gerektirmedi (zaten doğru sınıflanıyor). pytest: 101 → 114 passed (+13 test, regresyon
-yok). Madde keşfi/sayısı tüm düzeltmelerde korundu (916 kanunda madde-sayı değişimi 0).
+Tüm iddialar ham veriyle teyit edildi (2026-06-24). **4 hata sınıfı (C2, C1, A, B) + gövde-başı
+sızma + statü-regresyon** TDD ile düzeltildi, her biri ayrı atomik commit + tam korpus regresyon
+doğrulaması ile. madde-11 düzeltme gerektirmedi (zaten doğru sınıflanıyor). pytest: 101 → 124
+passed. Madde keşfi/sayısı tüm düzeltmelerde korundu (916 kanunda madde-sayı değişimi 0).
