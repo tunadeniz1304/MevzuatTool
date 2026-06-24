@@ -70,6 +70,29 @@ def test_empty_body_madde_is_filtered():
     assert madde_to_chunk(m, kanun_ad="KVKK") is None
 
 
+def test_islenmistir_only_body_is_filtered():
+    # text'i SADECE 'yerine işlenmiştir' yönlendirme notundan ibaret madde → korpusa GİRMEZ.
+    # Gerçek hukuki içerik yok (metin başka kanuna işlendi). Gerçek veri: 7579 M1.
+    m = _madde("1", "(22/12/1934 tarihli ve 2644 sayılı Tapu Kanunu ile ilgili olup, yerine işlenmiştir.)")
+    assert madde_to_chunk(m, kanun_ad="TAPU ... DEĞİŞİKLİK KANUNU") is None
+
+
+def test_ilgili_olup_only_body_is_filtered():
+    # 'ile ilgili olup ... işlenmiştir' varyantı da içeriksiz → filtrelenir. Gerçek veri: KVKK M30.
+    m = _madde("1", "(10/12/2003 tarihli ve 5018 sayılı Kanun ile ilgili olup yerine işlenmiştir.)")
+    assert madde_to_chunk(m, kanun_ad="X DEĞİŞİKLİK KANUNU") is None
+
+
+def test_real_content_with_islenmistir_mention_is_kept():
+    # KORUMA (false-positive): gerçek hüküm İÇİNDE 'işlenmiştir' geçse bile, içerik dolu → KALIR.
+    body = ("(1) Kişisel veriler, kanunda öngörülen usullere uygun işlenir ve sicile işlenmiştir. "
+            "(2) Veri sorumlusu gerekli tedbirleri alır ve denetimleri yapar.")
+    m = _madde("11", body)
+    c = madde_to_chunk(m, kanun_ad="KVKK")
+    assert c is not None                          # gerçek içerik elenmemeli
+    assert "tedbirleri alır" in c["text"]
+
+
 def test_maddeler_to_chunks_filters_empty():
     arts = [Article(no="11", body="(1) Dolu madde."), Article(no="12", body="   ")]
     maddeler, _ = enrich(arts, TREE, "6698")

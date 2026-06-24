@@ -7,9 +7,24 @@ Modüler sınır (CLAUDE.md): bağımsız teslim edilebilir JSONL `{id, text, me
 Boş-gövde maddeler (içeriksiz işlenmiş maddeler) korpusa GİRMEZ. Mülga DAHİL ama işaretli
 (tarihsel sorgu için; yurutluk='mülga' ile filtrelenebilir).
 """
+import re
 from dataclasses import asdict
 
 from mevzuat_tool.enrich import Madde
+
+# İçeriksiz yönlendirme notu: maddenin TÜM gövdesi '(... yerine işlenmiştir.)' veya
+# '(... ile ilgili olup ... işlenmiştir.)' gibi bir nottan ibaret — gerçek hüküm BAŞKA kanuna
+# işlenmiş, burada yok (değişiklik paketlerinde yaygın; RAG'a girerse boş/yanıltıcı sonuç).
+# Yalnız gövde BAŞTAN SONA bu desense filtreler; içinde 'işlenmiştir' geçen GERÇEK madde dokunulmaz.
+_ISLENMIS_NOTU = re.compile(
+    r"^\(?\s*[^)]*?(?:yerine\s+işlenmiş|ile\s+ilgili\s+olup)[^)]*?\)?\.?\s*$",
+    re.IGNORECASE,
+)
+
+
+def _sadece_islenmis_notu(govde: str) -> bool:
+    """Gövde tamamen içeriksiz yönlendirme notu mu? (gerçek hüküm yok)."""
+    return bool(_ISLENMIS_NOTU.match(govde.strip()))
 
 
 def _text(m: Madde) -> str:
@@ -21,9 +36,9 @@ def _text(m: Madde) -> str:
 
 
 def madde_to_chunk(m: Madde, kanun_ad: str) -> dict | None:
-    """Bir Madde'yi korpus chunk'ına çevir. Boş gövde → None (filtrelenir)."""
+    """Bir Madde'yi korpus chunk'ına çevir. Boş gövde VEYA sadece-işlenmiştir-notu → None."""
     govde = (m.body_temiz or m.body or "").strip()
-    if not govde:
+    if not govde or _sadece_islenmis_notu(govde):
         return None
     return {
         "id": m.id or f"{_kanun_no_from_id(m)}-{m.no}",
