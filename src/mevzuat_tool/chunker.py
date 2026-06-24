@@ -60,6 +60,24 @@ _BLEED_BASLIK = re.compile(
     r"(?<=[.!?])\s+[A-ZÇĞİÖŞÜ][\wçğıöşüâî]*(?:\s+[\wçğıöşüâî]+){0,4}:\s*$"
 )
 
+# Seviye-başlık bleed: gövde kuyruğuna sızan 'X. BÖLÜM/KISIM/KİTAP/AYIRIM/FASIL ...' yapısal
+# başlığı. Madde içinde yeni bir BÖLÜM/KISIM başlamaz — o, bir sonraki yapısal birimin başlığıdır
+# (chunker level-başlıkları madde saymaz, gövdeye sızar). Cümle-sonu (.!?:) VEYA ')' sonrası
+# sıra-sözcüğü ('İKİNCİ','ALTINCI','ON BİRİNCİ','SON') + BÖLÜM/KISIM görülünce ORADAN gövde sonuna
+# kadar kırp. 'ikinci fıkra' gibi sıra+fıkra/kişi BÖLÜM/KISIM olmadığı için dokunulmaz.
+# Notlar: (1) 'ON BİRİNCİ' gibi bileşik sıra; (2) 'altıncı' dizgi bozuğu 'ALTlNCI' (küçük-l) için
+# 'ı'↔'l' toleransı; (3) lookbehind'a ')' eklendi ('...md.) İKİNCİ BÖLÜM'). Gerçek veri: 3402,7545,7071.
+# Sıra göstergesi sözcüğü: 'İKİNCİ','ALTINCI','ON BİRİNCİ'/'ONBİRİNCİ' (boşluklu|bitişik),
+# 'altıncı' dizgi bozuğu 'ALTlNCI' için ı↔l toleransı, 'SON'. (Roma-rakamı 'III.' biçimi ek
+# karmaşıklık/risk getirip korpusta etki etmediği için kapsanmadı — kalan ~50 kopuk-dizgi
+# varyantı bilinen-sınır.)
+_SIRA = (r"(?:on|yirmi)?\s*(?:bir[il]nci|ik[il]nci|üçüncü|dördüncü|beşinci|alt[il]ncı|"
+         r"yed[il]nci|sek[il]z[il]nci|dokuzuncu|onuncu)|son")
+# Lookbehind: cümle-sonu (.!?:), ')' VEYA dipnot işareti (']' — 'yapılır.[2] ÜÇÜNCÜ BÖLÜM').
+_SEVIYE_BASLIK_BLEED = re.compile(
+    r"(?i)(?<=[.!?:)\]])\s+(?:" + _SIRA + r")\s+(?:bölüm|kısım|kitap|ayrım|ayirim|fasıl)\b.*$"
+)
+
 
 # Kanun-sonu 'işlenemeyen madde eki': '(TARİHLİ VE NNNN) SAYILI ... KANUNA İŞLENEMEYEN ...'
 # başlığı. Başka kanunlarla bu kanuna eklenmek istenip işlenememiş maddelerin listesidir — bu
@@ -88,7 +106,10 @@ def split_articles(text: str) -> list[Article]:
         number = m.group(2) or m.group(4)
         no = f"{_canon_prefix(prefix)} {number}" if prefix else number
         body = text[start:end].strip()
-        if not son_madde:  # sonraki maddenin başlığı gövde kuyruğuna sızmışsa kırp
+        # Seviye-başlık ('X. BÖLÜM/KISIM ...') gövde kuyruğuna sızmışsa oradan sona kadar kırp.
+        # (son madde dâhil — kanun-sonu 'Çeşitli ve Son Hükümler' başlığı son maddede de sızabilir)
+        body = _SEVIYE_BASLIK_BLEED.sub("", body).strip()
+        if not son_madde:  # sonraki maddenin (kolonlu) başlığı gövde kuyruğuna sızmışsa kırp
             body = _BLEED_BASLIK.sub("", body).strip()
         out.append(Article(no=no, body=body))
     return out
