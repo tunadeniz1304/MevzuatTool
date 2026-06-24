@@ -35,16 +35,20 @@ def _text(m: Madde) -> str:
     return govde
 
 
-def madde_to_chunk(m: Madde, kanun_ad: str) -> dict | None:
-    """Bir Madde'yi korpus chunk'ına çevir. Boş gövde VEYA sadece-işlenmiştir-notu → None."""
+def madde_to_chunk(m: Madde, kanun_ad: str, kanun_no: str) -> dict | None:
+    """Bir Madde'yi korpus chunk'ına çevir. Boş gövde VEYA sadece-işlenmiştir-notu → None.
+
+    m.id mevzuatId tabanlıdır (enrich'e mid verilir → 'MID-madde'; globalde benzersiz).
+    kanun_no AYRI parametredir: kanun numarası globalde benzersiz DEĞİL (6551 iki kanun) ve
+    id çok-parçalı olabilir ('MID-5-3') → id'den parse güvenilmez."""
     govde = (m.body_temiz or m.body or "").strip()
     if not govde or _sadece_islenmis_notu(govde):
         return None
     return {
-        "id": m.id or f"{_kanun_no_from_id(m)}-{m.no}",
+        "id": m.id,
         "text": _text(m),
         "metadata": {
-            "kanun_no": _kanun_no_from_id(m),
+            "kanun_no": kanun_no,
             "kanun_ad": kanun_ad,
             "madde_no": m.no,
             "madde_baslik": m.madde_baslik,
@@ -65,18 +69,11 @@ def madde_to_chunk(m: Madde, kanun_ad: str) -> dict | None:
     }
 
 
-def _kanun_no_from_id(m: Madde) -> str:
-    """id 'KANUNNO-MADDENO' biçimindedir (assign_ids); kanun_no'yu oradan al."""
-    if m.id and "-" in m.id:
-        return m.id.rsplit("-", 1)[0]
-    return ""
-
-
-def maddeler_to_chunks(maddeler, kanun_ad: str) -> list[dict]:
-    """Madde listesini korpus chunk listesine çevir; boş-gövde maddeleri eler."""
+def maddeler_to_chunks(maddeler, kanun_ad: str, kanun_no: str) -> list[dict]:
+    """Madde listesini korpus chunk listesine çevir; boş-gövde + içeriksiz-not maddeleri eler."""
     out = []
     for m in maddeler:
-        c = madde_to_chunk(m, kanun_ad)
+        c = madde_to_chunk(m, kanun_ad, kanun_no)
         if c is not None:
             out.append(c)
     return out

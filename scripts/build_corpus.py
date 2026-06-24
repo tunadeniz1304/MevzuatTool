@@ -42,8 +42,10 @@ async def build_one(f, no, mid, ad):
     arts = split_articles(normalize_text(content))
     ht = parse_tables(html) if html else None
     hd = parse_anchors(html) if html else None
-    maddeler, _gdip = enrich(arts, tree, no, html_tables=ht, html_dipnotlar=hd)
-    return maddeler_to_chunks(maddeler, kanun_ad=ad)
+    # id MID tabanlı (globalde benzersiz; kanun_no tekrar edebilir — 6551 iki kanun) → enrich'e mid.
+    # kanun_no (no) korpus metadata'sında AYRI taşınır.
+    maddeler, _gdip = enrich(arts, tree, mid, html_tables=ht, html_dipnotlar=hd)
+    return maddeler_to_chunks(maddeler, kanun_ad=ad, kanun_no=no)
 
 
 async def main():
