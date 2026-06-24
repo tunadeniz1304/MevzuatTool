@@ -1,3 +1,26 @@
+# Faz 5 (Embedding) Açık İşler
+
+## 🟠 Dev maddeler (>20K char) — embedding'i aşar (Faz 5'te çöz)
+- **Bulgu (2026-06-24, korpus sadakat denetimi):** 31.514 chunk'ın **26'sı (>20K char)** embedding
+  context'ini aşar. İki olgu: (1) **düz-metin ek-listeler** — `102979-12` "Yürütme" maddesine
+  binlerce kapatılan kurum/vakıf adı düz metin olarak yapışmış (160K char; markdown tablolar
+  zaten `metadata.tablolar`'a çıkarıldı ama bu listeler `strip_html` ile DÜZ metin de geldi);
+  `103011-Gecici1-*` Harçlar tarifesi. (2) **gerçek uzun maddeler** — vergi yapılandırma
+  kanunlarının "Matrah ve vergi artırımı / Diğer hükümler" upuzun ama meşru hükümleri.
+- **Karar (kullanıcı, 2026-06-24):** Faz 5'e ertelendi — çözüm embedding modeline bağlı.
+  BGE-M3 8192 token (~24K char) çoğunu alır; aşanlar için **fıkra-bazlı alt-chunk'lama**
+  (fıkra ağacı zaten `metadata.fikralar`'da hazır). Korpusun %0.08'i — erken-optimizasyon değil.
+- **Not:** markdown tablo çıkarma + sadece-tablo filtresi YAPILDI (commit 5e5e86e); dev-chunk 35→26.
+
+## 🟡 Mini-chunk'lar (<15 char) — anlamsız text (265 adet)
+- **Bulgu:** `120179-Gecici1`='(1)', `104098-Ek1`='Yürürlük' gibi 265 chunk text'i ya tek fıkra
+  işareti ya tek kelime başlık. Gerçek içerik parse'ta kayıp ya da madde gerçekten içeriksiz.
+- **Karar:** Önce dev-chunk'lar çözüldü; mini-chunk boş-içerik filtresi sonraya bırakıldı.
+- **Fix yönü:** text uzunluğu eşiği (ör. <15 char) + anlam kontrolü ile filtre; ama önce
+  bunların gerçekten içeriksiz mi yoksa parse-kaybı mı olduğunu örnekle doğrula.
+
+---
+
 # Faz 3 Follow-up Adayları (AÇIK liste)
 
 Bu liste **açık** tutulur — incelenebilir adaylar; henüz karara/plana bağlanmadı.
