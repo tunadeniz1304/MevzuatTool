@@ -73,3 +73,25 @@ def test_alt_bent_non_sequential_not_split():
     body = "a) 1) tek başına bir alt bent ama 7) atlamalı numara, alt-bent değil"
     f = parse_fikralar(body)[0]
     assert f.bentler[0].alt_bentler == []
+
+
+def test_inline_paren_number_references_are_not_fikra():
+    # A: cümle ortasında '(1), (2) ve (3) sayılı cetveller' fıkra DEĞİL — cetvel atfı.
+    # Gerçek veri (5564 M3): tek hüküm, 3 fıkraya bölünmemeli.
+    body = "(1) Toksik maddeler bu Kanunun eki (1), (2) ve (3) sayılı cetvellerde gösterilmiştir."
+    fs = parse_fikralar(body)
+    assert [f.no for f in fs] == ["(1)"]  # tek gerçek fıkra; (2),(3) cetvel atfı
+
+
+def test_fikra_reference_within_sentence_not_split():
+    # A: 'birinci fıkrasının (2), (3) numaralı bentleri' fıkra atfı — fıkra başı sanılmamalı.
+    body = "(1) Birinci fıkra. Bu maddenin (2), (3) numaralı bentleri uygulanmaz."
+    fs = parse_fikralar(body)
+    assert [f.no for f in fs] == ["(1)"]
+
+
+def test_real_fikra_after_sentence_end_is_kept():
+    # A koruma: cümle-sonu ('. ') sonrası gelen sıralı '(n)' GERÇEK fıkra — kaçırılmamalı.
+    body = "(1) Birinci fıkra hükmü. (2) İkinci fıkra hükmü. (3) Üçüncü fıkra hükmü."
+    fs = parse_fikralar(body)
+    assert [f.no for f in fs] == ["(1)", "(2)", "(3)"]
