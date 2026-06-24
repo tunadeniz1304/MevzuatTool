@@ -216,6 +216,25 @@ def test_bent_level_status_unchanged_by_position():
     assert extract_status("b) içerik metni (Mülga: 1/1/2020-1234 md.)") == "mülga"
 
 
+def test_tarih_baslangicli_kunye_mulga():
+    # 657 statü kaçırma: künye anahtar kelime yerine TARİH/ATIF ile başlıyor ('(2/1/1961- 203/2
+    # md. ile gelen ... teselsül ettirilmiştir.; Mülga: 2/7/2018-KHK-703 md.)'). Bu da açılış
+    # künyesidir → ';Mülga:' tüm maddeyi mülga yapmalı. Gerçek veri: 657 Ek2/Geçici1/Geçici2.
+    from mevzuat_tool.chunker import extract_status
+    body = ("(2/1/1961- 203/2 md. ile gelen numarasız ek md. hükmü olup madde numarası teselsül "
+            "ettirilmiştir.; Mülga: 2/7/2018 - KHK-703/73 md.)")
+    assert extract_status(body, konum_duyarli=True) == "mülga"
+
+
+def test_tarih_kunye_ardindan_icerik_yururlukte():
+    # Koruma: tarih-künye AÇILIŞTA ama ardından GERÇEK İÇERİK gelip ortada Mülga varsa, içerik
+    # başladığı için kısmi (madde yürürlükte). Yanlış-pozitif önleme.
+    from mevzuat_tool.chunker import extract_status
+    body = ("(2/1/1961-203/2 md. ile gelen madde) Bu madde kapsamında işlemler yürütülür ve "
+            "raporlanır. (Mülga son cümle: 1/1/2020-1234 md.)")
+    assert extract_status(body, konum_duyarli=True) == "yürürlükte"
+
+
 def test_prefix_and_suffix_maddeler_get_unique_no():
     text = (
         "Madde 1- (1) Asıl. "
