@@ -95,19 +95,26 @@ Bunları "uydurma madde" sanma. ([916-korpus-raporu.md](916-korpus-raporu.md) B�
 
 ---
 
-## Öncelikli aksiyonlar (kanıtlı kusurlar)
+## Öncelikli aksiyonlar (kanıtlı kusurlar) — HEPSİ DÜZELTİLDİ ✅
 
-| Öncelik | Aksiyon | Risk | Gerekçe |
-|---|---|---|---|
-| **P0a** | **C2 statü-kaçırma genişlet** — `extract_status`'a `; Mülga:` + AYM `İptal:` desenleri ekle | DÜŞÜK (genişletme) | En güvenli; mülga/iptal maddeler doğru işaretlenir. Yanlış-pozitif riski düşük. |
-| **P0b** | **A fıkra-bölücü sıkılaştır** — `(n)`'i yalnız cümle-sonu + paragraf başında fıkra say; cetvel/bent/atıf bağlamlarını dışla | ORTA-YÜKSEK | En çok madde etkiler ama sıkılaştırma gerçek fıkrayı kaçırabilir (yanlış-negatif) → en çok regresyon testi gerekir |
-| **P1** | **C1 aşırı-mülga sınırla** — "Mülga son/N. fıkra" gibi nitelikli mülgayı alt-düğüme uygula, maddeyi yürürlükte bırak | ORTA | Madde-statüsü ile fıkra-statüsü ayrışmalı |
-| **P2** | **B gövde-taşma + madde-11 sınır** — komşu başlık ayrımı + tek `N-` içeriksiz satır sınır tespiti | YÜKSEK | Chunker sınır mantığına dokunur → geniş regresyon riski |
+| Öncelik | Aksiyon | Durum | Commit | Sonuç |
+|---|---|---|---|---|
+| **P0a** | C2 statü-kaçırma genişlet (`; Mülga:` + AYM `İptal:`) | ✅ DÜZELTİLDİ | `e9cb766` | 5651 M9 + 657 Ek1/Ek2 artık mülga; 300-kanun +62 mülga |
+| **P1** | C1 aşırı-mülga sınırla (nitelikli kısmi-mülga) | ✅ DÜZELTİLDİ | `e9cb766` | 3402 M3 artık yürürlükte; -32 yanlış-mülga |
+| **P0b** | A fıkra-bölücü konum-duyarlı (cümle-sonu/baş) | ✅ DÜZELTİLDİ | `1a9ad2d` | 5564 M3: 3→1; 7326 M5: 29→13; esas kanun gerçek-fıkra kaybı 0 |
+| **P2** | B gövde-taşma (sonraki başlık kuyruk-kırpma) | ✅ DÜZELTİLDİ | `b6e8521` | TAM 916: madde-sayı değişimi 0, gövde kırpılan 2849 madde/122 kanun |
+
+**madde-11 (6756):** Düzeltme GEREKMEDİ — analiz, madde 11'in zaten **içeriksiz işlenmiş madde**
+(`MADDE 10- 11- ...yerine işlenmiştir`) olduğunu, `aralik.py`'nin onu zaten içeriksiz-aralık
+saydığını gösterdi (`'11' in islenmis_aralik_maddeleri = True`). Eval'de "gerçek kayıp" değil.
+Denetimin "madde 11 kayıp" alarmı eval açısından sahte; sadece M10 gövdesindeki `11-` artığı
+kozmetik (B düzeltmesi bunun bir kısmını da temizler).
 
 ---
 
 ## Durum
 
-Tüm iddialar ham veriyle teyit edildi (2026-06-24). Düzeltmeler bu rapordan sonra TDD ile,
-risk sırasına göre (düşükten yükseğe), her biri ayrı atomik commit olarak yapılacak. Her
-düzeltme öncesi ilgili iddia tekrar veriye karşı doğrulanacak.
+Tüm iddialar ham veriyle teyit edildi (2026-06-24). **4 hata sınıfı (C2, C1, A, B) TDD ile
+düzeltildi**, her biri ayrı atomik commit + tam korpus regresyon doğrulaması ile. madde-11
+düzeltme gerektirmedi (zaten doğru sınıflanıyor). pytest: 101 → 114 passed (+13 test, regresyon
+yok). Madde keşfi/sayısı tüm düzeltmelerde korundu (916 kanunda madde-sayı değişimi 0).
