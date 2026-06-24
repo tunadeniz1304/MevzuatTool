@@ -95,3 +95,25 @@ def test_real_fikra_after_sentence_end_is_kept():
     body = "(1) Birinci fıkra hükmü. (2) İkinci fıkra hükmü. (3) Üçüncü fıkra hükmü."
     fs = parse_fikralar(body)
     assert [f.no for f in fs] == ["(1)", "(2)", "(3)"]
+
+
+def test_fikra_after_kunye_paren_close_is_split():
+    # Gerçek veri (6698/KVKK M6): künye-fıkrası ')' ile biter, ardından sıralı '(n) (' gelir.
+    # '(2) (Mülga:...md.)' fıkrasının sonu ')' olduğu için '(3)' yutulmamalı — ayrı fıkra.
+    # Sinyal: '(n)' + boşluk + AÇILIŞ-PAREN '(' (künye başı) güçlü fıkra-başıdır; atıf değil.
+    body = ("(1) Özel nitelikli kişisel veridir. "
+            "(2) (Mülga:2/3/2024-7499/33 md.) "
+            "(3) (Değişik:2/3/2024-7499/33 md.) İşlenmesi yasaktır. "
+            "(4) Yeterli önlem şarttır.")
+    fs = parse_fikralar(body)
+    assert [f.no for f in fs] == ["(1)", "(2)", "(3)", "(4)"]
+    assert fs[1].text == "(2) (Mülga:2/3/2024-7499/33 md.)"
+    assert fs[1].yurutluk == "mülga"
+
+
+def test_paren_number_ref_after_close_paren_not_fikra():
+    # A koruma (yanlış-pozitif): künye-kapanışı ')' sonrası gelse de, '(n)' ardından
+    # KÜÇÜK harf/kelime gelirse (açılış-paren değil) bu atıftır, fıkra başı DEĞİL.
+    body = "(1) Bu hüküm (5237 sayılı Kanun md.) ile (2) numaralı bende tabidir."
+    fs = parse_fikralar(body)
+    assert [f.no for f in fs] == ["(1)"]  # '(2) numaralı' atıf — bölünmemeli
