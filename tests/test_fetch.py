@@ -85,3 +85,54 @@ def test_rate_state_proactive_pacing_after_bucket():
     waits = [rs.before_request() for _ in range(12)]
     assert waits[0] == 0 and waits[9] == 0      # ilk 10 serbest
     assert waits[10] >= 17                        # 11. istek öncesi kova doldu → bekle
+
+
+# --- fetch_tree disk cache (Faz 4: tekrar-üretim ucuzlasın; tree'ler API'den bir kez çekilir) ---
+
+def _fetcher_no_net(tmp_path):
+    """Ağsız MevzuatFetcher: client None (çağrılırsa patlar → cache okunduğunu kanıtlar)."""
+    from mevzuat_tool.fetch import MevzuatFetcher
+    f = MevzuatFetcher.__new__(MevzuatFetcher)
+    f.cache = tmp_path
+    f._client = None
+    f._rate = _RateState()
+    return f
+
+
+def test_fetch_tree_reads_cache_without_network(tmp_path):
+    import json as _json
+    from mevzuat_tool.fetch import parse_tree_json
+    # Ham API children JSON'unu cache'e elle yaz (gerçek fetch_tree formatı).
+    children = [{"maddeNo": "1", "maddeId": "100", "maddeBaslik": "Amaç", "children": []}]
+    (tmp_path / "treejson_555.json").write_text(_json.dumps(children), encoding="utf-8")
+    f = _fetcher_no_net(tmp_path)
+    nodes = _run(f.fetch_tree("555"))            # client None → ağa gitmeden cache'ten okumalı
+    assert len(nodes) == 1
+    assert nodes[0].madde_no == "1"
+    assert nodes[0].madde_baslik == "Amaç"
+    # parse_tree_json ile birebir aynı sonucu vermeli (cache = ham children)
+    assert nodes == parse_tree_json(children)
+
+
+def test_fetch_tree_writes_cache_after_fetch(tmp_path):
+    # Cache yoksa API'den çeker VE diske yazar (sonraki çağrı ağsız olsun).
+    children = [{"maddeNo": "7", "maddeId": "70", "maddeBaslik": "Tanım", "children": []}]
+    ok = _FakeResp(200, body={"metadata": {"FMTY": "SUCCESS"}, "data": {"children": children}})
+    f = _fetcher_no_net(tmp_path)
+    f._client = _FakeClient([ok])
+    nodes = _run(f.fetch_tree("777"))
+    assert nodes[0].madde_no == "7"
+    cache_file = tmp_path / "treejson_777.json"
+    assert cache_file.exists()                   # cache yazıldı
+    import json as _json
+    assert _json.loads(cache_file.read_text(encoding="utf-8"))[0]["maddeNo"] == "7"
+
+
+def test_fetch_tree_empty_not_cached(tmp_path):
+    # 0-madde (FMTY != SUCCESS) → cache YAZILMAZ (boş cache sonraki gerçek çekimi engellemesin).
+    fail = _FakeResp(200, body={"metadata": {"FMTY": "FAIL"}, "data": {}})
+    f = _fetcher_no_net(tmp_path)
+    f._client = _FakeClient([fail])
+    nodes = _run(f.fetch_tree("888"))
+    assert nodes == []
+    assert not (tmp_path / "treejson_888.json").exists()
