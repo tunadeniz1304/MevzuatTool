@@ -103,12 +103,19 @@ Bunları "uydurma madde" sanma. ([916-korpus-raporu.md](916-korpus-raporu.md) B�
 | **P1** | C1 aşırı-mülga sınırla (nitelikli kısmi-mülga) | ✅ DÜZELTİLDİ | `e9cb766` | 3402 M3 artık yürürlükte; -32 yanlış-mülga |
 | **P0b** | A fıkra-bölücü konum-duyarlı (cümle-sonu/baş) | ✅ DÜZELTİLDİ | `1a9ad2d` | 5564 M3: 3→1; 7326 M5: 29→13; esas kanun gerçek-fıkra kaybı 0 |
 | **P2** | B gövde-taşma (sonraki başlık kuyruk-kırpma) | ✅ DÜZELTİLDİ | `b6e8521` | TAM 916: madde-sayı değişimi 0, gövde kırpılan 2849 madde/122 kanun |
+| **P2b** | Gövde-başı içeriksiz-aralık not sızması (6756 M10) | ✅ DÜZELTİLDİ | `c7d4a62` | TAM 916: 333 madde temizlendi, yanlış-pozitif 0 |
 
-**madde-11 (6756):** Düzeltme GEREKMEDİ — analiz, madde 11'in zaten **içeriksiz işlenmiş madde**
-(`MADDE 10- 11- ...yerine işlenmiştir`) olduğunu, `aralik.py`'nin onu zaten içeriksiz-aralık
-saydığını gösterdi (`'11' in islenmis_aralik_maddeleri = True`). Eval'de "gerçek kayıp" değil.
-Denetimin "madde 11 kayıp" alarmı eval açısından sahte; sadece M10 gövdesindeki `11-` artığı
-kozmetik (B düzeltmesi bunun bir kısmını da temizler).
+**madde-11 (6756) — İKİ AYRI KATMAN:**
+- *Madde 11'in ayrı chunk olmaması:* Düzeltme GEREKMEDİ — madde 11 zaten **içeriksiz işlenmiş
+  madde** (`MADDE 10- 11- ...yerine işlenmiştir`), `aralik.py` onu içeriksiz-aralık sayıyor
+  (`'11' in islenmis_aralik_maddeleri = True`). Eval'de "gerçek kayıp" değil; kendi chunk'ını
+  hak etmiyor (yönlendirme notu, gerçek içeriği 211 sayılı kanunda).
+- *M10 gövdesine sızma:* DÜZELTİLDİ (`c7d4a62`). M10 gövdesi `'11- (...işlenmiştir.) MADDE 12 ila
+  20 - (...) MADDE 21 ila 32 - (...)'` ile kirleniyordu → RAG'da yanlış-chunk + embedding gürültüsü
+  (M10 vektörü "Askeri Hakimler/TSK Personel" gibi alakasız terimlerle kirleniyordu). enrich artık
+  gövde başına sızmış içeriksiz-aralık notunu kırpıyor. Güvenli kural: gövde RAKAM-tire-paren
+  (`11- (`) ile başlar + `işlenmiş/ilgili olup` bağlamı → kırp (gerçek fıkra `(1)` parenle başlar,
+  karışmaz). TAM 916: 333 madde temizlendi, **yanlış-pozitif 0** (gerçek içerik kesilmedi).
 
 ---
 
