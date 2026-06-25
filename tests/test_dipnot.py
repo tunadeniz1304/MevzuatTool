@@ -79,3 +79,29 @@ def test_dense_trailing_block_is_appendix():
     clean, dip = split_dipnot_apendiksi(body)
     assert clean == "Madde gövdesi uzun metin burada biter."
     assert [d.no for d in dip] == [1, 2, 3]
+
+
+def test_spread_body_start_references_long_body_not_appendix():
+    # 102939 M11 deseni: [1] gövde başında (40. krk), [2..5] tüm gövdeye yayılmış (706,2202,2973),
+    # son işaret kuyruğa yakın (kısa kuyruk) AMA bunlar gövde-içi REFERANSLAR. Gövde-başı az metin +
+    # uzun toplam gövde → apendiks değil (yoksa 2996ch gövde 40ch'a kesilir).
+    seg = "C" * 700
+    body = (f"İlk hüküm[1] burada {seg} ikinci kısım[2] devam {seg} üçüncü[3] bölüm {seg} "
+            f"dördüncü[4] kısım {seg} beşinci[5] son hüküm uygulanır.")
+    clean, dip = split_dipnot_apendiksi(body)
+    assert "son hüküm uygulanır" in clean
+    assert len(clean) > 2000          # uzun gövde [1]@başta diye kesilmemeli
+
+
+def test_dense_but_body_start_references_are_not_appendix():
+    # 5335 M30 over-truncation bug: [1] gövdenin BAŞINDA (28. krk), ardından [2..5] yoğun (ort
+    # aralık ~419<800) ama bunlar gövde-içi REFERANSLAR — gerçek apendiks değil. Apendiks kuyrukta
+    # olur; gövde-başında başlayan '[1]' apendiks SAYILMAMALI (yoksa 3998ch gövde 28ch'a kesilir).
+    seg = "B" * 600
+    body = (f"Cumhurbaşkanı tarafından atanan[1] görevlendirilenler ile {seg} "
+            f"yükseköğretim kurumları[2] ve[3] {seg} sağlık personeli[4] hakkında[5] {seg} "
+            f"bu hüküm uygulanır ve süreç tamamlanır.")
+    clean, dip = split_dipnot_apendiksi(body)
+    # gövde-başı '[1]' apendiks başı değil → gövdenin tamamı korunur
+    assert "süreç tamamlanır" in clean
+    assert len(clean) > 1500          # 3998→28 over-truncation OLMAMALI
