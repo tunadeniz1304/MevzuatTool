@@ -1,3 +1,31 @@
+# Gold-Set Denetimi (unique_mevzuat.json, 2026-06-25)
+
+Bağımsız gold-set (6055 mevzuat atfı: kanun-madde-fıkra-bent) ile korpus karşılaştırıldı.
+Gold = içeriksiz adres listesi (vergi/mali hukuk ağırlıklı, %54); korpus = tam içerik (31.5K madde).
+
+## Sonuç: korpus sağlam
+- **Madde coverage:** gold-işaretli 2679 maddenin %80'i dolu içerikli; %16 kapsam-dışı/filtre (doğru);
+  %1.2 (32) boş-aday → adversarial denetimde (workflow) 13 mülga + 1 yanlış-alarm + **1 gerçek bug**.
+- **Madde sayısı:** bedesten ground-truth 30.022 ↔ korpus 31.515 (+%5 = Ek/Geçici fazlası, doğru).
+- **Şişme yok:** (kanun,madde) gerçek-kopya 0; 1.371 boilerplate (Yürürlük/Yürütme) meşru (her kanunun
+  kendi maddesi) — bırakıldı (kullanıcı kararı, atıf-modunda değerli).
+
+## ✅ DÜZELTİLEN: dipnot over-truncation (commit 7754591)
+- **Bulgu:** `split_dipnot_apendiksi` gövde-BAŞINDAki yoğun `[1][2]..` referanslarını kuyruk dipnot
+  apendiksi sanıp gövdeyi kesiyordu (5335 M30: 3998ch→28ch). İlk 300 kanunda ~16 şüpheli vaka.
+- **Adversarial doğrulama (2 workflow, 24 ajan):** şüphelilerin çoğu mülga/meşru-apendiks; sadece
+  5335 M30 gerçek içerik-kaybıydı. Kalan 9 "over-truncation" → 9/9 meşru apendiks (büyük kanunların
+  değişiklik-listesi kuyruğu, doğru kesim). Tek gerçek bug düzeltildi.
+- **Fix:** son-[n]-kuyruğu uzunsa + uzun gövdede [1] öncesi metin kısaysa → gövde-içi referans,
+  apendiks değil. 106 meşru apendiks korundu (false-positive yok). 5335 M30: 28→3796ch kurtarıldı.
+
+## Açık (düşük öncelik): bent işaret-tipi uyuşmazlığı
+- Gold "bent 2" der, parser `a,b,c` etiketler (1319 M33: metinde `1. 2. 3.` var ama harf-bent
+  parse edilmiş). İÇERİK text'te TAM (kayıp değil), sadece bent ağacındaki `isaret` yanlış tip.
+- Etki: fıkra/bent-seviyesi metadata filtrelemesi; retrieval'ı (madde-seviyesi) etkilemez. Ertelendi.
+
+---
+
 # Faz 5 (Embedding) Açık İşler
 
 ## 🟠 Dev maddeler (>20K char) — embedding'i aşar (Faz 5'te çöz)
