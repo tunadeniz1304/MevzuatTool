@@ -226,6 +226,32 @@ def test_madde_basi_iptal_kunyesi_tam_mulga():
     assert extract_status(body, konum_duyarli=True) == "mülga"
 
 
+def test_iptal_fikra_kunyesi_tam_mulga():
+    # Bug 5: '(İptal fıkra:)' / '(İptal birinci fıkra:)' AYM kararı da iptal sinyalidir ('İptal:'
+    # gibi). Madde GERÇEK İÇERİK olmadan SADECE bu künyelerden ibaretse (tüm fıkraları iptal) → mülga.
+    # Gerçek veri: 102929-Ek1, 105335-1 (birinci+ikinci+üçüncü fıkra iptal, içerik yok).
+    from mevzuat_tool.chunker import extract_status
+    body = ("(İptal birinci fıkra: Anayasa Mahkemesinin 10/4/2019 tarihli kararı ile) "
+            "(İptal ikinci fıkra: Anayasa Mahkemesinin 10/4/2019 tarihli kararı ile)")
+    assert extract_status(body, konum_duyarli=True) == "mülga"
+
+
+def test_iptal_fikra_tek_kunye_tam_mulga():
+    # '(İptal fıkra:)' tek künye (103043-Gecici29): içerik yok → mülga.
+    from mevzuat_tool.chunker import extract_status
+    body = "(Ek:11/11/2020-7256/14 md.) (İptal fıkra: Anayasa Mahkemesinin 1/6/2023 tarihli kararı ile)"
+    assert extract_status(body, konum_duyarli=True) == "mülga"
+
+
+def test_iptal_fikra_inside_content_keeps_yururlukte():
+    # KORUMA (false-positive): madde GERÇEK İÇERİKLE başlayıp ortada '(İptal birinci fıkra:)' geçiyorsa
+    # bu BİR FIKRANIN iptali — tüm madde mülga DEĞİL (3402 M3 mantığı). Madde yürürlükte kalır.
+    from mevzuat_tool.chunker import extract_status
+    body = ("(1) Erişim sağlayıcılar esaslara uyar ve gerekli tedbirleri alır. "
+            "(İptal ikinci fıkra: Anayasa Mahkemesinin 30/6/2022 tarihli kararı ile)")
+    assert extract_status(body, konum_duyarli=True) == "yürürlükte"
+
+
 def test_bent_level_status_unchanged_by_position():
     # Koruma: alt-birim (konum_duyarli=False varsayılan) içindeki Mülga o birimi mülga yapar —
     # konum bakılmaz. Bent 'b) (Mülga:...)' → bent mülga (madde-seviyesi mantığı uygulanmaz).

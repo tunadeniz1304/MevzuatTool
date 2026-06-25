@@ -127,8 +127,12 @@ _KISMI_MULGA = re.compile(
     r"sekizinci|dokuzuncu|onuncu|\d+\s*(?:\.|inci|ıncı|uncu|üncü|nci))\s+"
     r"(?:fıkra|cümle|bent|paragraf)"
 )
-# Mülga/İptal markeri: parantez içinde 'Mülga' veya AYM 'İptal' (';' sonrası dâhil).
-_MULGA_MARKER = re.compile(r"(?i)\(\s*mülga|;\s*mülga|\(\s*iptal\s*:|;\s*iptal\s*:")
+# Mülga/İptal markeri: parantez içinde 'Mülga' veya AYM 'İptal' (';' sonrası dâhil). 'İptal'
+# ardından doğrudan ':' VEYA '(birinci/ikinci/.. ) fıkra:' gelebilir — '(İptal fıkra:)' /
+# '(İptal birinci fıkra:)' AYM kararı da iptal sinyalidir (Bug 5: 102929-Ek1, 105335-1).
+_MULGA_MARKER = re.compile(
+    r"(?i)\(\s*mülga|;\s*mülga|\(\s*iptal\s*:|;\s*iptal\s*:"
+    r"|\(\s*iptal\s+(?:\w+\s+)?fıkra\s*:|;\s*iptal\s+(?:\w+\s+)?fıkra\s*:")
 
 # Madde 'açılış künye bölgesi': gövde başındaki ardışık künye parantezleri + aralarındaki boşluk.
 # İki künye biçimi:
