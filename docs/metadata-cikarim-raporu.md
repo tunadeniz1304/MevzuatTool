@@ -179,13 +179,13 @@ haklarına sahiptir.
         "bentler": [
           { "isaret": "a)", "text": "a) Kişisel veri işlenip işlenmediğini öğrenme,", "yurutluk": "yürürlükte", "alt_bentler": [] },
           { "isaret": "b)", "text": "b) Kişisel verileri işlenmişse buna ilişkin bilgi talep etme,", "yurutluk": "yürürlükte", "alt_bentler": [] },
-          { "isaret": "c)", "...": "..." },
-          { "isaret": "ç)", "...": "..." },
-          { "isaret": "d)", "...": "..." },
-          { "isaret": "e)", "...": "..." },
-          { "isaret": "f)", "...": "..." },
-          { "isaret": "g)", "...": "..." },
-          { "isaret": "ğ)", "text": "ğ) ...zararın giderilmesini talep etme,", "yurutluk": "yürürlükte", "alt_bentler": [] }
+          { "isaret": "c)", "text": "c) Kişisel verilerin işlenme amacını ve bunların amacına uygun kullanılıp kullanılmadığını öğrenme,", "yurutluk": "yürürlükte", "alt_bentler": [] },
+          { "isaret": "ç)", "text": "ç) Yurt içinde veya yurt dışında kişisel verilerin aktarıldığı üçüncü kişileri bilme,", "yurutluk": "yürürlükte", "alt_bentler": [] },
+          { "isaret": "d)", "text": "d) Kişisel verilerin eksik veya yanlış işlenmiş olması hâlinde bunların düzeltilmesini isteme,", "yurutluk": "yürürlükte", "alt_bentler": [] },
+          { "isaret": "e)", "text": "e) 7 nci maddede öngörülen şartlar çerçevesinde kişisel verilerin silinmesini veya yok edilmesini isteme,", "yurutluk": "yürürlükte", "alt_bentler": [] },
+          { "isaret": "f)", "text": "f) (d) ve (e) bentleri uyarınca yapılan işlemlerin, kişisel verilerin aktarıldığı üçüncü kişilere bildirilmesini isteme,", "yurutluk": "yürürlükte", "alt_bentler": [] },
+          { "isaret": "g)", "text": "g) İşlenen verilerin münhasıran otomatik sistemler vasıtasıyla analiz edilmesi suretiyle kişinin kendisi aleyhine bir sonucun ortaya çıkmasına itiraz etme,", "yurutluk": "yürürlükte", "alt_bentler": [] },
+          { "isaret": "ğ)", "text": "ğ) Kişisel verilerin kanuna aykırı olarak işlenmesi sebebiyle zarara uğraması hâlinde zararın giderilmesini talep etme, haklarına sahiptir.", "yurutluk": "yürürlükte", "alt_bentler": [] }
         ]
       }
     ],
