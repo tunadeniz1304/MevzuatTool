@@ -74,6 +74,34 @@ def test_text_excludes_tables_but_metadata_keeps_them():
     assert c["metadata"]["tablolar"] == [tablo]        # tablo metadata'da DURUYOR
 
 
+_TREE_H = parse_tree(
+    "- ÜÇÜNCÜ BÖLÜM - Son Hükümler (maddeId:10)\n"
+    "  - Madde No: 84 - Asıl madde: (maddeId:840)\n"
+)
+
+
+def test_hiyerarsi_yolu_gecici_uses_own_label():
+    # Bug 3: Geçici/Ek maddede hiyerarsi_yolu sonu donor 'Madde N' yerine kendi etiketini ('Geçici
+    # Madde 1') kullanmalı. enrich cur_path'i son ASIL maddeden miras alır → son 'Madde N' yanlış.
+    arts = [Article(no="84", body="asıl içerik metni burada."),
+            Article(no="Geçici 1", body="(1) Geçici hüküm uygulanır.")]
+    maddeler, _ = enrich(arts, _TREE_H, MID)
+    chunks = maddeler_to_chunks(maddeler, kanun_ad="X", kanun_no="6698")
+    gecici = [c for c in chunks if c["metadata"]["madde_no"] == "Geçici 1"][0]
+    hy = gecici["metadata"]["hiyerarsi_yolu"]
+    assert hy.endswith("Geçici Madde 1"), hy          # donor 'Madde 84' DEĞİL
+    assert "Madde 84" not in hy
+    assert "Son Hükümler" in hy                         # bölüm bağlamı korunur
+
+
+def test_hiyerarsi_yolu_asil_unchanged():
+    # KORUMA: asıl madde hiyerarsi_yolu DEĞİŞMEZ (zaten doğru 'Madde N').
+    arts = [Article(no="84", body="asıl madde içeriği.")]
+    maddeler, _ = enrich(arts, _TREE_H, MID)
+    c = maddeler_to_chunks(maddeler, kanun_ad="X", kanun_no="6698")[0]
+    assert c["metadata"]["hiyerarsi_yolu"].endswith("Madde 84")
+
+
 def test_pure_artifact_madde_is_filtered():
     # Bug 4: gövdesi sadece fıkra-no/dipnot-işareti/madde-no artefaktı olan madde (anlamlı metin yok)
     # → korpusa GİRMEZ (embedding gürültüsü). Gerçek veri: 104624-10 '(1) (2) (3)', 103829-66 '[27]'.

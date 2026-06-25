@@ -27,6 +27,25 @@ def _sadece_islenmis_notu(govde: str) -> bool:
     return bool(_ISLENMIS_NOTU.match(govde.strip()))
 
 
+_PREFIX_ETIKET = {"gecici": "Geçici", "ek": "Ek", "mukerrer": "Mükerrer"}
+
+
+def _hiyerarsi_yolu(m: Madde) -> str | None:
+    """hiyerarsi_yolu'nun sonundaki donor 'Madde N' parçasını chunk'ın GERÇEK etiketiyle düzelt.
+    enrich, Geçici/Ek/Mükerrer maddelere son ASIL maddenin yolunu miras verir → son 'Madde N'
+    yanlış (Bug 3). Bölüm/kısım bağlamı korunur, sadece terminal 'Madde N' düzeltilir."""
+    hy = m.hiyerarsi_yolu
+    if hy is None or m.madde_tipi == "asil":
+        return hy
+    # madde_no 'Geçici 1' / 'Ek 2' → etiket 'Geçici Madde 1' / 'Ek Madde 2'
+    prefix = _PREFIX_ETIKET.get(m.madde_tipi)
+    if not prefix:
+        return hy
+    sira = m.no.split(None, 1)[1] if " " in m.no else m.no
+    etiket = f"{prefix} Madde {sira}"
+    return re.sub(r"Madde \S+$", etiket, hy)
+
+
 def _saf_artefakt(govde: str) -> bool:
     """Gövde sadece fıkra-no '(1)' / dipnot '[2]' / madde-no '24-' artefaktından mı ibaret?
     Bu işaretler + boşluk + noktalama çıkınca geriye <3 anlamlı harf kalıyorsa gerçek metin yok
@@ -86,7 +105,7 @@ def madde_to_chunk(m: Madde, kanun_ad: str, kanun_no: str) -> dict | None:
             "kisim_no": m.kisim_no, "kisim_baslik": m.kisim_baslik,
             "bolum_no": m.bolum_no, "bolum_baslik": m.bolum_baslik,
             "ayirim_no": m.ayirim_no, "ayirim_baslik": m.ayirim_baslik,
-            "hiyerarsi_yolu": m.hiyerarsi_yolu,
+            "hiyerarsi_yolu": _hiyerarsi_yolu(m),
             # zengin: iç içe dataclass ağaçları asdict ile JSON-serileştirilebilir dict'e döner
             "fikralar": [asdict(f) for f in m.fikralar],
             "degisiklik_gecmisi": [asdict(d) for d in m.degisiklik_gecmisi],
