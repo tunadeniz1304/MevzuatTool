@@ -117,3 +117,21 @@ def test_paren_number_ref_after_close_paren_not_fikra():
     body = "(1) Bu hüküm (5237 sayılı Kanun md.) ile (2) numaralı bende tabidir."
     fs = parse_fikralar(body)
     assert [f.no for f in fs] == ["(1)"]  # '(2) numaralı' atıf — bölünmemeli
+
+
+def test_leading_kunye_before_fikra_one_does_not_collapse():
+    # Bug 2: madde künye/başlık '(Başlığı ile Birlikte Değişik: ...)' ile başlayıp ardından
+    # '(1) (2) (3)' fıkraları geliyorsa, lider künye fıkra bölmeyi ÇÖKERTMEMELİ. Künye '(1)'den
+    # önce preamble; sonraki numaralı fıkralar ayrı tutulur. Gerçek veri: ÇEK 5941 M6, Vatandaşlık.
+    body = ("(Başlığı ile Birlikte Değişik: 15/7/2016-6728/64 md.) "
+            "(1) Karşılıksız çek bedeli ödenir. (2) İkinci fıkra hükmü. (3) Üçüncü fıkra hükmü.")
+    fs = parse_fikralar(body)
+    # numaralı fıkralar yakalanmalı (lider künye yutmamalı)
+    assert [f.no for f in fs if f.no] == ["(1)", "(2)", "(3)"]
+
+
+def test_leading_kunye_ek_madde_fikralari():
+    # Ek madde künye-lider deseni (103294-Ek2): '(TARİH-md.) (1) ... (2) ...'.
+    body = "(4/4/2015-6645/79 md.) (1) Kamu kurumlarında çalışanlar. (2) Bu kişilerin hakları."
+    fs = parse_fikralar(body)
+    assert [f.no for f in fs if f.no] == ["(1)", "(2)"]

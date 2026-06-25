@@ -240,7 +240,10 @@ def test_enrich_populates_new_fields():
     assert len(m.degisiklik_gecmisi) == 1
     assert m.degisiklik_gecmisi[0].kanun_no == "4842"
     assert "Değişik" not in m.body_temiz
-    assert len(m.fikralar) == 1
+    # Lider künye '(Değişik:...)' preamble (no=None) + gerçek '(1)' fıkra ayrı (Bug 2 fix):
+    # künye fıkra bölmeyi çökertmez; numaralı fıkra korunur.
+    assert [f.no for f in m.fikralar] == [None, "(1)"]
+    assert len([f for f in m.fikralar if f.no]) == 1   # 1 numaralı fıkra
 
 
 def test_enrich_separates_footnote_appendix_into_global():
