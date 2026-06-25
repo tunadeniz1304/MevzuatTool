@@ -18,9 +18,13 @@ from mevzuat_tool.chunker import extract_status
 # künyesidir, sonu ')' ile biter (noktalama değil) → standart lookbehind '(3)'ü kaçırır. Ama
 # ardından '(n) (' (açılış-paren = künye başı) gelirse bu GÜÇLÜ fıkra-başıdır; atıfta ('(2) sayılı',
 # '(2) numaralı') açılış-paren gelmez. Bu yüzden ')' + boşluk + '(n)' + boşluk + '(' deseni de böler.
+# EK SİNYAL 2 — lider künye/başlık sonrası '(1)' fıkrası (Bug 2: ÇEK 5941 M6, '(Başlığı ile
+# Birlikte Değişik:...) (1) Karşılıksız...'). Künye ')' ile biter, ardından '(n)' + BÜYÜK harf gelir
+# (gerçek fıkra metni). Atıf ('(2) numaralı', '(2) sayılı') KÜÇÜK harf devam eder → bölünmez.
 _FIKRA_BOL = re.compile(
     r"(?=(?:(?<=[.:!?]\s)|(?<=\n))\(\d+\)\s)"        # cümle-sonu/satır-sonu sonrası '(n)'
     r"|(?=(?<=\)\s)\(\d+\)\s(?=\())"                  # künye-kapanışı ')' sonrası '(n) (' (künye başı)
+    r"|(?=(?<=\)\s)\(\d+\)\s(?=[A-ZÇĞİÖŞÜ]))"        # künye-')' sonrası '(n)' + BÜYÜK harf (fıkra metni)
 )
 _FIKRA_NO = re.compile(r"^(\(\d+\))")
 # Boşluk-sınırlı (normalize-sonrası tek-satır metin) bent işaretçileri:
@@ -109,7 +113,10 @@ def parse_fikralar(body: str) -> list:
     if not body:
         return []
     parcalar = [p.strip() for p in _FIKRA_BOL.split(body) if p.strip()]
-    if not parcalar or not _FIKRA_NO.match(parcalar[0]):
+    # Numaralı fıkra HİÇ yoksa tek numarasız fıkra. İlk parça '(1)' OLMASA bile (lider künye/başlık
+    # '(Başlığı ile Değişik:...) (1) ...'), parçalarda numaralı fıkra varsa bölmeyi koru — lider
+    # künye preamble olarak no=None ilk fıkra kalır (Bug 2: ÇEK 5941 M6). Numaralı fıkra yoksa collapse.
+    if not parcalar or not any(_FIKRA_NO.match(p) for p in parcalar):
         return [Fikra(no=None, text=body, bentler=_bentler(body),
                       yurutluk=extract_status(body))]
     out = []
