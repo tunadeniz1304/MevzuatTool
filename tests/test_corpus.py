@@ -74,6 +74,21 @@ def test_text_excludes_tables_but_metadata_keeps_them():
     assert c["metadata"]["tablolar"] == [tablo]        # tablo metadata'da DURUYOR
 
 
+def test_pure_artifact_madde_is_filtered():
+    # Bug 4: gövdesi sadece fıkra-no/dipnot-işareti/madde-no artefaktı olan madde (anlamlı metin yok)
+    # → korpusa GİRMEZ (embedding gürültüsü). Gerçek veri: 104624-10 '(1) (2) (3)', 103829-66 '[27]'.
+    for artefakt in ["(1) (2) (3)", "[27]", "(1)", "24-", "[2]"]:
+        m = _madde("11", artefakt)
+        assert madde_to_chunk(m, kanun_ad="X", kanun_no="6698") is None, f"{artefakt!r} elenmedi"
+
+
+def test_short_but_meaningful_madde_is_kept():
+    # KORUMA: kısa ama ANLAMLI madde elenmemeli (gerçek hüküm). '(1) Yürürlüktedir.' gibi.
+    m = _madde("11", "(1) Bu hüküm yürürlüktedir.")
+    c = madde_to_chunk(m, kanun_ad="X", kanun_no="6698")
+    assert c is not None and "yürürlüktedir" in c["text"]
+
+
 def test_table_only_madde_is_filtered():
     # Madde gövdesi SADECE tablodan ibaretse (gerçek metin yok), tablo text'ten çıkınca text boş
     # kalır → chunk korpusa GİRMEZ (anlamsız boş text embedding'e gitmesin).

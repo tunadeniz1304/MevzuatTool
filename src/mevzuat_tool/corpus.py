@@ -27,6 +27,14 @@ def _sadece_islenmis_notu(govde: str) -> bool:
     return bool(_ISLENMIS_NOTU.match(govde.strip()))
 
 
+def _saf_artefakt(govde: str) -> bool:
+    """Gövde sadece fıkra-no '(1)' / dipnot '[2]' / madde-no '24-' artefaktından mı ibaret?
+    Bu işaretler + boşluk + noktalama çıkınca geriye <3 anlamlı harf kalıyorsa gerçek metin yok
+    (Bug 4: 104624-10 '(1) (2) (3)', 103829-66 '[27]', 104863-1 '4 -'). Embedding gürültüsü."""
+    cekirdek = re.sub(r"\(\d+\)|\[\d+\]|\d+|[\s.;,\-]", "", govde)
+    return len(cekirdek) < 3
+
+
 def _govde_tablosuz(m: Madde) -> str:
     """body_temiz'den HTML tablolarını çıkar. enrich tabloları body_temiz sonuna '\\n\\n<md>'
     olarak gömüyor (tablolar alanında da yapısal duruyor). Embedding text'ine dev tablolar
@@ -55,8 +63,13 @@ def madde_to_chunk(m: Madde, kanun_ad: str, kanun_no: str) -> dict | None:
     if not govde or _sadece_islenmis_notu(govde):
         return None
     text = _text(m)
-    # Tablo çıkınca geriye anlamlı metin kalmadıysa (sadece-tablo / sadece-başlık madde) → filtrele.
-    if not _govde_tablosuz(m):
+    govde_t = _govde_tablosuz(m)
+    if not govde_t:
+        return None      # tablo çıkınca metin kalmadı (sadece-tablo/başlık)
+    # Saf artefakt ('(1) (2)', '[27]', '24-') → filtrele (embedding gürültüsü). AMA mülga maddeyi
+    # ELEME: mülga gövdesi künye temizlenince '(1)' gibi görünür ama tarihsel sorgu için tutulur
+    # (CLAUDE.md ilke 5; yurutluk='mülga' ile işaretli). Sadece YÜRÜRLÜKTEKİ artefaktlar elenir.
+    if m.yurutluk != "mülga" and _saf_artefakt(govde_t):
         return None
     return {
         "id": m.id,
