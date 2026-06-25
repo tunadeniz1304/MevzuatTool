@@ -54,13 +54,30 @@ def _saf_artefakt(govde: str) -> bool:
     return len(cekirdek) < 3
 
 
+def _tablo_duz(md_tablo: str) -> str:
+    """Markdown tabloyu DÜZ metne çevir (strip_html'in body'ye gömdüğü form). '|' ayraçları ve
+    '---' hizalama satırı kaldırılır, boşluk normalize edilir. '| Sıra | İl |\\n|---|\\n| 1 |
+    ANKARA |' → 'Sıra İl 1 ANKARA'."""
+    satirlar = [s for s in md_tablo.splitlines() if not re.match(r"^\s*\|?[\s:|-]*\|?\s*$", s)]
+    duz = " ".join(s.replace("|", " ") for s in satirlar)
+    return re.sub(r"\s+", " ", duz).strip()
+
+
 def _govde_tablosuz(m: Madde) -> str:
-    """body_temiz'den HTML tablolarını çıkar. enrich tabloları body_temiz sonuna '\\n\\n<md>'
-    olarak gömüyor (tablolar alanında da yapısal duruyor). Embedding text'ine dev tablolar
-    girmemeli (boyut aşımı + sayı-yığını anlamsal gürültü); tablo metadata.tablolar'da kalır."""
+    """body_temiz'den tabloları çıkar. enrich markdown tabloyu body_temiz'e gömüyor AMA strip_html
+    DÜZLEŞTİRİLMİŞ formu ('Sıra No İl 1 ANKARA...') da text'e koyabilir (Bug 1: 6749 M12 = 160K).
+    Hem markdown formu hem düz formu çıkar. Tablo metadata.tablolar'da yapısal kalır (kayıpsız)."""
     govde = (m.body_temiz or m.body or "").strip()
     for tablo in (m.tablolar or []):
         govde = govde.replace("\n\n" + tablo, "").replace(tablo, "")
+        # düzleştirilmiş form: boşluk-normalize karşılaştırmayla çıkar (markdown ↔ düz farkını yut)
+        duz = _tablo_duz(tablo)
+        if duz and len(duz) > 20:
+            govde_norm = re.sub(r"\s+", " ", govde)
+            i = govde_norm.find(duz)
+            if i != -1:
+                # düz tabloyu (boşluk-normalize konumundan) çıkarmak için orijinal govde'de eşle
+                govde = re.sub(re.escape(duz).replace(r"\ ", r"\s+"), " ", govde, count=1)
     return govde.strip()
 
 

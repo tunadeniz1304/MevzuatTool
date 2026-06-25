@@ -60,6 +60,22 @@ def test_chunk_metadata_embeds_fikra_tree():
     assert [b["isaret"] for b in fk[0]["bentler"]] == ["a)", "b)"]
 
 
+def test_text_excludes_flattened_table_form():
+    # Bug 1: enrich tabloyu MARKDOWN olarak metadata'ya, ama strip_html DÜZLEŞTİRİLMİŞ formu
+    # ('Sıra No İl 1 ANKARA...') text'e koyuyor. _govde_tablosuz markdown'ı arayıp düz formu
+    # bulamıyordu → 160K dev chunk. Düzleştirilmiş tablo da text'ten çıkarılmalı (gerçek veri 6749 M12).
+    markdown = "| Sıra | İl |\n| --- | --- |\n| 1 | ANKARA |\n| 2 | İZMİR |"
+    # body'de tablo DÜZ form olarak (strip_html çıktısı gibi) gömülü:
+    duz = "Sıra İl 1 ANKARA 2 İZMİR"
+    arts = [Article(no="103", body=f"(1) Bu Kanunu Bakanlar Kurulu yürütür. {duz}")]
+    maddeler, _ = enrich(arts, TREE, MID, html_tables={"103": [markdown]})
+    c = madde_to_chunk(maddeler[0], kanun_ad="X", kanun_no="6698")
+    assert "Bakanlar Kurulu yürütür" in c["text"]      # gerçek madde korunur
+    assert "ANKARA" not in c["text"]                    # düz tablo formu çıkarıldı
+    assert "İZMİR" not in c["text"]
+    assert c["metadata"]["tablolar"] == [markdown]      # markdown metadata'da durur
+
+
 def test_text_excludes_tables_but_metadata_keeps_them():
     # Tablolar embedding text'ine GİRMEZ (dev tablolar embedding'i aşırır + anlamsal gürültü),
     # ama metadata.tablolar'da yapısal DURUR (kaybolmaz, erişilebilir). enrich body_temiz'e
