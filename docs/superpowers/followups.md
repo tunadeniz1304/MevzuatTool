@@ -26,6 +26,26 @@ Gold = içeriksiz adres listesi (vergi/mali hukuk ağırlıklı, %54); korpus = 
 
 ---
 
+# Embedding-Hazırlık Adversarial Denetimi (2026-06-25)
+
+5 bağımsız denetçi (korpus/parse/sadakat/kod/mimari) + adversarial doğrulama. OYBİRLİĞİ:
+"küçük-düzeltmeyle-hazır", embedding-engeli (go/no-go blocker) = 0. 5 yüksek-ciddiyet bulgu
+TDD ile düzeltildi (her biri 0 yanlış-pozitif + gerçek-veri kontrolü):
+
+| Bug | Önce | Sonra | Commit |
+|---|---|---|---|
+| 5: '(İptal fıkra:)' yürürlük yanlış | 5 | 0 | 015ba6e |
+| 2: lider-künye fıkra çökmesi | 36 | 0 (271 madde fıkra kazandı) | 189cf31 |
+| 4: saf-artefakt mini-chunk | 103 | 0 (79 mülga korundu) | bcf27e9 |
+| 3: Geçici/Ek hiyerarsi_yolu donor | 5781 | 0 | ce91135 |
+| 1: düzleştirilmiş tablo text-sızması | 26 | 20 (9 markdown düzeldi) | f87eb37 |
+
+Korpus: 31515→31416 chunk, max-boy 160K→110K, ID-çakışma 0, boş-text 0, pytest 170 passed.
+
+ÇÜRÜTÜLEN bulgu (denetim dürüstlüğü): "gold 'bent 2' der parser 'a,b,c' eder — bug" →
+adversarial doğrulama REDDETTİ: Türkçede bent harfle atıfta bulunulur ('(a) bendi' 2913x,
+'(2) bendi' 6x), parser DOĞRU.
+
 # Faz 5 (Embedding) Açık İşler
 
 ## 🟠 Dev maddeler (>20K char) — embedding'i aşar (Faz 5'te çöz)
