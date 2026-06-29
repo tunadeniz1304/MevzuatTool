@@ -262,3 +262,55 @@ def test_harf_ust_numara_alt_NOT_inverted_by_b3():
     # harf ÜST (ilk işaret 'a)'); numara '1. 2.' a)'nın İÇİNDE kalır (üst-bent OLMAZ)
     assert [b.isaret for b in f.bentler] == ["a)", "b)"]
     assert "1. Başkalarını" in f.bentler[0].text   # numara harf-bendin içinde
+
+
+# ---- B4 (FAZ 6): liste-kapanış cümlesi son bentten ayrılır ----
+
+def test_liste_kapanis_cumlesi_son_bende_yapismaz():
+    # B4: liste-açan fıkrada (giriş ':' ile biter) kısa-enum bentlerden sonra gelen GERİ-ATIFLI
+    # kapanış cümlesi son bende yapışmamalı — o bende AİT DEĞİL, tüm fıkrayı kapatan hükümdür.
+    # Gerçek veri: 103111-2 (GVK 193 Madde 2, Gelirin unsurları).
+    body = ("Gelire giren kazanç ve iratlar şunlardır: 1. Ticarî kazançlar, 2. Ziraî kazançlar, "
+            "3. Ücretler, 4. Serbest meslek kazançları, 5. Gayrimenkul sermaye iratları, "
+            "6. Menkul sermaye iratları, 7. Diğer kazanç ve iratlar. Bu Kanunda aksine hüküm "
+            "olmadıkça, yukarıda yazılı kazanç ve iratlar gelirin tespitinde gerçek ve safi "
+            "miktarları ile nazara alınır.")
+    f = parse_fikralar(body)[0]
+    assert [b.isaret for b in f.bentler] == ["1.", "2.", "3.", "4.", "5.", "6.", "7."]
+    # son bent SADECE kendi öğesini içerir; kapanış cümlesi AYRILMIŞ
+    assert f.bentler[-1].text == "7. Diğer kazanç ve iratlar."
+    assert "nazara alınır" not in f.bentler[-1].text
+    # kapanış cümlesi fıkra metninde KORUNUR (kayıp yok — embedding girdisi bozulmaz)
+    assert "nazara alınır" in f.text
+
+
+def test_ancak_istisna_cumlesi_bentte_kalir():
+    # B4 KORUMA (yanlış-pozitif — ilk denemenin 46 FP'sinin sınıfı): bendin MEŞRU ikinci cümlesi
+    # ('Ancak ...', 'Bu oran ...') geri-atıflı kapanış DEĞİL — bende KALMALI, kesilmemeli.
+    body = ("Aşağıdaki hâllerde uygulanır: a) Birinci hâl, b) İkinci hâl, c) Üçüncü hâl. "
+            "Ancak, bu hâllerde idare ayrıca gerekçe göstermek zorundadır.")
+    f = parse_fikralar(body)[0]
+    assert [b.isaret for b in f.bentler] == ["a)", "b)", "c)"]
+    assert "Ancak" in f.bentler[-1].text          # istisna cümlesi son bentte KALIR
+
+
+def test_coklu_cumle_bent_kirpilmaz():
+    # B4 KORUMA: bentler zaten çok-cümleli (noktayla biten tam paragraflar) — liste-açan kısa-enum
+    # imzası TUTMAZ (önceki bentler virgülle bitmiyor) → kırpma TETİKLENMEZ.
+    body = ("Şu işlemler yapılır: a) İlk işlem tamamlanır. Sonra rapor düzenlenir. "
+            "b) İkinci işlem yapılır. Bu Kanunda aksine hüküm olsa bile uygulanır.")
+    f = parse_fikralar(body)[0]
+    assert [b.isaret for b in f.bentler] == ["a)", "b)"]
+    # önceki bent 'a)' kısa-enum değil (noktayla bitiyor) → imza tutmaz → son bent dokunulmaz
+    assert "uygulanır" in f.bentler[-1].text
+
+
+def test_geri_atifsiz_baslik_bu_fixle_kirpilmaz():
+    # B4 KORUMA: son öğeden sonra gelen ifade GERİ-ATIFSIZ bir başlık/isim tamlaması ise
+    # (fiil-cümlesi değil) bu fix kesmez — başlık sızması ayrı sorun (FAZ 4 C1).
+    body = ("Birlik organları şunlardır: 1. Genel Kurul, 2. Yönetim Kurulu, "
+            "3. Denetleme Kurulu. Birlik Genel Kurulunun oluşumu")
+    f = parse_fikralar(body)[0]
+    assert [b.isaret for b in f.bentler] == ["1.", "2.", "3."]
+    # 'Birlik Genel Kurulunun oluşumu' geri-atıf değil → B4 kesmez (son bentte kalır)
+    assert "Birlik Genel Kurulunun oluşumu" in f.bentler[-1].text
