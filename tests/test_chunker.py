@@ -259,6 +259,32 @@ def test_bent_level_status_unchanged_by_position():
     assert extract_status("b) içerik metni (Mülga: 1/1/2020-1234 md.)") == "mülga"
 
 
+def test_iptal_bent_kunyesi_birim_mulga():
+    # A1 (FAZ 1): '(İptal bent:)' AYM iptali — '(İptal fıkra:)' ile SİMETRİK olmalı; o ana kadar
+    # marker'da yalnız 'fıkra' vardı, 'bent' yoktu (asimetri). Bent-seviyesi (konum_duyarli=False)
+    # → o bent mülga. Gerçek veri: 7405 M38, 7354 M5/M6, 7245 M6.
+    from mevzuat_tool.chunker import extract_status
+    assert extract_status("a) bir hak (İptal bent: Anayasa Mahkemesinin 1/6/2023 tarihli kararı ile)") == "mülga"
+
+
+def test_iptal_madde_kunyesi_tam_mulga():
+    # A3 (FAZ 1): '(İptal madde: AYM ...)' tamamen iptal edilmiş boş madde → mülga. O ana kadar
+    # marker '(İptal:)' bekliyordu; 'iptal madde:' araya 'madde' girince eşleşmiyordu (11 madde
+    # yanlışlıkla 'yürürlükte'). Gerçek veri: 103326-1..5 (Kanun 221).
+    from mevzuat_tool.chunker import extract_status
+    body = "(İptal madde: Anayasa Mahkemesinin 21/4/2022 tarihli ve E.2021/119 sayılı kararı ile)"
+    assert extract_status(body, konum_duyarli=True) == "mülga"
+
+
+def test_iptal_bent_inside_content_keeps_madde_yururlukte():
+    # A1 KORUMA (yanlış-pozitif): madde GERÇEK İÇERİKLE başlayıp ortada '(İptal bent:)' geçiyorsa
+    # bu BİR BENDİN iptali — tüm madde mülga DEĞİL (5651 / iptal-fıkra mantığının analoğu).
+    from mevzuat_tool.chunker import extract_status
+    body = ("(1) Aşağıdaki haklar tanınır: a) birinci hak. "
+            "(İptal bent: Anayasa Mahkemesinin 1/6/2023 tarihli kararı ile)")
+    assert extract_status(body, konum_duyarli=True) == "yürürlükte"
+
+
 def test_tarih_baslangicli_kunye_mulga():
     # 657 statü kaçırma: künye anahtar kelime yerine TARİH/ATIF ile başlıyor ('(2/1/1961- 203/2
     # md. ile gelen ... teselsül ettirilmiştir.; Mülga: 2/7/2018-KHK-703 md.)'). Bu da açılış
