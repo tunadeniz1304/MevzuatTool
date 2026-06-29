@@ -214,3 +214,51 @@ def test_sayili_kanun_reference_not_treated_as_cetvel():
     body = "(1) 5237 sayılı Kanuna göre işlem yapılır. (2) İkinci fıkra hükmü uygulanır."
     fs = parse_fikralar(body)
     assert [f.no for f in fs] == ["(1)", "(2)"]
+
+
+# ---- B3 (FAZ 3): numaralı asıl-grup iki-seviye (1. > a)) ----
+
+def test_numbered_group_with_harf_subitems_two_level():
+    # B3: numaralı üst-grup '1. 2.' + altında harf-bent 'a) b)' → İKİ SEVİYE.
+    # Gerçek veri: 103044-3 (Gümrük 4458 Tanımlar). Mevcut hata: a)b)c)... tek düz listeye eziliyordu.
+    body = ("Bu Kanunda geçen; 1. \"Müsteşarlık\" deyimi, Gümrük Müsteşarlığını; "
+            "2. a) \"Gümrük idaresi\" deyimi, yönetim birimlerini; "
+            "b) \"Giriş gümrük idaresi\" deyimi, giriş idaresini; "
+            "3. a) \"Eşya\" deyimi, her türlü maddeyi; b) \"Serbest dolaşım\" deyimi, durumu;")
+    f = parse_fikralar(body)[0]
+    # üst seviye = numaralı grup
+    assert [b.isaret for b in f.bentler] == ["1.", "2.", "3."]
+    # 1. bentin altında harf yok; 2. ve 3.'ün altında 'a) b)' alt-bent
+    assert f.bentler[0].alt_bentler == []
+    assert [a.isaret for a in f.bentler[1].alt_bentler] == ["a)", "b)"]
+    assert [a.isaret for a in f.bentler[2].alt_bentler] == ["a)", "b)"]
+    assert "Gümrük idaresi" in f.bentler[1].alt_bentler[0].text
+
+
+def test_plain_letter_bentler_unchanged_by_b3():
+    # B3 GERİYE-UYUM: numaralı üst-grup YOKsa düz harf-bent davranışı BİREBİR korunur.
+    body = "Aşağıdakiler: a) birinci bent b) ikinci bent c) üçüncü bent"
+    f = parse_fikralar(body)[0]
+    assert [b.isaret for b in f.bentler] == ["a)", "b)", "c)"]
+    assert all(b.alt_bentler == [] for b in f.bentler)
+
+
+def test_plain_numbered_bentler_without_harf_unchanged_by_b3():
+    # B3 GERİYE-UYUM: numara var ama harf-bent YOK → düz numara-bent (tek seviye), iki-seviye DEĞİL.
+    body = "Şunlar gelirdir: 1. birinci gelir, 2. ikinci gelir, 3. üçüncü gelir."
+    f = parse_fikralar(body)[0]
+    assert [b.isaret for b in f.bentler] == ["1.", "2.", "3."]
+    assert all(b.alt_bentler == [] for b in f.bentler)
+
+
+def test_harf_ust_numara_alt_NOT_inverted_by_b3():
+    # B3 KORUMA (yanlış-pozitif): TTK 6102'de hiyerarşi 'harf ÜST > numara ALT' olabilir
+    # (a) ... 1. ... 2. ... b) ...). B3 numara-üst varsaymamalı — İLK yapısal işaret HARF ise
+    # harf ÜST kalır. Gerçek veri: 103039-55/181/960 (TTK haksız rekabet, tür değiştirme).
+    body = ("Aşağıdakiler haksız rekabettir: a) Aldatıcı reklamlar ve özellikle; "
+            "1. Başkalarını kötüleyen, 2. Yanlış bilgi veren beyanlar; "
+            "b) Sözleşmeyi ihlale yöneltme.")
+    f = parse_fikralar(body)[0]
+    # harf ÜST (ilk işaret 'a)'); numara '1. 2.' a)'nın İÇİNDE kalır (üst-bent OLMAZ)
+    assert [b.isaret for b in f.bentler] == ["a)", "b)"]
+    assert "1. Başkalarını" in f.bentler[0].text   # numara harf-bendin içinde

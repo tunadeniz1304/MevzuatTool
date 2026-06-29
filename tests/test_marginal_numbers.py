@@ -53,6 +53,9 @@ def test_marginal_number_with_real_harf_bentler_preserved():
     assert [f.no for f in fs] == ["(1)"]
     # gerçek harf-bentler korunur; marjinal '1.' bent listesinde YOK (harf-stili kazanır)
     assert [b.isaret for b in fs[0].bentler] == ["a)", "b)", "c)", "d)", "e)", "f)"]
+    # B3 KİLİDİ: harf-bentler ÜST seviyede kalır (alt_bentler'e İNMEZ). Marjinal '1.' başlığı
+    # iki-seviyeli modu TETİKLEMEZ — gövdede sıralı '1. 2.' numara-KOŞUSU yok (tek '(1)' paren).
+    assert all(b.alt_bentler == [] for b in fs[0].bentler)
 
 
 def test_consecutive_marginal_numbers_not_numbered_bentler():
