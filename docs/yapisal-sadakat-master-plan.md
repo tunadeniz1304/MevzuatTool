@@ -16,10 +16,15 @@
 | **FAZ 3** | Numaralı asıl-grup (B3) — en riskli | DİKKATLİ | ✅ Tamam (commit'li) | [faz-3-numarali-grup.md](faz-planlari/faz-3-numarali-grup.md) |
 | **FAZ 4** | Sızma (C1, C2) | SONRA | ✅ Tamam (commit'li, confusion FP=0) | [faz-4-sizma.md](faz-planlari/faz-4-sizma.md) |
 | **FAZ 5** | Dipnot/tablo (D1; D2/D3 ertelendi) | ERTELENEBİLİR | ✅ Tamam (D1 commit'li) | [faz-5-dipnot-tablo.md](faz-planlari/faz-5-dipnot-tablo.md) |
+| **FAZ 6** | Liste-kapanış cümlesi (B4) — GVK m.2 orijinal bug | SONRA | ✅ Tamam (B4 commit'li, 0 FP) | [faz-6-kapanis-cumlesi.md](faz-planlari/faz-6-kapanis-cumlesi.md) |
+| **FAZ 7** | Roman-`i)` 3. seviye sızması (Z1) — en ağır zehir | YÜKSEK | ✅ Tamam (Z1 commit'li, 0 FP) | [faz-7-roman-i-3seviye.md](faz-planlari/faz-7-roman-i-3seviye.md) |
+| **FAZ 8** | Sarkan kenar-numara (Z4) | DAR | ✅ Tamam (Z4 commit'li, 41 madde 0 FP) | [faz-8-sarkan-kenar-numara.md](faz-planlari/faz-8-sarkan-kenar-numara.md) |
+| **FAZ 9** | Kapanış genişletme (Z2) | ORTA | ⏸️ Ertelendi (semantik, regex 0-FP veremez) | — (master Z2 notu) |
+| **FAZ 10** | Bleed başlık genişletme (Z3) | YÜKSEK | ✅ Tamam (Z3 commit'li, 30 kesim FP=0) | [faz-10-bleed-baslik.md](faz-planlari/faz-10-bleed-baslik.md) |
 
 > Durum kodları: ⬜ Başlanmadı · 🟡 Planlanıyor · 🔵 Uygulanıyor · ✅ Tamam (commit'li) · ⏸️ Beklemede
 
-**Açık karar (FAZ'lardan bağımsız):** Kapanış-kırpma fix'i (çalışma ağacında, **46 yanlış-pozitifli**) — geri al / yeniden tasarla / FAZ olarak ekle? 46 FP'nin 14'ü zaten B3 sınıfı.
+**Açık karar (ÇÖZÜLDÜ):** Kapanış-kırpma fix'i (46 FP'li ilk deneme) → FAZ 6'da **dar imza (geri-atıflı kapanış, 3 madde, 0 FP)** ile yeniden tasarlanıp commit'lendi. Genişletme borcu (18 TP) aşağıda "Kalan Zehir Kalemleri"nde.
 
 ---
 
@@ -142,3 +147,41 @@ Geçmiş desen: commit `2158ea7` (yürürlük regresyonu fıkra-ağacıyla düze
 ## Kapsam Notu
 - Bu plan **yalnız KANUN** türü kapsamında (ADR-0013); generation/embedding kapsam dışı (retrieval'da biter).
 - İlgili: [decisions.md](decisions.md) (ADR-0004 atomik birim=madde, ADR-0005 yürürlük birinci-sınıf), [metadata-cikarim-raporu.md](metadata-cikarim-raporu.md) (metadata çıkarım algoritması), [commit_discipline.md](commit_discipline.md).
+
+---
+
+## Kalan Zehir Kalemleri (FAZ 1-6 sonrası, korpus-geneli ölçüldü 2026-06-29)
+
+> "Zehir" = retrieval'ı bozan. `text` (embedding) genelde sağlam; risk **yapısal sadakatte**
+> (atıf/filtre çözümünü kıran bozuk `bentler[]` ağacı). Aşağıdakiler ölçülmüş açık kalemlerdir.
+
+| # | Sorun | Frekans | Zehir tipi | Öncelik |
+|---|---|---|---|---|
+| **Z1** | ✅ **ÇÖZÜLDÜ (FAZ 7)** — Roman-rakam `i)` 3. seviye sızması: `a) > i) ii)` üç-seviye hiyerarşide `i)` harf-bent sanılıyordu; harf-listesine kardeş giriyor → bir harf-bent BOŞ kalır | **5 madde düzeltildi** (488 Damga, 492 Harçlar, 4458 Gümrük×2, 193 GVK) | **Yapı (ağır):** boş düğüm + atıf çözülmez | ✅ commit `c82baee`, 0 FP |
+| **Z2** | ⏸️ **ERTELENDİ (çözülemez-güvenle)** — Kapanış-cümlesi genişletme (B4'ün kaçırdığı geri-atıfsız kapanış). **Ölçüm (FAZ 9):** B4-imzalı 16 geri-atıfsız aday içinde kod-sinyali (kelime/fiil) FN-etiketleriyle yalnız **11/16** uyuşuyor; 1 tehlikeli yanlış (`103055-52` TP sanılıp kesilirse over-truncation FP). TP/FP ayrımı **semantik** (cümle listeye mi son bende mi atıf yapıyor), regex 0-FP veremez. B4'ün dar 3-madde kapsamı korunur. | 18 TP | **Yapı (orta)** | ⏸️ ertelendi (kullanıcı, 2026-06-29) |
+| **Z3** | ✅ **ÇÖZÜLDÜ (FAZ 10)** — Bleed başlık kalanı: C1 sözlüğüne 7 güvenli başlık eklendi (Tanımlar/Kapsam/Yönetmelik...). Confusion matrix 30 kesim, **0 FP**. | 30 madde düzeltildi | **Yapı (orta)** | ✅ commit `1a45936` |
+| **Z4** | ✅ **ÇÖZÜLDÜ (FAZ 8)** — Sarkan kenar-numara: sonraki maddenin kenar-numarası (`6.`) gövde kuyruğundan kırpılır. | **41 madde** (FSEK 16, Kooperatifler 22, KMK 3) | **Yapı (düşük)** | ✅ commit `4dcb7de`, 0 FP |
+| **Z4-roman** | 🆕 Roman kenar-numara kuyruğu (`...uygulanmaz. III.`) Z4 deseni (`\d+`) yakalamaz | ~19 madde | Gürültü (kozmetik) | ⬜ açık (düşük öncelik) |
+| **Z5** | **Append/dipnot bölgesi sızması** (`5648 SAYILI KANUNA EK...` alt-bende karışıyor) | birkaç (103983-22) | **Gürültü:** D2 alanı | DÜŞÜK (FAZ 5'te D2 ertelendi) |
+
+> **NOT — "dev bent ≠ zehir":** İlk tarama 329 ">2000 krk bent" buldu ama **307'si meşru uzun
+> hüküm** (`102965-11` KDV istisna `c)` 2080 krk = gerçekten uzun, yapı sağlam; `103689-135`
+> Avukatlık disiplin `1.` 22 alt-bent = doğru parse). Gerçek zehir kriteri **uzunluk değil
+> yapı bozulması**: boş/kaçmış alt-bent VEYA harf-sırası kırılması (`a)...i)...b)...i)` tekrarı,
+> veya konum-dışı `i)` = `f)` ile `g)` arasında). Bu filtreyle 329 → **12 gerçek-zehir**.
+
+### Z1 kök neden + ÇÖZÜM (FAZ 7, doğrulandı — 103017-Ek2 Damga V.)
+Gerçek yapı 3 seviyeli: `2.` (üst) → `a) b) c)...` (orta) → `i) ii)` (alt-alt, roman). Parser
+`_BENT_HARF_ISARET = [a-zçğıöşü]\)` ile `i)`'yi orta-seviye harf-bent sanıyordu →
+`a)`'nın altındaki `i)` bloğu `a)`'dan koparılıyor, `b)`'nin altındaki `i)` de `b)`'den
+koparılıyor → **`b)` bomboş** (`len=2`). B3 (FAZ 3) iki-seviye destekliyor, **3. seviye yoktu**.
+
+**ÇÖZÜM (`_roman_i_idx`, kullanıcı kararı=dar):** KESİN-ROMAN sinyali (0 FP) — `i)` işareti
+(a) TEKRARLI (harf-listede `i` bir kez olur; 2+ = roman) VEYA (b) bir önceki harf-bent BOŞ
+(`f) i)` bitişik). `_harf_alt_bentler` roman `i)`'yi işaret olarak ATLAR → dilimleme onu bir
+önceki harf-bende yapıştırır. Meşru harf-bent `i)` (`...ı) i) j)...` veya tek+dolu `...h) i) j)`)
+DOKUNULMAZ. **Kapsam kararı (kullanıcı, 2026-06-29): dar (kesin-roman), 3. seviye katmanı kurma.**
+
+**Sonuç:** etkilenen 5 madde (hepsi text korundu), boş-alt-bent 3→0, 3 meşru-`i)` listesi
+korundu (0 FP). Master "şüpheli" sayılan `103006-Mukerrer298`/`103161-Gecici11` doğru biçimde
+MEŞRU çıktı, dokunulmadı. İlk tahmin "~12 üst-bent" abartılıydı — gerçek zehir 5, kalanı meşru.

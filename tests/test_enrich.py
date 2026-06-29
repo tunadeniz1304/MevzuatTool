@@ -203,6 +203,30 @@ def test_enrich_strips_colonless_high_confidence_header_tail():
     assert "Yürürlük" not in m.body
 
 
+def test_enrich_strips_expanded_safe_header_tail():
+    # Z3 (FAZ 10): C1 sözlüğüne eklenen GÜVENLİ başlıklar ('Tanımlar', 'Kapsam', 'Atıflar',
+    # 'Yönetmelik(ler)', 'Ortak hükümler', 'Uygulanmayacak hükümler') gövde kuyruğuna sızınca
+    # kesilir. Bunlar neredeyse-asla-meşru-cümle-sonu-değil. Gerçek veri: 332571-2 (...kapsar. Tanımlar).
+    for tail in ("Tanımlar", "Kapsam", "Atıflar", "Yönetmelik"):
+        body = f"(1) Bu Kanunun amacı ve kapsamı ilgili hususları düzenlemektir. {tail}"
+        arts = [Article(no="1", body=body), Article(no="2", body="(1) İçerik.")]
+        tree = parse_tree("- Madde No: 1 - Amaç: (maddeId:1)\n")     # M2 tree'de YOK
+        m = _maddeler(arts, tree)[0]
+        assert m.body.endswith("düzenlemektir."), f"{tail}: kesilmedi"
+        assert tail not in m.body, f"{tail}: kuyrukta kaldı"
+
+
+def test_enrich_ambiguous_header_not_in_dictionary_not_stripped():
+    # Z3 KORUMA: belirsiz başlıklar ('Sorumluluk', 'Konusu', 'Genel olarak', 'Süre') sözlüğe
+    # EKLENMEDİ — meşru cümle sonu olabilir (over-truncation riski) + 'Genel olarak' E-tuzağı
+    # (998 kenar-numaralı '1. Genel olarak'). Bunlar gövde kuyruğunda kalsa bile KESİLMEZ.
+    body = ("(1) Bu hükme aykırı davrananlar zarardan şahsen sorumludur. Sorumluluk")
+    arts = [Article(no="5", body=body), Article(no="6", body="(1) İçerik.")]
+    tree = parse_tree("- Madde No: 5 - Ceza: (maddeId:5)\n")
+    m = _maddeler(arts, tree)[0]
+    assert m.body.endswith("Sorumluluk")            # sözlükte yok → kesilmez (over-trunc güvenliği)
+
+
 def test_enrich_high_confidence_word_midbody_not_truncated():
     # C1 OVER-TRUNCATION KORUMA: yüksek-güven kelimesi ('Yürürlük') gövde ORTASINDA/cümle-içinde
     # meşru geçerse KESİLMEZ. Yalnız son %15'te + bağımsız kuyruk ifadesi kesilir.
@@ -227,6 +251,40 @@ def test_enrich_strips_kenar_numara_header_tail():
     m = _maddeler(arts, tree)[0]
     assert m.body.endswith("ileri sürülebilir.")
     assert "Kefalet" not in m.body
+
+
+def test_enrich_strips_sarkan_kenar_numara_tail():
+    # Z4 (FAZ 8): kenar-numaralı kanunlarda (FSEK 5846, TMK...) madde başlığı bir kenar-numarayla
+    # başlar ('5. İktibas serbestisi'). Sonraki maddenin kenar-numarası ('6.') önceki maddenin
+    # gövde KUYRUĞUNA tek başına sızar (başlık metni split'te dahil edilmemiş → tree-marker
+    # '6. Gazete münderecatı' gövdede yalnız '6.' olarak görünür, eşleşmez). Gerçek veri:
+    # 104458-35 ('...alındığı yer belirtilir. 6.'). Cümle-sonu + gövde-sonu + tek 'N.' → kırp.
+    body = ("Bir eserin bazı cümlelerinin alınması serbesttir. İktibasın belli olması lazımdır. "
+            "İlim eserlerinde alındığı yer belirtilir. 6.")
+    arts = [Article(no="35", body=body), Article(no="36", body="Gazete münderecatı içerik.")]
+    tree = parse_tree(
+        "- Madde No: 35 - 5. İktibas serbestisi: (maddeId:35)\n"
+        "- Madde No: 36 - 6. Gazete münderecatı: (maddeId:36)\n"
+    )
+    m = _maddeler(arts, tree)[0]
+    assert m.body.endswith("alındığı yer belirtilir.")
+    assert not m.body.rstrip().endswith("6.")        # sarkan kenar-numara kırpıldı
+
+
+def test_enrich_does_not_strip_midbody_number():
+    # Z4 KORUMA (E-tuzağı): madde İÇİNDE meşru 'N.' (kenar-numara/numaralı liste) DOKUNULMAZ —
+    # yalnız gövde-SONU tek 'N.' kırpılır. Gerçek risk: TMK/FSEK '1. Genel olarak' madde başlığı
+    # gövde içinde, veya numaralı bent listesi. Gövde sonu fiil-cümlesiyle bitiyorsa kesim YOK.
+    body = ("Gelire giren kazançlar şunlardır: 1. Ticari kazanç, 2. Zirai kazanç, 3. Diğer kazanç. "
+            "Bu kazançlar gerçek miktarları ile dikkate alınır.")
+    arts = [Article(no="2", body=body), Article(no="3", body="(1) Sonraki madde.")]
+    tree = parse_tree(
+        "- Madde No: 2 - Gelirin unsurları: (maddeId:2)\n"
+        "- Madde No: 3 - Mükellefler: (maddeId:3)\n"
+    )
+    m = _maddeler(arts, tree)[0]
+    assert "1. Ticari kazanç" in m.body              # madde-içi numaralar KORUNDU
+    assert m.body.rstrip().endswith("dikkate alınır.")
 
 
 def test_enrich_plain_madde_missing_in_tree_does_not_crash():

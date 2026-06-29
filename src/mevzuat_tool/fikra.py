@@ -87,15 +87,43 @@ def _alt_bentler(text: str) -> list:
     return out
 
 
+def _roman_i_idx(ms: list) -> set:
+    """Z1: harf-işaret listesinde ROMAN 'i)' (3. seviye alt-alt-bent) konumlarını bul. Roman 'i)'
+    harf-bent SANILIP listeye giriyor → bir önceki harf-bent boş kalıyor (içerik kaçar; 103017-Ek2
+    Damga V.). KESİN sinyal (0 yanlış-pozitif): 'i)' işareti (a) TEKRARLI (harf-listede 'i' bir kez
+    olur — 2+ kez = roman) VEYA (b) bir ÖNCEKİ harf-bent BOŞ (işareti hemen kendinden önce, araya
+    metin girmemiş → önceki harf içeriksiz, içeriği bu 'i)'ye kaçmış). Meşru harf-bent 'i)'
+    ('...h) i) j)...', ı) atlanmış) TEK + öncesi dolu → dokunulmaz."""
+    i_konum = [k for k, m in enumerate(ms) if m.group(1) == "i"]
+    if not i_konum:
+        return set()
+    roman = set()
+    tekrarli = len(i_konum) >= 2
+    for k in i_konum:
+        if tekrarli:
+            roman.add(k)
+        elif k > 0:
+            # önceki harf-bent boş mu? (önceki işaretin bitişi ile bu işaretin başı arası ~yok)
+            onceki_govde = ms[k - 1].group(0)            # ör. 'f) '
+            arada = ms[k].start() - ms[k - 1].end()      # önceki işaretten bu işarete metin var mı
+            if arada <= 1:                                # 'f) i)' bitişik → f) boş, i) roman
+                roman.add(k)
+    return roman
+
+
 def _harf_alt_bentler(text: str) -> list:
     # B3: numaralı üst-grup (1. 2.) dilimi içindeki harf-bentleri ALT-BENT yap ('a) b) c)').
     # Harfte sıralı-koşu şartı GEVŞEK (≥1 eşleşme) — harf işareti zaten güçlü sinyal; _alt_bentler'in
     # dilimleme deseni (her işaretten sonrakine) yeniden kullanılır.
+    # Z1: roman 'i)' (3. seviye) işaret olarak ATLANIR — dilimleme onu bir önceki harf-bende yapıştırır
+    # (ayrı alt-bent üretmez, önceki harf-bent boş kalmaz).
     ms = list(_BENT_HARF_ISARET.finditer(text))
+    roman = _roman_i_idx(ms)
+    harf = [m for k, m in enumerate(ms) if k not in roman]
     out = []
-    for i, m in enumerate(ms):
+    for i, m in enumerate(harf):
         bas = m.start()
-        son = ms[i + 1].start() if i + 1 < len(ms) else len(text)
+        son = harf[i + 1].start() if i + 1 < len(harf) else len(text)
         parca = text[bas:son].strip()
         out.append(AltBent(isaret=m.group(0).strip(), text=parca, yurutluk=extract_status(parca)))
     return out
@@ -157,6 +185,49 @@ def _bentler(text: str) -> list:
     return []
 
 
+# B4 (FAZ 6): liste-kapanış cümlesi son bentten ayrılır. GVK m.2 (103111-2) gibi liste-açan
+# fıkralarda ('...şunlardır: 1. ..., 2. ..., 7. Diğer... . Bu Kanunda ... nazara alınır.') son
+# bent dilimi metin sonuna kadar gittiği için fıkra-kapanış hükmü son bende yapışır. Bu cümle
+# hiçbir bende ait DEĞİL — tüm fıkrayı kapatır. Çok DAR imza (0 yanlış-pozitif, 3 madde):
+#   (1) bentler bir liste öğesi → son-bent HARİÇ hepsi KISA enum (virgül/; sonu, tek cümle),
+#   (2) son bent = '<öğe>. <KAPANIŞ>' ve KAPANIŞ geri-atıflı bir hüküm cümlesi.
+# Geri-atıf öncülü 'Ancak ...' istisnalarını (bende meşru 2. cümle) ve başlık sızmasını ELER.
+_KAPANIS_GERI_ATIF = re.compile(
+    r"^(?:Bu [Kk]anun(?:da|un)|Yukarıda|yukarıda|Bunlar|Bu fıkra(?:da)?\s|Şu kadar ki|Söz konusu)")
+
+
+def _kisa_enum_bent(text: str) -> bool:
+    """Bent metni kısa liste öğesi mi? (virgül/; ile biter, tek cümle, <70 krk — işaret hariç)."""
+    govde = re.sub(r"^[0-9a-zçğıöşü]+[.)]\s*", "", text).strip()
+    return (len(govde) < 70 and govde.rstrip().endswith((",", ";"))
+            and not re.search(r"\.\s+[A-ZÇĞİÖŞÜ]", govde))
+
+
+def _kapanis_ayir(bentler: list, fikra_text: str) -> list:
+    """B4: liste-açan fıkrada son bende yapışmış geri-atıflı kapanış cümlesini son bentten AYIR.
+    Yalnız DAR imza karşılanınca son bent kısaltılır (kapanış cümlesi fıkra.text'te kalır, kayıp
+    yok). İmza tutmazsa bentler AYNEN döner (davranış değişmez)."""
+    if len(bentler) < 2 or any(b.alt_bentler for b in bentler):
+        return bentler
+    # (1) fıkra giriş cümlesi ':' ile bitiyor mu (liste-açan)?
+    idx = fikra_text.find(bentler[0].text)
+    if idx <= 0 or not fikra_text[:idx].rstrip().endswith(":"):
+        return bentler
+    # (2) son-bent HARİÇ hepsi kısa enum
+    if not all(_kisa_enum_bent(b.text) for b in bentler[:-1]):
+        return bentler
+    # (3) son bentte: '<işaret> <kısa-öğe>. <GERİ-ATIFLI KAPANIŞ>'
+    son = bentler[-1]
+    m = re.match(r"^([0-9a-zçğıöşü]+[.)]\s*.{0,75}?[,;.]?)\s*\.\s+(.{10,})$", son.text, re.DOTALL)
+    if not m or not _KAPANIS_GERI_ATIF.match(m.group(2).strip()):
+        return bentler
+    # kapanış cümlesini son bentten çıkar; öğe sonundaki nokta korunur
+    yeni_text = m.group(1).rstrip() + "."
+    yeni_son = Bent(isaret=son.isaret, text=yeni_text,
+                    yurutluk=extract_status(yeni_text), alt_bentler=son.alt_bentler)
+    return bentler[:-1] + [yeni_son]
+
+
 def _fikra_yurutluk(text, bentler):
     """Fıkra yürürlüğü (A2): bentler VARSA bent ağacından türet — tümü mülga ise fıkra mülga,
     en az biri yürürlükte ise fıkra yürürlükte (gömülü tek '(Mülga:)' bendi tüm fıkrayı mülga
@@ -173,14 +244,14 @@ def _parse_hukum(body: str) -> list:
     # '(Başlığı ile Değişik:...) (1) ...'), parçalarda numaralı fıkra varsa bölmeyi koru — lider
     # künye preamble olarak no=None ilk fıkra kalır (Bug 2: ÇEK 5941 M6). Numaralı fıkra yoksa collapse.
     if not parcalar or not any(_FIKRA_NO.match(p) for p in parcalar):
-        bentler = _bentler(body)
+        bentler = _kapanis_ayir(_bentler(body), body)
         return [Fikra(no=None, text=body, bentler=bentler,
                       yurutluk=_fikra_yurutluk(body, bentler))]
     out = []
     for p in parcalar:
         mno = _FIKRA_NO.match(p)
         no = mno.group(1) if mno else None
-        bentler = _bentler(p)
+        bentler = _kapanis_ayir(_bentler(p), p)
         out.append(Fikra(no=no, text=p, bentler=bentler, yurutluk=_fikra_yurutluk(p, bentler)))
     return out
 

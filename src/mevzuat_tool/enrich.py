@@ -73,14 +73,32 @@ _MADDE_MARKER_SON_ORAN = 0.85   # madde-başlığı marker'ı yalnız gövdenin 
 # kapanış-madde başlıkları — neredeyse hiç meşru cümle SONU olmaz. Korpus frekansı: Yürürlük 260,
 # Geçiş hükümleri 26, Yürütme 13, Yürürlükten kaldırılan hükümler 9... Yalnız cümle-sonu (. ! ?)
 # sonrası + gövde SONUNDA bağımsız ifade olarak dururlarsa kesilir (over-truncation güvenliği).
+# Z3 (FAZ 10): C1 sözlüğü güvenli başlıklarla genişletildi. Eklenenler (adversarial doğrulandı:
+# kuyrukta hep cümle-sonu bleed, neredeyse-asla-meşru-cümle-sonu-değil; korpus madde_baslik
+# frekansı yüksek): Tanımlar 211, Kapsam 156, Yönetmelik 116, Yönetmelikler 48, Atıflar/Ortak/
+# Uygulanmayacak hükümler. EKLENMEDİ (belirsiz/E-tuzağı over-truncation): Sorumluluk, Konusu,
+# Süre, Yetki, İzin (meşru cümle sonu olabilir); Genel hükümler / Uygulanacak hükümler (kenar-
+# numaralı bağlamda '1. Genel hükümler' gelir → son-ek kesimi yarım keser); Genel olarak (998-tuzağı).
 _KAPANIS_BASLIK = (
     "Yürürlük", "Yürütme", "Geçiş hükümleri", "Geçici hükümler",
     "Yürürlükten kaldırılan hükümler", "Değiştirilen hükümler",
     "Çeşitli hükümler", "Son hükümler",
+    "Tanımlar", "Kapsam", "Yönetmelik", "Yönetmelikler",
+    "Atıflar", "Ortak hükümler", "Uygulanmayacak hükümler",
 )
 _KAPANIS_BASLIK_RE = re.compile(
-    r"(?<=[.!?])\s+(?:" + "|".join(re.escape(b) for b in _KAPANIS_BASLIK) + r")\s*$"
+    # uzun-önce sırala (alternasyonda 'Yönetmelik' 'Yönetmelikler'i maskelemesin)
+    r"(?<=[.!?])\s+(?:"
+    + "|".join(re.escape(b) for b in sorted(_KAPANIS_BASLIK, key=len, reverse=True))
+    + r")\s*$"
 )
+
+# Z4 (FAZ 8): kenar-numaralı kanunlarda (FSEK 5846, TMK...) madde başlığı kenar-numarayla başlar
+# ('5. İktibas serbestisi'). Sonraki maddenin kenar-numarası ('6.') önceki gövde kuyruğuna TEK
+# BAŞINA sızar (başlık metni split'te yok). Cümle-sonu (. ! ?) + boşluk + tek 'N.' + gövde SONU →
+# bu sarkan numara kırpılır. Madde-İÇİ 'N.' (numaralı liste/kenar-başlık) dokunulmaz çünkü desen
+# yalnız gövde SONUNU ($) hedefler. Gerçek veri: 104458-35 ('...belirtilir. 6.').
+_SARKAN_KENAR_NUMARA_RE = re.compile(r"(?<=[.!?])\s+\d+\.\s*$")
 
 
 def _strip_bleed(body, level_markers, madde_markers):
@@ -98,6 +116,10 @@ def _strip_bleed(body, level_markers, madde_markers):
     mk = _KAPANIS_BASLIK_RE.search(body)
     if mk is not None and mk.start() >= esik:
         cut = min(cut, mk.start())
+    # Z4: sarkan kenar-numara kuyruğu (cümle-sonu + tek 'N.' + gövde sonu).
+    sk = _SARKAN_KENAR_NUMARA_RE.search(body)
+    if sk is not None:
+        cut = min(cut, sk.start())
     return body[:cut].strip()
 
 
