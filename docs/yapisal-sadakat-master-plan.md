@@ -16,10 +16,11 @@
 | **FAZ 3** | Numaralı asıl-grup (B3) — en riskli | DİKKATLİ | ✅ Tamam (commit'li) | [faz-3-numarali-grup.md](faz-planlari/faz-3-numarali-grup.md) |
 | **FAZ 4** | Sızma (C1, C2) | SONRA | ✅ Tamam (commit'li, confusion FP=0) | [faz-4-sizma.md](faz-planlari/faz-4-sizma.md) |
 | **FAZ 5** | Dipnot/tablo (D1; D2/D3 ertelendi) | ERTELENEBİLİR | ✅ Tamam (D1 commit'li) | [faz-5-dipnot-tablo.md](faz-planlari/faz-5-dipnot-tablo.md) |
+| **FAZ 6** | Liste-kapanış cümlesi (B4) — GVK m.2 orijinal bug | SONRA | ✅ Tamam (B4 commit'li, 0 FP) | [faz-6-kapanis-cumlesi.md](faz-planlari/faz-6-kapanis-cumlesi.md) |
 
 > Durum kodları: ⬜ Başlanmadı · 🟡 Planlanıyor · 🔵 Uygulanıyor · ✅ Tamam (commit'li) · ⏸️ Beklemede
 
-**Açık karar (FAZ'lardan bağımsız):** Kapanış-kırpma fix'i (çalışma ağacında, **46 yanlış-pozitifli**) — geri al / yeniden tasarla / FAZ olarak ekle? 46 FP'nin 14'ü zaten B3 sınıfı.
+**Açık karar (ÇÖZÜLDÜ):** Kapanış-kırpma fix'i (46 FP'li ilk deneme) → FAZ 6'da **dar imza (geri-atıflı kapanış, 3 madde, 0 FP)** ile yeniden tasarlanıp commit'lendi. Genişletme borcu (18 TP) aşağıda "Kalan Zehir Kalemleri"nde.
 
 ---
 
@@ -142,3 +143,39 @@ Geçmiş desen: commit `2158ea7` (yürürlük regresyonu fıkra-ağacıyla düze
 ## Kapsam Notu
 - Bu plan **yalnız KANUN** türü kapsamında (ADR-0013); generation/embedding kapsam dışı (retrieval'da biter).
 - İlgili: [decisions.md](decisions.md) (ADR-0004 atomik birim=madde, ADR-0005 yürürlük birinci-sınıf), [metadata-cikarim-raporu.md](metadata-cikarim-raporu.md) (metadata çıkarım algoritması), [commit_discipline.md](commit_discipline.md).
+
+---
+
+## Kalan Zehir Kalemleri (FAZ 1-6 sonrası, korpus-geneli ölçüldü 2026-06-29)
+
+> "Zehir" = retrieval'ı bozan. `text` (embedding) genelde sağlam; risk **yapısal sadakatte**
+> (atıf/filtre çözümünü kıran bozuk `bentler[]` ağacı). Aşağıdakiler ölçülmüş açık kalemlerdir.
+
+| # | Sorun | Frekans | Zehir tipi | Öncelik |
+|---|---|---|---|---|
+| **Z1** | **Roman-rakam `i)` 3. seviye sızması**: `a) > i) ii)` üç-seviye hiyerarşide `i)` harf-bent (`i)`) sanılıyor; harf-listesine kardeş olarak giriyor → bir harf-bent BOŞ kalır (içeriği `i)`'ye kaçar) | **~12 üst-bent** (488 Damga, 492 Harçlar, 4458 Gümrük, 193 GVK, 3065 KDV, 5809...) | **Yapı (ağır):** boş `b)` düğümü + alt-alt-bent düzleşmesi → atıf çözülmez | **YÜKSEK** |
+| **Z2** | **Kapanış-cümlesi genişletme** (B4 dar kapsamın kaçırdığı, geri-atıfsız gerçek kapanış) | **18 madde** (FN analizi: orta 7 + geniş 11 TP) | **Yapı (orta):** son bent fazla cümle içerir | ORTA |
+| **Z3** | **Bleed başlık kalanı** (sonraki-madde başlığı son fıkra/bende sızıyor; FAZ 4 C1 sonrası kalan) | ~59 (FN_geniş'te BLEED sınıfı) + C1-dışı varyantlar | **Yapı (orta):** bent sonu yabancı başlık | ORTA |
+| **Z4** | **Sarkan numara** (`...edilir. 5.` bent sonuna yapışık sonraki madde-no) | **9 madde** (103626, 104458...) | **Yapı (düşük):** madde sınırı kirli | DÜŞÜK |
+| **Z5** | **Append/dipnot bölgesi sızması** (`5648 SAYILI KANUNA EK...` alt-bende karışıyor) | birkaç (103983-22) | **Gürültü:** D2 alanı | DÜŞÜK (FAZ 5'te D2 ertelendi) |
+
+> **NOT — "dev bent ≠ zehir":** İlk tarama 329 ">2000 krk bent" buldu ama **307'si meşru uzun
+> hüküm** (`102965-11` KDV istisna `c)` 2080 krk = gerçekten uzun, yapı sağlam; `103689-135`
+> Avukatlık disiplin `1.` 22 alt-bent = doğru parse). Gerçek zehir kriteri **uzunluk değil
+> yapı bozulması**: boş/kaçmış alt-bent VEYA harf-sırası kırılması (`a)...i)...b)...i)` tekrarı,
+> veya konum-dışı `i)` = `f)` ile `g)` arasında). Bu filtreyle 329 → **12 gerçek-zehir**.
+
+### Z1 kök neden (en ağır, doğrulandı — 103017-Ek2 Damga V.)
+Gerçek yapı 3 seviyeli: `2.` (üst) → `a) b) c)...` (orta) → `i) ii)` (alt-alt, roman). Parser
+`_BENT_HARF_ISARET = [a-zçğıöşü]\)` ile `i)`'yi orta-seviye harf-bent sanıyor →
+`a)`'nın altındaki `i)` bloğu `a)`'dan koparılıyor, `b)`'nin altındaki `i)` de `b)`'den
+koparılıyor → **`b)` bomboş** (`len=2`). B3 (FAZ 3) iki-seviye destekliyor, **3. seviye yok**.
+Ayırt edici sinyal: `i)` harf-sırasında konum-dışı (`f)` sonrası `g)` öncesi — Türk alfabesi
+`f g ğ h ı i` olduğu için `i)` orada harf-bent OLAMAZ → roman alt-bent.
+
+**Z1 YP-riski (YÜKSEK):** roman `i)` ile meşru harf `i)` (Türk alfabesinde `h) ı) i) j)`)
+ayrımı; yanlış ayrım 998-kenar-numara benzeri toplu-bozma tuzağı. Fix öncesi E-tuzağı stili
+koruma testleri ZORUNLU. Tetik DAR olmalı: yalnız `i)` konum-dışı VEYA bir önceki harf boş.
+
+> **Karar (kullanıcı, 2026-06-29):** #1 (Z1) için **önce salt analiz** — bu rapor. Fix
+> (dar: yalnız boş-bent kaçışı / tam: 3. seviye roman desteği) sonraki turda kullanıcı kararıyla.
