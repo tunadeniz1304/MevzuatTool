@@ -12,7 +12,7 @@
 |---|---|---|---|---|
 | **FAZ 0** | Altyapı: `compare_corpus.py` + E-tuzağı koruma testleri | ŞİMDİ | ✅ Tamam (commit'li) | [faz-0-altyapi.md](faz-planlari/faz-0-altyapi.md) |
 | **FAZ 1** | Yürürlük/mülga (A1+A2+A3) — MVP-kritik | ŞİMDİ | ✅ Tamam (commit'li) | [faz-1-yururluk.md](faz-planlari/faz-1-yururluk.md) |
-| **FAZ 2** | Fıkra/bent sınır (B1, B2) | SONRA | ⬜ Başlanmadı | _(faz başında yazılacak)_ |
+| **FAZ 2** | Fıkra/bent sınır (B1, B2) | SONRA | ✅ Tamam (commit'li) | [faz-2-fikra-bent-sinir.md](faz-planlari/faz-2-fikra-bent-sinir.md) |
 | **FAZ 3** | Numaralı asıl-grup (B3) — en riskli | DİKKATLİ | ⬜ Başlanmadı | _(faz başında yazılacak)_ |
 | **FAZ 4** | Sızma (C1, C2) | SONRA | ⬜ Başlanmadı | _(faz başında yazılacak)_ |
 | **FAZ 5** | Dipnot/tablo (D1, D2, D3) | ERTELENEBİLİR | ⬜ Başlanmadı | _(faz başında yazılacak)_ |
@@ -119,7 +119,7 @@ Geçmiş desen: commit `2158ea7` (yürürlük regresyonu fıkra-ağacıyla düze
 |---|---|---|
 | 1 | Mülga oranı + **status-flip tablosu** | ~49 madde + ~129 bent → yürürlüğe döner; ~10 bent + 11 madde → mülga. Beklenmeyen flip = regresyon |
 | 2 | **Sahte-bent sayısı**, bent dağılımı | 862→~0; atıf testleri korunur |
-| 3 | **TMK/TBK/TTK/FSEK/Anayasa etkilenen-madde = 0** (KRİTİK KAPI); Gümrük-tipi bent-derinliği artar | Bu 5 kanunda 0 değişim şart |
+| 3 | TMK/TBK/TTK/FSEK/Anayasa'da **bent-işaret yapısı / numara-bent ortaya çıkması = 0** (KRİTİK KAPI); Gümrük-tipi bent-derinliği artar | Kenar-numara tetiği yok. ⚠️ Düzeltildi: "etkilenen-madde=0" YANLIŞ kapıydı — B1 dipnot-fıkra ayrımı bu kanunları meşru etkiler (text/bent-yapısı değişmeden); kapı **bent-işaret değişimine** bakmalı (bkz. FAZ 2 sonucu) |
 | 4 | Etkilenen-madde ~1064; `fikralar[-1]` uzunluk dağılımı | Kısalma beklenir; aşırı-kısalma = regresyon |
 | 5 | text-uzunluk kısalması; tablo-duplike 27→0 | — |
 
