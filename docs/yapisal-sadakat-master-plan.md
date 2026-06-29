@@ -13,7 +13,7 @@
 | **FAZ 0** | Altyapı: `compare_corpus.py` + E-tuzağı koruma testleri | ŞİMDİ | ✅ Tamam (commit'li) | [faz-0-altyapi.md](faz-planlari/faz-0-altyapi.md) |
 | **FAZ 1** | Yürürlük/mülga (A1+A2+A3) — MVP-kritik | ŞİMDİ | ✅ Tamam (commit'li) | [faz-1-yururluk.md](faz-planlari/faz-1-yururluk.md) |
 | **FAZ 2** | Fıkra/bent sınır (B1, B2) | SONRA | ✅ Tamam (commit'li) | [faz-2-fikra-bent-sinir.md](faz-planlari/faz-2-fikra-bent-sinir.md) |
-| **FAZ 3** | Numaralı asıl-grup (B3) — en riskli | DİKKATLİ | ⬜ Başlanmadı | _(faz başında yazılacak)_ |
+| **FAZ 3** | Numaralı asıl-grup (B3) — en riskli | DİKKATLİ | ✅ Tamam (commit'li) | [faz-3-numarali-grup.md](faz-planlari/faz-3-numarali-grup.md) |
 | **FAZ 4** | Sızma (C1, C2) | SONRA | ⬜ Başlanmadı | _(faz başında yazılacak)_ |
 | **FAZ 5** | Dipnot/tablo (D1, D2, D3) | ERTELENEBİLİR | ⬜ Başlanmadı | _(faz başında yazılacak)_ |
 
