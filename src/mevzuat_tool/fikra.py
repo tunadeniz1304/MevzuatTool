@@ -87,15 +87,43 @@ def _alt_bentler(text: str) -> list:
     return out
 
 
+def _roman_i_idx(ms: list) -> set:
+    """Z1: harf-işaret listesinde ROMAN 'i)' (3. seviye alt-alt-bent) konumlarını bul. Roman 'i)'
+    harf-bent SANILIP listeye giriyor → bir önceki harf-bent boş kalıyor (içerik kaçar; 103017-Ek2
+    Damga V.). KESİN sinyal (0 yanlış-pozitif): 'i)' işareti (a) TEKRARLI (harf-listede 'i' bir kez
+    olur — 2+ kez = roman) VEYA (b) bir ÖNCEKİ harf-bent BOŞ (işareti hemen kendinden önce, araya
+    metin girmemiş → önceki harf içeriksiz, içeriği bu 'i)'ye kaçmış). Meşru harf-bent 'i)'
+    ('...h) i) j)...', ı) atlanmış) TEK + öncesi dolu → dokunulmaz."""
+    i_konum = [k for k, m in enumerate(ms) if m.group(1) == "i"]
+    if not i_konum:
+        return set()
+    roman = set()
+    tekrarli = len(i_konum) >= 2
+    for k in i_konum:
+        if tekrarli:
+            roman.add(k)
+        elif k > 0:
+            # önceki harf-bent boş mu? (önceki işaretin bitişi ile bu işaretin başı arası ~yok)
+            onceki_govde = ms[k - 1].group(0)            # ör. 'f) '
+            arada = ms[k].start() - ms[k - 1].end()      # önceki işaretten bu işarete metin var mı
+            if arada <= 1:                                # 'f) i)' bitişik → f) boş, i) roman
+                roman.add(k)
+    return roman
+
+
 def _harf_alt_bentler(text: str) -> list:
     # B3: numaralı üst-grup (1. 2.) dilimi içindeki harf-bentleri ALT-BENT yap ('a) b) c)').
     # Harfte sıralı-koşu şartı GEVŞEK (≥1 eşleşme) — harf işareti zaten güçlü sinyal; _alt_bentler'in
     # dilimleme deseni (her işaretten sonrakine) yeniden kullanılır.
+    # Z1: roman 'i)' (3. seviye) işaret olarak ATLANIR — dilimleme onu bir önceki harf-bende yapıştırır
+    # (ayrı alt-bent üretmez, önceki harf-bent boş kalmaz).
     ms = list(_BENT_HARF_ISARET.finditer(text))
+    roman = _roman_i_idx(ms)
+    harf = [m for k, m in enumerate(ms) if k not in roman]
     out = []
-    for i, m in enumerate(ms):
+    for i, m in enumerate(harf):
         bas = m.start()
-        son = ms[i + 1].start() if i + 1 < len(ms) else len(text)
+        son = harf[i + 1].start() if i + 1 < len(harf) else len(text)
         parca = text[bas:son].strip()
         out.append(AltBent(isaret=m.group(0).strip(), text=parca, yurutluk=extract_status(parca)))
     return out

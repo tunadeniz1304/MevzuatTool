@@ -264,6 +264,72 @@ def test_harf_ust_numara_alt_NOT_inverted_by_b3():
     assert "1. Başkalarını" in f.bentler[0].text   # numara harf-bendin içinde
 
 
+# ---- Z1 (FAZ 7): roman-rakam 'i)' 3. seviye sızması ----
+
+def test_roman_i_does_not_split_letter_bent_repeated():
+    # Z1: '2. ... a) ... i) ... b) ... i) ...' — roman 'i)' (3. seviye) harf-bent SANILIYOR,
+    # harf-listesine kardeş giriyor → 'b)' BOŞ kalır (içeriği i)'ye kaçar). Gerçek veri: 103017-Ek2
+    # (Damga V. 488 Ek 2). KESİN-ROMAN sinyali: 'i)' TEKRARLI (harf-listede imkansız).
+    # Doğru davranış: roman 'i)' bir önceki harf-bendin metnine dahil; ayrı alt-bent OLMAZ.
+    # (B3 iki-seviye tetiklensin diye '1.' + '2.' çoklu numara — gerçek veride de öyle.)
+    body = ("Tanımlar şunlardır: "
+            "1. Birinci grup tek tanım, "
+            "2. Aşağıdaki işlemler müstesnadır: "
+            "a) Yatırım programında yer alan yatırımlar. i) Tam mükellef olması hâlinde uygulanır. "
+            "b) Savunma sanayii işlemleri. i) Onaylanan projeler kapsamındadır. "
+            "c) İmalatçı firmaların işlemleri.")
+    f = parse_fikralar(body)[0]
+    ust = f.bentler[1]                                   # '2.' üst-bent
+    altler = ust.alt_bentler
+    # roman 'i)' ayrı alt-bent OLMAZ; yalnız harf-bentler a) b) c)
+    assert [a.isaret for a in altler] == ["a)", "b)", "c)"]
+    # 'b)' BOŞ kalmaz — kendi içeriğini korur, roman i) metni a)/b)'ye gömülü kalır
+    assert "Savunma sanayii" in altler[1].text
+    assert all(len(a.text) > 5 for a in altler)          # hiçbir harf-bent boş değil
+    # içerik kaybı yok: roman i) metni üst-bent / harf-bent text'inde korunur
+    assert "Tam mükellef" in ust.text
+    assert "Onaylanan projeler" in ust.text
+
+
+def test_roman_i_empty_preceding_letter_bent():
+    # Z1: 'i)' TEK ama önceki harf-bent BOŞ ('f)' içeriksiz, çünkü içeriği i)'ye kaçtı) → roman.
+    # Gerçek veri: 103044-227 (Gümrük 4458). 'e) f) i) g) h)' — f) boş, i) f)'nin alt-bendi.
+    body = ("Şartlar şunlardır: "
+            "1. Birinci grup tek tanım, "
+            "2. İkinci grup şartları: "
+            "a) Vatandaş olmak, b) Ehliyet sahibi olmak, c) Haklardan mahrum olmamak, "
+            "d) Suç işlememiş olmak, e) Çıkarılmamış olmak, "
+            "f) i) Hukuk veya iktisat dallarında öğrenim görmüş olmak, "
+            "g) Staj yapmış olmak, h) Sınavı kazanmış olmak.")
+    f = parse_fikralar(body)[0]
+    ust = f.bentler[1]                                   # '2.' üst-bent
+    altler = ust.alt_bentler
+    # roman 'i)' ayrı alt-bent OLMAZ; f) içeriğini korur (boş kalmaz)
+    assert "i)" not in [a.isaret for a in altler]
+    assert [a.isaret for a in altler] == ["a)", "b)", "c)", "d)", "e)", "f)", "g)", "h)"]
+    fbent = [a for a in altler if a.isaret == "f)"][0]
+    assert "Hukuk veya iktisat" in fbent.text             # i) içeriği f)'ye dahil
+    assert len(fbent.text) > 5                             # f) boş değil
+
+
+def test_legit_harf_i_not_treated_as_roman():
+    # Z1 KORUMA (yanlış-pozitif): MEŞRU harf-bent 'i)' (Türkçe alfabe '...h) i) j)...', ı) atlanmış)
+    # roman SANILMAMALI. Gerçek veri: 103111-89 (GVK), 103006-Mukerrer298 (VUK). Sinyal: 'i)' TEK +
+    # komşular dolu + sıralı (önceki harf boş DEĞİL). Bu liste düz harf-bent kalır, dokunulmaz.
+    body = ("Yapılan harcamalar: "
+            "1. Birinci grup tek tanım, "
+            "2. İkinci grup harcamaları: "
+            "a) Ulusal projelere, b) Kültür birikimine, c) Sanat eserlerine, d) Tarihî yapılara, "
+            "e) Müzelere, f) Taşınmaz varlıklara, g) Envanter çalışmalarına, h) Kültür varlıklarına, "
+            "i) Somut olmayan mirasa, j) Kütüphane ve müzelere ilişkin harcamalar.")
+    f = parse_fikralar(body)[0]
+    ust = f.bentler[1]                                   # '2.' üst-bent
+    isaretler = [a.isaret for a in ust.alt_bentler]
+    # 'i)' MEŞRU harf-bent — listede kendi yerinde kalır (roman sanılıp silinmez)
+    assert "i)" in isaretler
+    assert isaretler == ["a)", "b)", "c)", "d)", "e)", "f)", "g)", "h)", "i)", "j)"]
+
+
 # ---- B4 (FAZ 6): liste-kapanış cümlesi son bentten ayrılır ----
 
 def test_liste_kapanis_cumlesi_son_bende_yapismaz():
