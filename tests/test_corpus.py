@@ -133,6 +133,32 @@ def test_short_but_meaningful_madde_is_kept():
     assert c is not None and "yürürlüktedir" in c["text"]
 
 
+def test_dipnot_isaretleri_text_ve_bentten_temizlenir():
+    # D1 (FAZ 5): '[n]' dipnot işaretleri text ve bent metninde gürültü olarak kalıyordu (text
+    # 5801, bent 1863 chunk). Embedding girdisinden temizlenir. Gerçek veri: 328134-3 gibi.
+    m = _madde("11", "(1) Vakıf şu faaliyetlerde bulunur:[1]\na) eğitim vermek,[2]\nb) yardım etmek.")
+    c = madde_to_chunk(m, kanun_ad="X", kanun_no="6698")
+    assert "[1]" not in c["text"] and "[2]" not in c["text"]      # text temiz
+    assert "faaliyetlerde bulunur" in c["text"]                    # içerik korundu
+    # bent metinleri de temiz
+    for fk in c["metadata"]["fikralar"]:
+        for b in fk["bentler"]:
+            assert "[" not in b["text"] or "]" not in b["text"]
+
+
+def test_dipnot_temizleme_dipnotlar_metadatasini_bozmaz():
+    # D1 KORUMA: '[n]' temizleme yalnız text/bent metnini etkiler; metadata.dipnotlar[] alanı
+    # AYRI tutulur (m.dipnotlar, asdict ile serileşir) → DOKUNULMAZ.
+    from mevzuat_tool.dipnot import Dipnot
+    m = _madde("11", "(1) Hüküm şudur[1] ve devamı böyledir.")
+    m.dipnotlar = [Dipnot(no=1, text="Birinci dipnot tanımı metni.")]   # dipnot bağı kurulmuş gibi
+    c = madde_to_chunk(m, kanun_ad="X", kanun_no="6698")
+    assert "[1]" not in c["text"]                                  # text'te işaret temizlendi
+    assert "Hüküm şudur" in c["text"]                              # içerik korundu
+    assert len(c["metadata"]["dipnotlar"]) == 1                    # dipnotlar[] KORUNDU
+    assert c["metadata"]["dipnotlar"][0]["text"] == "Birinci dipnot tanımı metni."
+
+
 def test_table_only_madde_is_filtered():
     # Madde gövdesi SADECE tablodan ibaretse (gerçek metin yok), tablo text'ten çıkınca text boş
     # kalır → chunk korpusa GİRMEZ (anlamsız boş text embedding'e gitmesin).
