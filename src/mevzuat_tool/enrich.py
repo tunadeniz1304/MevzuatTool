@@ -82,6 +82,13 @@ _KAPANIS_BASLIK_RE = re.compile(
     r"(?<=[.!?])\s+(?:" + "|".join(re.escape(b) for b in _KAPANIS_BASLIK) + r")\s*$"
 )
 
+# Z4 (FAZ 8): kenar-numaralı kanunlarda (FSEK 5846, TMK...) madde başlığı kenar-numarayla başlar
+# ('5. İktibas serbestisi'). Sonraki maddenin kenar-numarası ('6.') önceki gövde kuyruğuna TEK
+# BAŞINA sızar (başlık metni split'te yok). Cümle-sonu (. ! ?) + boşluk + tek 'N.' + gövde SONU →
+# bu sarkan numara kırpılır. Madde-İÇİ 'N.' (numaralı liste/kenar-başlık) dokunulmaz çünkü desen
+# yalnız gövde SONUNU ($) hedefler. Gerçek veri: 104458-35 ('...belirtilir. 6.').
+_SARKAN_KENAR_NUMARA_RE = re.compile(r"(?<=[.!?])\s+\d+\.\s*$")
+
 
 def _strip_bleed(body, level_markers, madde_markers):
     cut = len(body)
@@ -98,6 +105,10 @@ def _strip_bleed(body, level_markers, madde_markers):
     mk = _KAPANIS_BASLIK_RE.search(body)
     if mk is not None and mk.start() >= esik:
         cut = min(cut, mk.start())
+    # Z4: sarkan kenar-numara kuyruğu (cümle-sonu + tek 'N.' + gövde sonu).
+    sk = _SARKAN_KENAR_NUMARA_RE.search(body)
+    if sk is not None:
+        cut = min(cut, sk.start())
     return body[:cut].strip()
 
 

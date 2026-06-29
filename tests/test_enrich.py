@@ -229,6 +229,40 @@ def test_enrich_strips_kenar_numara_header_tail():
     assert "Kefalet" not in m.body
 
 
+def test_enrich_strips_sarkan_kenar_numara_tail():
+    # Z4 (FAZ 8): kenar-numaralı kanunlarda (FSEK 5846, TMK...) madde başlığı bir kenar-numarayla
+    # başlar ('5. İktibas serbestisi'). Sonraki maddenin kenar-numarası ('6.') önceki maddenin
+    # gövde KUYRUĞUNA tek başına sızar (başlık metni split'te dahil edilmemiş → tree-marker
+    # '6. Gazete münderecatı' gövdede yalnız '6.' olarak görünür, eşleşmez). Gerçek veri:
+    # 104458-35 ('...alındığı yer belirtilir. 6.'). Cümle-sonu + gövde-sonu + tek 'N.' → kırp.
+    body = ("Bir eserin bazı cümlelerinin alınması serbesttir. İktibasın belli olması lazımdır. "
+            "İlim eserlerinde alındığı yer belirtilir. 6.")
+    arts = [Article(no="35", body=body), Article(no="36", body="Gazete münderecatı içerik.")]
+    tree = parse_tree(
+        "- Madde No: 35 - 5. İktibas serbestisi: (maddeId:35)\n"
+        "- Madde No: 36 - 6. Gazete münderecatı: (maddeId:36)\n"
+    )
+    m = _maddeler(arts, tree)[0]
+    assert m.body.endswith("alındığı yer belirtilir.")
+    assert not m.body.rstrip().endswith("6.")        # sarkan kenar-numara kırpıldı
+
+
+def test_enrich_does_not_strip_midbody_number():
+    # Z4 KORUMA (E-tuzağı): madde İÇİNDE meşru 'N.' (kenar-numara/numaralı liste) DOKUNULMAZ —
+    # yalnız gövde-SONU tek 'N.' kırpılır. Gerçek risk: TMK/FSEK '1. Genel olarak' madde başlığı
+    # gövde içinde, veya numaralı bent listesi. Gövde sonu fiil-cümlesiyle bitiyorsa kesim YOK.
+    body = ("Gelire giren kazançlar şunlardır: 1. Ticari kazanç, 2. Zirai kazanç, 3. Diğer kazanç. "
+            "Bu kazançlar gerçek miktarları ile dikkate alınır.")
+    arts = [Article(no="2", body=body), Article(no="3", body="(1) Sonraki madde.")]
+    tree = parse_tree(
+        "- Madde No: 2 - Gelirin unsurları: (maddeId:2)\n"
+        "- Madde No: 3 - Mükellefler: (maddeId:3)\n"
+    )
+    m = _maddeler(arts, tree)[0]
+    assert "1. Ticari kazanç" in m.body              # madde-içi numaralar KORUNDU
+    assert m.body.rstrip().endswith("dikkate alınır.")
+
+
 def test_enrich_plain_madde_missing_in_tree_does_not_crash():
     arts = [
         Article(no="84", body="ağaçtaki."),
