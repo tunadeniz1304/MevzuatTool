@@ -135,3 +135,130 @@ def test_leading_kunye_ek_madde_fikralari():
     body = "(4/4/2015-6645/79 md.) (1) Kamu kurumlarında çalışanlar. (2) Bu kişilerin hakları."
     fs = parse_fikralar(body)
     assert [f.no for f in fs if f.no] == ["(1)", "(2)"]
+
+
+def test_fikra_status_derived_from_bentler_one_mulga_keeps_yururlukte():
+    # A2 (FAZ 1): bent-listeli fıkrada TEK gömülü '(Mülga:)' TÜM fıkrayı mülga YAPMAMALI.
+    # Fıkra statüsü bent ağacından türetilir: en az bir bent yürürlükte → fıkra yürürlükte.
+    # Gerçek veri: 103829-3 (Nüfus K. 5490 Tanımlar) — 29 bent, yalnız 'ç)' mülga, 28 canlı.
+    body = ("Bu Kanunda geçen deyimlerden; a) Bakanlık: İçişleri Bakanlığını, "
+            "b) Genel Müdürlük: Nüfus İşleri Genel Müdürlüğünü, "
+            "ç) (Mülga: 1/1/2020-1234/5 md.) "
+            "d) Nüfus kütüğü: kişisel bilgileri gösteren kütüğü, ifade eder.")
+    f = parse_fikralar(body)[0]
+    assert f.yurutluk == "yürürlükte"            # fıkra: en az bir bent canlı
+    assert f.bentler[2].isaret == "ç)"
+    assert f.bentler[2].yurutluk == "mülga"      # yalnız ç) mülga
+
+
+def test_fikra_status_derived_from_bentler_all_mulga_is_mulga():
+    # A2 koruma: TÜM bentler mülga ise fıkra GERÇEKTEN mülga kalır (tam-mülga korunur).
+    body = ("Liste: a) (Mülga: 1/1/2020-1/1 md.) "
+            "b) (Mülga: 1/1/2020-1/1 md.) "
+            "c) (Mülga: 1/1/2020-1/1 md.)")
+    f = parse_fikralar(body)[0]
+    assert [b.yurutluk for b in f.bentler] == ["mülga", "mülga", "mülga"]
+    assert f.yurutluk == "mülga"
+
+
+def test_fikra_without_bentler_status_unchanged():
+    # A2 koruma: bentsiz (düz) fıkrada davranış DEĞİŞMEZ — extract_status aynen.
+    assert parse_fikralar("Düz bir fıkra metni, yürürlükte.")[0].yurutluk == "yürürlükte"
+    assert parse_fikralar("(Mülga: 1/1/2020-1/1 md.)")[0].yurutluk == "mülga"
+
+
+def test_fikra_after_dipnot_bracket_is_split():
+    # B1 (FAZ 2): cümle '.[1]' dipnot işaretiyle bitince sonraki '(2)' fıkra-başı KAÇIYORDU
+    # (lookbehind '[.:!?]\s|\n|)\s' içinde ']' yok). Gerçek veri: 189065-5 — '(2)' fıkrası
+    # '(1)'e gömülüyordu. Dipnot ']' + boşluk sonrası '(n)' de fıkra-başı sayılmalı.
+    body = "(1) Kurum yükümlüdür.[1] (2) Fona ilişkin esaslar belirlenir. (3) Üçüncü fıkra."
+    fs = parse_fikralar(body)
+    assert [f.no for f in fs] == ["(1)", "(2)", "(3)"]
+
+
+def test_fikra_dipnot_bracket_does_not_oversplit():
+    # B1 KORUMA: ']' her zaman fıkra-başı tetiklemez — ardından '(n)' + boşluk gelmeli.
+    # Cümle-ortası '[1]' atıfı/dipnotu fıkra üretmez.
+    body = "(1) Hüküm[1] uygulanır ve devam eder, ikinci cümle de buradadır."
+    fs = parse_fikralar(body)
+    assert [f.no for f in fs] == ["(1)"]
+
+
+def test_fikra_dipnot_bracket_midsentence_not_split():
+    # B1 KORUMA (yanlış-pozitif): cümle ORTASINDA '(…)[10] (1) zimmet, irtikâp...' deseni —
+    # ']' öncesi nokta YOK (')' var) ve '(n)' sonrası KÜÇÜK harf (cümle devamı). Bu fıkra DEĞİL.
+    # Gerçek veri: 103569-28 (Tababet 1219) — B1 ilk hali bu cümleyi yanlışlıkla bölüyordu.
+    body = ("Hekimlik mesleğinin icrası için kasten işlenen suçlar, Anayasal düzene karşı "
+            "suçlar, (…)[10] (1) zimmet, irtikâp, rüşvet, hırsızlık suçlarından mahkûm "
+            "olmamak şarttır.")
+    fs = parse_fikralar(body)
+    assert [f.no for f in fs] == [None]   # tek numarasız fıkra; '(1)' cümle-ortası, bölünmez
+
+
+def test_ekli_cetvel_does_not_produce_fake_bentler():
+    # B2 (FAZ 2): '(N) SAYILI LİSTE/CETVEL' ekli cetveli sahte fıkra+bent üretiyordu.
+    # Gerçek veri: 104030-5 (Büyükşehir 5747 Yürütme) — '(1) Bakanlar Kurulu yürütür.'
+    # sonrası '(1) SAYILI LİSTE ADANA...' 862 sahte bent. Cetvel bölünmez; içerik korunur.
+    body = ("(1) Bu Kanun hükümlerini Bakanlar Kurulu yürütür. "
+            "(1) SAYILI LİSTE ADANA İLİ MAHALLELER 1. Köy A 2. Köy B 3. Köy C "
+            "(2) SAYILI LİSTE İZMİR İLİ MAHALLELER 1. Köy D 2. Köy E")
+    fs = parse_fikralar(body)
+    assert [f.no for f in fs] == ["(1)"]          # tek gerçek hüküm fıkrası
+    assert fs[0].bentler == []                     # cetvelden sahte bent ÜRETİLMEZ
+    assert "ADANA" in fs[0].text                   # cetvel içeriği KORUNUR (kayıp yok)
+
+
+def test_sayili_kanun_reference_not_treated_as_cetvel():
+    # B2 KORUMA (yanlış-pozitif): 'NNNN sayılı Kanun' meşru fıkra metnidir, cetvel DEĞİL —
+    # ayırt edici desen '(N) SAYILI' + BÜYÜK-harf LİSTE/CETVEL/TARİFE. 'sayılı' (6844 madde) etkilenmez.
+    body = "(1) 5237 sayılı Kanuna göre işlem yapılır. (2) İkinci fıkra hükmü uygulanır."
+    fs = parse_fikralar(body)
+    assert [f.no for f in fs] == ["(1)", "(2)"]
+
+
+# ---- B3 (FAZ 3): numaralı asıl-grup iki-seviye (1. > a)) ----
+
+def test_numbered_group_with_harf_subitems_two_level():
+    # B3: numaralı üst-grup '1. 2.' + altında harf-bent 'a) b)' → İKİ SEVİYE.
+    # Gerçek veri: 103044-3 (Gümrük 4458 Tanımlar). Mevcut hata: a)b)c)... tek düz listeye eziliyordu.
+    body = ("Bu Kanunda geçen; 1. \"Müsteşarlık\" deyimi, Gümrük Müsteşarlığını; "
+            "2. a) \"Gümrük idaresi\" deyimi, yönetim birimlerini; "
+            "b) \"Giriş gümrük idaresi\" deyimi, giriş idaresini; "
+            "3. a) \"Eşya\" deyimi, her türlü maddeyi; b) \"Serbest dolaşım\" deyimi, durumu;")
+    f = parse_fikralar(body)[0]
+    # üst seviye = numaralı grup
+    assert [b.isaret for b in f.bentler] == ["1.", "2.", "3."]
+    # 1. bentin altında harf yok; 2. ve 3.'ün altında 'a) b)' alt-bent
+    assert f.bentler[0].alt_bentler == []
+    assert [a.isaret for a in f.bentler[1].alt_bentler] == ["a)", "b)"]
+    assert [a.isaret for a in f.bentler[2].alt_bentler] == ["a)", "b)"]
+    assert "Gümrük idaresi" in f.bentler[1].alt_bentler[0].text
+
+
+def test_plain_letter_bentler_unchanged_by_b3():
+    # B3 GERİYE-UYUM: numaralı üst-grup YOKsa düz harf-bent davranışı BİREBİR korunur.
+    body = "Aşağıdakiler: a) birinci bent b) ikinci bent c) üçüncü bent"
+    f = parse_fikralar(body)[0]
+    assert [b.isaret for b in f.bentler] == ["a)", "b)", "c)"]
+    assert all(b.alt_bentler == [] for b in f.bentler)
+
+
+def test_plain_numbered_bentler_without_harf_unchanged_by_b3():
+    # B3 GERİYE-UYUM: numara var ama harf-bent YOK → düz numara-bent (tek seviye), iki-seviye DEĞİL.
+    body = "Şunlar gelirdir: 1. birinci gelir, 2. ikinci gelir, 3. üçüncü gelir."
+    f = parse_fikralar(body)[0]
+    assert [b.isaret for b in f.bentler] == ["1.", "2.", "3."]
+    assert all(b.alt_bentler == [] for b in f.bentler)
+
+
+def test_harf_ust_numara_alt_NOT_inverted_by_b3():
+    # B3 KORUMA (yanlış-pozitif): TTK 6102'de hiyerarşi 'harf ÜST > numara ALT' olabilir
+    # (a) ... 1. ... 2. ... b) ...). B3 numara-üst varsaymamalı — İLK yapısal işaret HARF ise
+    # harf ÜST kalır. Gerçek veri: 103039-55/181/960 (TTK haksız rekabet, tür değiştirme).
+    body = ("Aşağıdakiler haksız rekabettir: a) Aldatıcı reklamlar ve özellikle; "
+            "1. Başkalarını kötüleyen, 2. Yanlış bilgi veren beyanlar; "
+            "b) Sözleşmeyi ihlale yöneltme.")
+    f = parse_fikralar(body)[0]
+    # harf ÜST (ilk işaret 'a)'); numara '1. 2.' a)'nın İÇİNDE kalır (üst-bent OLMAZ)
+    assert [b.isaret for b in f.bentler] == ["a)", "b)"]
+    assert "1. Başkalarını" in f.bentler[0].text   # numara harf-bendin içinde

@@ -44,6 +44,8 @@ Python · mevzuat-mcp · embedding (aday: BGE-M3) · vektör store **açık kara
 | Mimari bugün ne durumda? | `docs/arch.md` |
 | Bu karar neden böyle? | `docs/decisions.md` |
 | Commit/branch nasıl? | `docs/commit_discipline.md` |
+| Metadata nasıl çıkarılıyor? | `docs/metadata-cikarim-raporu.md` |
+| Yapısal-sadakat düzeltme fazları? | `docs/yapisal-sadakat-master-plan.md` |
 
 ## Bugünkü durum (2026-06-18)
 Faz 0 (kurulum/yönetişim). Repo'da yalnız LICENSE + yönetişim dokümanları var; **kod henüz yok.** Sıradaki: Python iskeleti + Faz 1 (mevzuat-mcp entegrasyonu).
