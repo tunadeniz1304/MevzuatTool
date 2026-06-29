@@ -203,6 +203,30 @@ def test_enrich_strips_colonless_high_confidence_header_tail():
     assert "Yürürlük" not in m.body
 
 
+def test_enrich_strips_expanded_safe_header_tail():
+    # Z3 (FAZ 10): C1 sözlüğüne eklenen GÜVENLİ başlıklar ('Tanımlar', 'Kapsam', 'Atıflar',
+    # 'Yönetmelik(ler)', 'Ortak hükümler', 'Uygulanmayacak hükümler') gövde kuyruğuna sızınca
+    # kesilir. Bunlar neredeyse-asla-meşru-cümle-sonu-değil. Gerçek veri: 332571-2 (...kapsar. Tanımlar).
+    for tail in ("Tanımlar", "Kapsam", "Atıflar", "Yönetmelik"):
+        body = f"(1) Bu Kanunun amacı ve kapsamı ilgili hususları düzenlemektir. {tail}"
+        arts = [Article(no="1", body=body), Article(no="2", body="(1) İçerik.")]
+        tree = parse_tree("- Madde No: 1 - Amaç: (maddeId:1)\n")     # M2 tree'de YOK
+        m = _maddeler(arts, tree)[0]
+        assert m.body.endswith("düzenlemektir."), f"{tail}: kesilmedi"
+        assert tail not in m.body, f"{tail}: kuyrukta kaldı"
+
+
+def test_enrich_ambiguous_header_not_in_dictionary_not_stripped():
+    # Z3 KORUMA: belirsiz başlıklar ('Sorumluluk', 'Konusu', 'Genel olarak', 'Süre') sözlüğe
+    # EKLENMEDİ — meşru cümle sonu olabilir (over-truncation riski) + 'Genel olarak' E-tuzağı
+    # (998 kenar-numaralı '1. Genel olarak'). Bunlar gövde kuyruğunda kalsa bile KESİLMEZ.
+    body = ("(1) Bu hükme aykırı davrananlar zarardan şahsen sorumludur. Sorumluluk")
+    arts = [Article(no="5", body=body), Article(no="6", body="(1) İçerik.")]
+    tree = parse_tree("- Madde No: 5 - Ceza: (maddeId:5)\n")
+    m = _maddeler(arts, tree)[0]
+    assert m.body.endswith("Sorumluluk")            # sözlükte yok → kesilmez (over-trunc güvenliği)
+
+
 def test_enrich_high_confidence_word_midbody_not_truncated():
     # C1 OVER-TRUNCATION KORUMA: yüksek-güven kelimesi ('Yürürlük') gövde ORTASINDA/cümle-içinde
     # meşru geçerse KESİLMEZ. Yalnız son %15'te + bağımsız kuyruk ifadesi kesilir.
