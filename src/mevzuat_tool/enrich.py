@@ -98,7 +98,10 @@ _KAPANIS_BASLIK_RE = re.compile(
 # BAŞINA sızar (başlık metni split'te yok). Cümle-sonu (. ! ?) + boşluk + tek 'N.' + gövde SONU →
 # bu sarkan numara kırpılır. Madde-İÇİ 'N.' (numaralı liste/kenar-başlık) dokunulmaz çünkü desen
 # yalnız gövde SONUNU ($) hedefler. Gerçek veri: 104458-35 ('...belirtilir. 6.').
-_SARKAN_KENAR_NUMARA_RE = re.compile(r"(?<=[.!?])\s+\d+\.\s*$")
+# Z4-roman (FAZ 11): kenar-başlık ROMAN-numaralı da olabilir ('II. Orman köylülerinin...'). Sonraki
+# maddenin roman-numarası ('II.') aynı şekilde gövde kuyruğuna sızar. Gerçek veri: 104456-12
+# (Orman '...işlem yapılır. II.'), 103273-272 (TBK '...uygulanmaz. III.'). Roman: I/V/X dizisi.
+_SARKAN_KENAR_NUMARA_RE = re.compile(r"(?<=[.!?])\s+(?:\d+|[IVX]+)\.\s*$")
 
 
 def _strip_bleed(body, level_markers, madde_markers):
@@ -116,11 +119,14 @@ def _strip_bleed(body, level_markers, madde_markers):
     mk = _KAPANIS_BASLIK_RE.search(body)
     if mk is not None and mk.start() >= esik:
         cut = min(cut, mk.start())
-    # Z4: sarkan kenar-numara kuyruğu (cümle-sonu + tek 'N.' + gövde sonu).
+    body = body[:cut].strip()
+    # Z4: sarkan kenar-numara/roman kuyruğu — kapanış-başlık kesiminden SONRA uygula. 'III. Ortak
+    # hükümler'de önce 'Ortak hükümler' kesilir, geriye '... III.' kalır → sarkan roman da kırpılır
+    # (iki-aşama; 103273-272, 104456-13). Kesilen gövde üzerinde arandığı için yeni kuyruk görülür.
     sk = _SARKAN_KENAR_NUMARA_RE.search(body)
     if sk is not None:
-        cut = min(cut, sk.start())
-    return body[:cut].strip()
+        body = body[:sk.start()].strip()
+    return body
 
 
 # Gövde BAŞINDA içeriksiz-aralık yönlendirme notu: bir sonraki içeriksiz maddenin '11- (...
