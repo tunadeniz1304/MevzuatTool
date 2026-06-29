@@ -1,3 +1,74 @@
+# Gold-Set Denetimi (unique_mevzuat.json, 2026-06-25)
+
+Bağımsız gold-set (6055 mevzuat atfı: kanun-madde-fıkra-bent) ile korpus karşılaştırıldı.
+Gold = içeriksiz adres listesi (vergi/mali hukuk ağırlıklı, %54); korpus = tam içerik (31.5K madde).
+
+## Sonuç: korpus sağlam
+- **Madde coverage:** gold-işaretli 2679 maddenin %80'i dolu içerikli; %16 kapsam-dışı/filtre (doğru);
+  %1.2 (32) boş-aday → adversarial denetimde (workflow) 13 mülga + 1 yanlış-alarm + **1 gerçek bug**.
+- **Madde sayısı:** bedesten ground-truth 30.022 ↔ korpus 31.515 (+%5 = Ek/Geçici fazlası, doğru).
+- **Şişme yok:** (kanun,madde) gerçek-kopya 0; 1.371 boilerplate (Yürürlük/Yürütme) meşru (her kanunun
+  kendi maddesi) — bırakıldı (kullanıcı kararı, atıf-modunda değerli).
+
+## ✅ DÜZELTİLEN: dipnot over-truncation (commit 7754591)
+- **Bulgu:** `split_dipnot_apendiksi` gövde-BAŞINDAki yoğun `[1][2]..` referanslarını kuyruk dipnot
+  apendiksi sanıp gövdeyi kesiyordu (5335 M30: 3998ch→28ch). İlk 300 kanunda ~16 şüpheli vaka.
+- **Adversarial doğrulama (2 workflow, 24 ajan):** şüphelilerin çoğu mülga/meşru-apendiks; sadece
+  5335 M30 gerçek içerik-kaybıydı. Kalan 9 "over-truncation" → 9/9 meşru apendiks (büyük kanunların
+  değişiklik-listesi kuyruğu, doğru kesim). Tek gerçek bug düzeltildi.
+- **Fix:** son-[n]-kuyruğu uzunsa + uzun gövdede [1] öncesi metin kısaysa → gövde-içi referans,
+  apendiks değil. 106 meşru apendiks korundu (false-positive yok). 5335 M30: 28→3796ch kurtarıldı.
+
+## Açık (düşük öncelik): bent işaret-tipi uyuşmazlığı
+- Gold "bent 2" der, parser `a,b,c` etiketler (1319 M33: metinde `1. 2. 3.` var ama harf-bent
+  parse edilmiş). İÇERİK text'te TAM (kayıp değil), sadece bent ağacındaki `isaret` yanlış tip.
+- Etki: fıkra/bent-seviyesi metadata filtrelemesi; retrieval'ı (madde-seviyesi) etkilemez. Ertelendi.
+
+---
+
+# Embedding-Hazırlık Adversarial Denetimi (2026-06-25)
+
+5 bağımsız denetçi (korpus/parse/sadakat/kod/mimari) + adversarial doğrulama. OYBİRLİĞİ:
+"küçük-düzeltmeyle-hazır", embedding-engeli (go/no-go blocker) = 0. 5 yüksek-ciddiyet bulgu
+TDD ile düzeltildi (her biri 0 yanlış-pozitif + gerçek-veri kontrolü):
+
+| Bug | Önce | Sonra | Commit |
+|---|---|---|---|
+| 5: '(İptal fıkra:)' yürürlük yanlış | 5 | 0 | 015ba6e |
+| 2: lider-künye fıkra çökmesi | 36 | 0 (271 madde fıkra kazandı) | 189cf31 |
+| 4: saf-artefakt mini-chunk | 103 | 0 (79 mülga korundu) | bcf27e9 |
+| 3: Geçici/Ek hiyerarsi_yolu donor | 5781 | 0 | ce91135 |
+| 1: düzleştirilmiş tablo text-sızması | 26 | 20 (9 markdown düzeldi) | f87eb37 |
+
+Korpus: 31515→31416 chunk, max-boy 160K→110K, ID-çakışma 0, boş-text 0, pytest 170 passed.
+
+ÇÜRÜTÜLEN bulgu (denetim dürüstlüğü): "gold 'bent 2' der parser 'a,b,c' eder — bug" →
+adversarial doğrulama REDDETTİ: Türkçede bent harfle atıfta bulunulur ('(a) bendi' 2913x,
+'(2) bendi' 6x), parser DOĞRU.
+
+# Faz 5 (Embedding) Açık İşler
+
+## 🟠 Dev maddeler (>20K char) — embedding'i aşar (Faz 5'te çöz)
+- **Bulgu (2026-06-24, korpus sadakat denetimi):** 31.514 chunk'ın **26'sı (>20K char)** embedding
+  context'ini aşar. İki olgu: (1) **düz-metin ek-listeler** — `102979-12` "Yürütme" maddesine
+  binlerce kapatılan kurum/vakıf adı düz metin olarak yapışmış (160K char; markdown tablolar
+  zaten `metadata.tablolar`'a çıkarıldı ama bu listeler `strip_html` ile DÜZ metin de geldi);
+  `103011-Gecici1-*` Harçlar tarifesi. (2) **gerçek uzun maddeler** — vergi yapılandırma
+  kanunlarının "Matrah ve vergi artırımı / Diğer hükümler" upuzun ama meşru hükümleri.
+- **Karar (kullanıcı, 2026-06-24):** Faz 5'e ertelendi — çözüm embedding modeline bağlı.
+  BGE-M3 8192 token (~24K char) çoğunu alır; aşanlar için **fıkra-bazlı alt-chunk'lama**
+  (fıkra ağacı zaten `metadata.fikralar`'da hazır). Korpusun %0.08'i — erken-optimizasyon değil.
+- **Not:** markdown tablo çıkarma + sadece-tablo filtresi YAPILDI (commit 5e5e86e); dev-chunk 35→26.
+
+## 🟡 Mini-chunk'lar (<15 char) — anlamsız text (265 adet)
+- **Bulgu:** `120179-Gecici1`='(1)', `104098-Ek1`='Yürürlük' gibi 265 chunk text'i ya tek fıkra
+  işareti ya tek kelime başlık. Gerçek içerik parse'ta kayıp ya da madde gerçekten içeriksiz.
+- **Karar:** Önce dev-chunk'lar çözüldü; mini-chunk boş-içerik filtresi sonraya bırakıldı.
+- **Fix yönü:** text uzunluğu eşiği (ör. <15 char) + anlam kontrolü ile filtre; ama önce
+  bunların gerçekten içeriksiz mi yoksa parse-kaybı mı olduğunu örnekle doğrula.
+
+---
+
 # Faz 3 Follow-up Adayları (AÇIK liste)
 
 Bu liste **açık** tutulur — incelenebilir adaylar; henüz karara/plana bağlanmadı.

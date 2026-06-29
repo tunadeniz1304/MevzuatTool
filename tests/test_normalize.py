@@ -12,3 +12,19 @@ def test_strips_soft_hyphen():
     raw = "MADDE 464­- Malzeme ve iş araçları"
     assert normalize_text(raw) == "MADDE 464- Malzeme ve iş araçları"
     assert "­" not in normalize_text(raw)
+
+
+def test_unifies_minus_sign_marker():
+    # Gerçek veri: [6223] kanunu madde markerini U+2212 (MINUS SIGN) ile yazıyor: "MADDE 1 − (1)".
+    # Bu normal hyphen'e (U+002D) çevrilmeli, yoksa chunker maddeyi tanıyamaz (0 parça → çöküş).
+    raw = "MADDE 1 − (1) Bu Kanunun amacı"
+    assert normalize_text(raw) == "MADDE 1 - (1) Bu Kanunun amacı"
+    assert "−" not in normalize_text(raw)
+
+
+def test_unifies_other_dash_variants():
+    # Diğer tire-varyantları da normal hyphen'e: U+2010 hyphen, U+2011 non-breaking hyphen,
+    # U+2015 horizontal bar. (Türk mevzuat metinlerinde madde markerinde görülebilir.)
+    assert normalize_text("MADDE 2 ‐ metin") == "MADDE 2 - metin"
+    assert normalize_text("MADDE 3 ‑ metin") == "MADDE 3 - metin"
+    assert normalize_text("MADDE 4 ― metin") == "MADDE 4 - metin"
