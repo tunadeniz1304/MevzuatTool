@@ -108,6 +108,15 @@ def _bentler(text: str) -> list:
     return []
 
 
+def _fikra_yurutluk(text, bentler):
+    """Fıkra yürürlüğü (A2): bentler VARSA bent ağacından türet — tümü mülga ise fıkra mülga,
+    en az biri yürürlükte ise fıkra yürürlükte (gömülü tek '(Mülga:)' bendi tüm fıkrayı mülga
+    YAPMAZ; 103829-3). Bentsiz (düz) fıkrada davranış DEĞİŞMEZ: extract_status aynen."""
+    if bentler:
+        return "mülga" if all(b.yurutluk == "mülga" for b in bentler) else "yürürlükte"
+    return extract_status(text)
+
+
 def parse_fikralar(body: str) -> list:
     body = body.strip()
     if not body:
@@ -117,11 +126,13 @@ def parse_fikralar(body: str) -> list:
     # '(Başlığı ile Değişik:...) (1) ...'), parçalarda numaralı fıkra varsa bölmeyi koru — lider
     # künye preamble olarak no=None ilk fıkra kalır (Bug 2: ÇEK 5941 M6). Numaralı fıkra yoksa collapse.
     if not parcalar or not any(_FIKRA_NO.match(p) for p in parcalar):
-        return [Fikra(no=None, text=body, bentler=_bentler(body),
-                      yurutluk=extract_status(body))]
+        bentler = _bentler(body)
+        return [Fikra(no=None, text=body, bentler=bentler,
+                      yurutluk=_fikra_yurutluk(body, bentler))]
     out = []
     for p in parcalar:
         mno = _FIKRA_NO.match(p)
         no = mno.group(1) if mno else None
-        out.append(Fikra(no=no, text=p, bentler=_bentler(p), yurutluk=extract_status(p)))
+        bentler = _bentler(p)
+        out.append(Fikra(no=no, text=p, bentler=bentler, yurutluk=_fikra_yurutluk(p, bentler)))
     return out

@@ -135,3 +135,33 @@ def test_leading_kunye_ek_madde_fikralari():
     body = "(4/4/2015-6645/79 md.) (1) Kamu kurumlarında çalışanlar. (2) Bu kişilerin hakları."
     fs = parse_fikralar(body)
     assert [f.no for f in fs if f.no] == ["(1)", "(2)"]
+
+
+def test_fikra_status_derived_from_bentler_one_mulga_keeps_yururlukte():
+    # A2 (FAZ 1): bent-listeli fıkrada TEK gömülü '(Mülga:)' TÜM fıkrayı mülga YAPMAMALI.
+    # Fıkra statüsü bent ağacından türetilir: en az bir bent yürürlükte → fıkra yürürlükte.
+    # Gerçek veri: 103829-3 (Nüfus K. 5490 Tanımlar) — 29 bent, yalnız 'ç)' mülga, 28 canlı.
+    body = ("Bu Kanunda geçen deyimlerden; a) Bakanlık: İçişleri Bakanlığını, "
+            "b) Genel Müdürlük: Nüfus İşleri Genel Müdürlüğünü, "
+            "ç) (Mülga: 1/1/2020-1234/5 md.) "
+            "d) Nüfus kütüğü: kişisel bilgileri gösteren kütüğü, ifade eder.")
+    f = parse_fikralar(body)[0]
+    assert f.yurutluk == "yürürlükte"            # fıkra: en az bir bent canlı
+    assert f.bentler[2].isaret == "ç)"
+    assert f.bentler[2].yurutluk == "mülga"      # yalnız ç) mülga
+
+
+def test_fikra_status_derived_from_bentler_all_mulga_is_mulga():
+    # A2 koruma: TÜM bentler mülga ise fıkra GERÇEKTEN mülga kalır (tam-mülga korunur).
+    body = ("Liste: a) (Mülga: 1/1/2020-1/1 md.) "
+            "b) (Mülga: 1/1/2020-1/1 md.) "
+            "c) (Mülga: 1/1/2020-1/1 md.)")
+    f = parse_fikralar(body)[0]
+    assert [b.yurutluk for b in f.bentler] == ["mülga", "mülga", "mülga"]
+    assert f.yurutluk == "mülga"
+
+
+def test_fikra_without_bentler_status_unchanged():
+    # A2 koruma: bentsiz (düz) fıkrada davranış DEĞİŞMEZ — extract_status aynen.
+    assert parse_fikralar("Düz bir fıkra metni, yürürlükte.")[0].yurutluk == "yürürlükte"
+    assert parse_fikralar("(Mülga: 1/1/2020-1/1 md.)")[0].yurutluk == "mülga"
