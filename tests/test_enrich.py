@@ -271,6 +271,49 @@ def test_enrich_strips_sarkan_kenar_numara_tail():
     assert not m.body.rstrip().endswith("6.")        # sarkan kenar-numara kırpıldı
 
 
+def test_enrich_strips_sarkan_roman_numara_tail():
+    # Z4-roman (FAZ 11): kenar-numaralı kanunlarda madde başlığı ROMAN-numarayla başlar
+    # ('II. Orman köylülerinin...'). Sonraki maddenin roman-numarası ('II.') önceki maddenin gövde
+    # kuyruğuna tek başına sızar. Z4 (\d+) romanı yakalamaz. Gerçek veri: 104456-12 (Orman 6831
+    # '...işlem yapılır. II.'), 103273-272 (TBK '...uygulanmaz. III.').
+    body = ("Orman kadastrosu kesinleşen sahalarda ilgili hükümlere göre işlem yapılır. II.")
+    arts = [Article(no="12", body=body), Article(no="13", body="Orman köylüleri içerik.")]
+    tree = parse_tree(
+        "- Madde No: 12 - I. Orman kadastrosu: (maddeId:12)\n"
+        "- Madde No: 13 - II. Orman köylülerinin kalkındırılması: (maddeId:13)\n"
+    )
+    m = _maddeler(arts, tree)[0]
+    assert m.body.endswith("işlem yapılır.")
+    assert not m.body.rstrip().endswith("II.")       # sarkan roman-numara kırpıldı
+
+
+def test_enrich_strips_roman_then_kapanis_baslik_combined():
+    # Z4-roman + Z3 etkileşimi: kuyrukta 'III. Ortak hükümler' (roman-numara + kapanış-başlık).
+    # _strip_bleed önce 'Ortak hükümler'i keser → geriye '...uygulanmaz. III.' kalır; sonra sarkan
+    # roman 'III.' de kırpılmalı (iki-aşamalı). Gerçek veri: 103273-272 (TBK), 104456-13 (Orman).
+    # (gerçek veride gövde uzun → 'Ortak hükümler' son %15'te; kısa fixture eşik altında kalır)
+    body = ("Bu maddede düzenlenen taksitle satış ve benzeri sözleşmelere ilişkin koruyucu "
+            "hükümler kıyas yoluyla uygulanır ancak bu durumda 264 ilâ 271 inci maddeler "
+            "uygulanmaz. III. Ortak hükümler")
+    arts = [Article(no="272", body=body), Article(no="273", body="(1) İçerik.")]
+    tree = parse_tree("- Madde No: 272 - 4. Sınırlama: (maddeId:272)\n")
+    m = _maddeler(arts, tree)[0]
+    assert m.body.endswith("uygulanmaz.")            # hem 'Ortak hükümler' hem 'III.' kırpıldı
+    assert "Ortak hükümler" not in m.body
+    assert not m.body.rstrip().endswith("III.")
+
+
+def test_enrich_does_not_strip_midbody_roman():
+    # Z4-roman KORUMA: madde İÇİNDE meşru roman ('Tip II diyabet', 'III. Bölüm' cümle-içi) veya
+    # gövde fiil-cümlesiyle bitiyorsa DOKUNULMAZ — yalnız gövde-SONU tek roman 'N.' kırpılır.
+    body = ("Bu madde II. derece akrabaları da kapsar ve ilgili hükümler buna göre uygulanır.")
+    arts = [Article(no="5", body=body), Article(no="6", body="(1) Sonraki.")]
+    tree = parse_tree("- Madde No: 5 - Kapsam: (maddeId:5)\n")
+    m = _maddeler(arts, tree)[0]
+    assert "II. derece" in m.body                     # madde-içi roman KORUNDU
+    assert m.body.rstrip().endswith("uygulanır.")
+
+
 def test_enrich_does_not_strip_midbody_number():
     # Z4 KORUMA (E-tuzağı): madde İÇİNDE meşru 'N.' (kenar-numara/numaralı liste) DOKUNULMAZ —
     # yalnız gövde-SONU tek 'N.' kırpılır. Gerçek risk: TMK/FSEK '1. Genel olarak' madde başlığı
