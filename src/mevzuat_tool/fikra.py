@@ -21,12 +21,22 @@ from mevzuat_tool.chunker import extract_status
 # EK SİNYAL 2 — lider künye/başlık sonrası '(1)' fıkrası (Bug 2: ÇEK 5941 M6, '(Başlığı ile
 # Birlikte Değişik:...) (1) Karşılıksız...'). Künye ')' ile biter, ardından '(n)' + BÜYÜK harf gelir
 # (gerçek fıkra metni). Atıf ('(2) numaralı', '(2) sayılı') KÜÇÜK harf devam eder → bölünmez.
+# B1 (FAZ 2): cümle '.[1]' dipnot işaretiyle bitince '] ' + '(n)' de fıkra-başıdır — dipnot
+# işareti standart '[.:!?]\s' lookbehind'ını maskeliyordu (189065-5: '(2)' fıkrası '(1)'e gömülü).
+# AMA dipnot-']' sonrası '(n)' YALNIZ ardından BÜYÜK harf gelirse fıkra (gerçek fıkra metni başı).
+# Cümle-ortası '(…)[10] (1) zimmet, irtikâp...' (103569-28): ')' + ']' + '(1)' + KÜÇÜK harf →
+# cümle devamı, fıkra DEĞİL. Büyük-harf şartı bu yanlış-pozitifi eler.
 _FIKRA_BOL = re.compile(
     r"(?=(?:(?<=[.:!?]\s)|(?<=\n))\(\d+\)\s)"        # cümle-sonu/satır-sonu sonrası '(n)'
+    r"|(?=(?<=\]\s)\(\d+\)\s(?=[A-ZÇĞİÖŞÜ]))"        # dipnot-']' sonrası '(n)' + BÜYÜK harf
     r"|(?=(?<=\)\s)\(\d+\)\s(?=\())"                  # künye-kapanışı ')' sonrası '(n) (' (künye başı)
     r"|(?=(?<=\)\s)\(\d+\)\s(?=[A-ZÇĞİÖŞÜ]))"        # künye-')' sonrası '(n)' + BÜYÜK harf (fıkra metni)
 )
 _FIKRA_NO = re.compile(r"^(\(\d+\))")
+# B2 (FAZ 2): ekli cetvel başlığı '(N) SAYILI LİSTE/CETVEL/TARİFE' — bu noktadan SONRASI cetveldir,
+# fıkra/bent BÖLÜNMEZ (104030-5: '(1) SAYILI LİSTE ...' 862 sahte bent üretiyordu). Ayırt edici:
+# BÜYÜK-harf LİSTE/CETVEL/TARİFE (salt 'sayılı' değil — 'NNNN sayılı Kanun' atfı 6844 maddede meşru).
+_CETVEL_BAS = re.compile(r"\(\d+\)\s+SAYILI\s+(?:LİSTE|CETVEL|TARİFE)")
 # Boşluk-sınırlı (normalize-sonrası tek-satır metin) bent işaretçileri:
 _BENT_NUM_ISARET = re.compile(r"(?:(?<=\s)|^)(\d+)\.\s")
 _BENT_HARF_ISARET = re.compile(r"(?:(?<=\s)|^)([a-zçğıöşü])\)\s")
@@ -117,10 +127,8 @@ def _fikra_yurutluk(text, bentler):
     return extract_status(text)
 
 
-def parse_fikralar(body: str) -> list:
-    body = body.strip()
-    if not body:
-        return []
+def _parse_hukum(body: str) -> list:
+    """Cetvelsiz hüküm gövdesini fıkra ağacına böl (asıl mantık)."""
     parcalar = [p.strip() for p in _FIKRA_BOL.split(body) if p.strip()]
     # Numaralı fıkra HİÇ yoksa tek numarasız fıkra. İlk parça '(1)' OLMASA bile (lider künye/başlık
     # '(Başlığı ile Değişik:...) (1) ...'), parçalarda numaralı fıkra varsa bölmeyi koru — lider
@@ -136,3 +144,22 @@ def parse_fikralar(body: str) -> list:
         bentler = _bentler(p)
         out.append(Fikra(no=no, text=p, bentler=bentler, yurutluk=_fikra_yurutluk(p, bentler)))
     return out
+
+
+def parse_fikralar(body: str) -> list:
+    body = body.strip()
+    if not body:
+        return []
+    # B2: ekli cetvel '(N) SAYILI LİSTE/CETVEL/TARİFE' başlığı varsa, o noktadan sonrası cetveldir —
+    # fıkra/bent bölünmez, içerik son fıkraya eklenir (kayıp yok, sahte yapı üretilmez). Cetvel yoksa
+    # _parse_hukum aynen çalışır (cetvelsiz davranış birebir korunur).
+    mc = _CETVEL_BAS.search(body)
+    if mc and mc.start() > 0:
+        hukum, cetvel = body[:mc.start()].strip(), body[mc.start():].strip()
+        fikralar = _parse_hukum(hukum)
+        if fikralar and cetvel:
+            son = fikralar[-1]
+            fikralar[-1] = Fikra(no=son.no, text=(son.text + " " + cetvel).strip(),
+                                 bentler=son.bentler, yurutluk=son.yurutluk)
+        return fikralar
+    return _parse_hukum(body)
