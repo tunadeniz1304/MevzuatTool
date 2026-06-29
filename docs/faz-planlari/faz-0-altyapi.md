@@ -1,8 +1,16 @@
 # FAZ 0 — Altyapı (regresyon kapısı) — Alt-Plan
 
-> Master: [../yapisal-sadakat-master-plan.md](../yapisal-sadakat-master-plan.md) · Durum: 🟡 Planlanıyor
+> Master: [../yapisal-sadakat-master-plan.md](../yapisal-sadakat-master-plan.md) · Durum: ✅ **Tamam**
 > **Kod değişikliği YOK** (parser'a dokunulmaz). Yalnız: 1 yeni script + 1 yeni test dosyası.
 > Amaç: Sonraki tüm fazların "0 yanlış-pozitif" disiplinini ölçecek **regresyon altyapısını** kurmak.
+
+## ✅ SONUÇ (tamamlandı)
+- `tests/test_marginal_numbers.py` — **5 koruma testi yeşil** (TMK/TBK/TTK/FSEK/Anayasa gerçek desenleri; TTK M4 marjinal-başlık+gerçek-harf-bent vakası dahil).
+- `scripts/compare_corpus.py` — OLD-vs-NEW diff aracı; **kendine-diff = 0 smoke geçti** (status-flip 0, etkilenen-madde 0, 5 korumalı kanun 0, `--gate` exit 0).
+- Tam test: **175 passed** (170 + 5). Smoke build (`CORPUS_LIMIT=2`) parse hatasız.
+- **Araç baseline'da bile bulguları yakalıyor:** sahte-bent şüphesi 21 madde (>30 bent), bent maks 864 (104030-5 Büyükşehir cetveli), son-fıkra maks 160163 (tablo şişmesi) — FAZ 2/3/4 hedefleriyle birebir.
+
+> ⚠️ **TUZAK (gelecek fazlar için):** `build_corpus.py` çıktısı SABİT `data/corpus/korpus.jsonl`. Smoke build (`CORPUS_LIMIT`/`CORPUS_MID`) bu dosyayı **üzerine yazar** — tam korpusu siler. Her faz regresyonunda: önce `cp data/corpus/korpus.jsonl data/gold/korpus_baseline.jsonl` ile baseline al, NEW üret, compare et, sonra baseline'dan **geri yükle**. (`data/gold/` gitignore'da.)
 
 ---
 
