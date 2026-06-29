@@ -17,6 +17,7 @@
 | **FAZ 4** | Sızma (C1, C2) | SONRA | ✅ Tamam (commit'li, confusion FP=0) | [faz-4-sizma.md](faz-planlari/faz-4-sizma.md) |
 | **FAZ 5** | Dipnot/tablo (D1; D2/D3 ertelendi) | ERTELENEBİLİR | ✅ Tamam (D1 commit'li) | [faz-5-dipnot-tablo.md](faz-planlari/faz-5-dipnot-tablo.md) |
 | **FAZ 6** | Liste-kapanış cümlesi (B4) — GVK m.2 orijinal bug | SONRA | ✅ Tamam (B4 commit'li, 0 FP) | [faz-6-kapanis-cumlesi.md](faz-planlari/faz-6-kapanis-cumlesi.md) |
+| **FAZ 7** | Roman-`i)` 3. seviye sızması (Z1) — en ağır zehir | YÜKSEK | ✅ Tamam (Z1 commit'li, 0 FP) | [faz-7-roman-i-3seviye.md](faz-planlari/faz-7-roman-i-3seviye.md) |
 
 > Durum kodları: ⬜ Başlanmadı · 🟡 Planlanıyor · 🔵 Uygulanıyor · ✅ Tamam (commit'li) · ⏸️ Beklemede
 
@@ -153,7 +154,7 @@ Geçmiş desen: commit `2158ea7` (yürürlük regresyonu fıkra-ağacıyla düze
 
 | # | Sorun | Frekans | Zehir tipi | Öncelik |
 |---|---|---|---|---|
-| **Z1** | **Roman-rakam `i)` 3. seviye sızması**: `a) > i) ii)` üç-seviye hiyerarşide `i)` harf-bent (`i)`) sanılıyor; harf-listesine kardeş olarak giriyor → bir harf-bent BOŞ kalır (içeriği `i)`'ye kaçar) | **~12 üst-bent** (488 Damga, 492 Harçlar, 4458 Gümrük, 193 GVK, 3065 KDV, 5809...) | **Yapı (ağır):** boş `b)` düğümü + alt-alt-bent düzleşmesi → atıf çözülmez | **YÜKSEK** |
+| **Z1** | ✅ **ÇÖZÜLDÜ (FAZ 7)** — Roman-rakam `i)` 3. seviye sızması: `a) > i) ii)` üç-seviye hiyerarşide `i)` harf-bent sanılıyordu; harf-listesine kardeş giriyor → bir harf-bent BOŞ kalır | **5 madde düzeltildi** (488 Damga, 492 Harçlar, 4458 Gümrük×2, 193 GVK) | **Yapı (ağır):** boş düğüm + atıf çözülmez | ✅ commit `c82baee`, 0 FP |
 | **Z2** | **Kapanış-cümlesi genişletme** (B4 dar kapsamın kaçırdığı, geri-atıfsız gerçek kapanış) | **18 madde** (FN analizi: orta 7 + geniş 11 TP) | **Yapı (orta):** son bent fazla cümle içerir | ORTA |
 | **Z3** | **Bleed başlık kalanı** (sonraki-madde başlığı son fıkra/bende sızıyor; FAZ 4 C1 sonrası kalan) | ~59 (FN_geniş'te BLEED sınıfı) + C1-dışı varyantlar | **Yapı (orta):** bent sonu yabancı başlık | ORTA |
 | **Z4** | **Sarkan numara** (`...edilir. 5.` bent sonuna yapışık sonraki madde-no) | **9 madde** (103626, 104458...) | **Yapı (düşük):** madde sınırı kirli | DÜŞÜK |
@@ -165,17 +166,18 @@ Geçmiş desen: commit `2158ea7` (yürürlük regresyonu fıkra-ağacıyla düze
 > yapı bozulması**: boş/kaçmış alt-bent VEYA harf-sırası kırılması (`a)...i)...b)...i)` tekrarı,
 > veya konum-dışı `i)` = `f)` ile `g)` arasında). Bu filtreyle 329 → **12 gerçek-zehir**.
 
-### Z1 kök neden (en ağır, doğrulandı — 103017-Ek2 Damga V.)
+### Z1 kök neden + ÇÖZÜM (FAZ 7, doğrulandı — 103017-Ek2 Damga V.)
 Gerçek yapı 3 seviyeli: `2.` (üst) → `a) b) c)...` (orta) → `i) ii)` (alt-alt, roman). Parser
-`_BENT_HARF_ISARET = [a-zçğıöşü]\)` ile `i)`'yi orta-seviye harf-bent sanıyor →
+`_BENT_HARF_ISARET = [a-zçğıöşü]\)` ile `i)`'yi orta-seviye harf-bent sanıyordu →
 `a)`'nın altındaki `i)` bloğu `a)`'dan koparılıyor, `b)`'nin altındaki `i)` de `b)`'den
-koparılıyor → **`b)` bomboş** (`len=2`). B3 (FAZ 3) iki-seviye destekliyor, **3. seviye yok**.
-Ayırt edici sinyal: `i)` harf-sırasında konum-dışı (`f)` sonrası `g)` öncesi — Türk alfabesi
-`f g ğ h ı i` olduğu için `i)` orada harf-bent OLAMAZ → roman alt-bent.
+koparılıyor → **`b)` bomboş** (`len=2`). B3 (FAZ 3) iki-seviye destekliyor, **3. seviye yoktu**.
 
-**Z1 YP-riski (YÜKSEK):** roman `i)` ile meşru harf `i)` (Türk alfabesinde `h) ı) i) j)`)
-ayrımı; yanlış ayrım 998-kenar-numara benzeri toplu-bozma tuzağı. Fix öncesi E-tuzağı stili
-koruma testleri ZORUNLU. Tetik DAR olmalı: yalnız `i)` konum-dışı VEYA bir önceki harf boş.
+**ÇÖZÜM (`_roman_i_idx`, kullanıcı kararı=dar):** KESİN-ROMAN sinyali (0 FP) — `i)` işareti
+(a) TEKRARLI (harf-listede `i` bir kez olur; 2+ = roman) VEYA (b) bir önceki harf-bent BOŞ
+(`f) i)` bitişik). `_harf_alt_bentler` roman `i)`'yi işaret olarak ATLAR → dilimleme onu bir
+önceki harf-bende yapıştırır. Meşru harf-bent `i)` (`...ı) i) j)...` veya tek+dolu `...h) i) j)`)
+DOKUNULMAZ. **Kapsam kararı (kullanıcı, 2026-06-29): dar (kesin-roman), 3. seviye katmanı kurma.**
 
-> **Karar (kullanıcı, 2026-06-29):** #1 (Z1) için **önce salt analiz** — bu rapor. Fix
-> (dar: yalnız boş-bent kaçışı / tam: 3. seviye roman desteği) sonraki turda kullanıcı kararıyla.
+**Sonuç:** etkilenen 5 madde (hepsi text korundu), boş-alt-bent 3→0, 3 meşru-`i)` listesi
+korundu (0 FP). Master "şüpheli" sayılan `103006-Mukerrer298`/`103161-Gecici11` doğru biçimde
+MEŞRU çıktı, dokunulmadı. İlk tahmin "~12 üst-bent" abartılıydı — gerçek zehir 5, kalanı meşru.
