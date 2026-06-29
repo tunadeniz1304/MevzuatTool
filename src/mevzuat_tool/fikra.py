@@ -87,6 +87,20 @@ def _alt_bentler(text: str) -> list:
     return out
 
 
+def _harf_alt_bentler(text: str) -> list:
+    # B3: numaralı üst-grup (1. 2.) dilimi içindeki harf-bentleri ALT-BENT yap ('a) b) c)').
+    # Harfte sıralı-koşu şartı GEVŞEK (≥1 eşleşme) — harf işareti zaten güçlü sinyal; _alt_bentler'in
+    # dilimleme deseni (her işaretten sonrakine) yeniden kullanılır.
+    ms = list(_BENT_HARF_ISARET.finditer(text))
+    out = []
+    for i, m in enumerate(ms):
+        bas = m.start()
+        son = ms[i + 1].start() if i + 1 < len(ms) else len(text)
+        parca = text[bas:son].strip()
+        out.append(AltBent(isaret=m.group(0).strip(), text=parca, yurutluk=extract_status(parca)))
+    return out
+
+
 def _kes(text, matches):
     """matches: re.Match listesi (sıralı). Her işaretçiden bir sonrakine kadar olan dilim."""
     out = []
@@ -100,6 +114,19 @@ def _kes(text, matches):
     return out
 
 
+def _kes_iki_seviye(text, num_matches):
+    """B3: numaralı üst-grubu dilimle; her dilimdeki harf-bentleri ALT-BENT yap (iki seviye).
+    Üst-bent text'i kendi harf alt-bentlerini içerir; alt_bentler yoksa boş liste (1. tek tanım)."""
+    out = []
+    for i, m in enumerate(num_matches):
+        bas = m.start()
+        son = num_matches[i + 1].start() if i + 1 < len(num_matches) else len(text)
+        parca = text[bas:son].strip()
+        out.append(Bent(isaret=m.group(0).strip(), text=parca, yurutluk=extract_status(parca),
+                        alt_bentler=_harf_alt_bentler(parca)))
+    return out
+
+
 def _bentler(text: str) -> list:
     # Numara bentleri: yalnız 1,2,3,... ile başlayan SIRALI koşu (yıl/madde atıflarını ele).
     num_all = list(_BENT_NUM_ISARET.finditer(text))
@@ -110,6 +137,18 @@ def _bentler(text: str) -> list:
             num_seq.append(m)
             beklenen += 1
     harf = list(_BENT_HARF_ISARET.finditer(text))
+    # B3 (FAZ 3): İKİ-SEVİYELİ numaralı asıl-grup ('1. 2.' üst-bent + altında 'a) b)' alt-bent).
+    # Gümrük 4458 M3 gibi: '1. ...; 2. a)...; b)...; 3. a)...' düz tek listeye eziliyordu. DAR tetik
+    # (0 yanlış-pozitif): (A) sıralı numara-koşu ≥2, (B) en az bir numaralı dilimde harf var,
+    # (C) toplam harf ≥2, (D) İLK yapısal işaret NUMARA (numara-üst hiyerarşisi).
+    # (D) kritik: TTK 6102 (103039-55/181/960) hiyerarşi TERS — 'a) ... 1. ... 2. ... b)' (harf ÜST,
+    # numara ALT). İlk işaret harf ise B3 tetiklenmez → harf üstte kalır. Kenar-numara (TMK/TBK
+    # '1. Genel olarak') harf-bent içermez → (B) düşer; TTK M4 ('(1)' paren) sıralı '1.2.' yok → (A) düşer.
+    if (len(num_seq) >= 2 and len(harf) >= 2
+            and num_seq[0].start() < harf[0].start()):   # (D) numara harften ÖNCE = numara üst
+        ust = _kes_iki_seviye(text, num_seq)
+        if any(b.alt_bentler for b in ust):     # (B): en az bir üst-bentin altında harf alt-bent
+            return ust
     # İlk-stil-kazanır (kod-sırası; spec 'karışık stil tek fıkrada varsayılmaz').
     if harf:
         return _kes(text, harf)
