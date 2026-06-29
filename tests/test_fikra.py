@@ -165,3 +165,52 @@ def test_fikra_without_bentler_status_unchanged():
     # A2 koruma: bentsiz (düz) fıkrada davranış DEĞİŞMEZ — extract_status aynen.
     assert parse_fikralar("Düz bir fıkra metni, yürürlükte.")[0].yurutluk == "yürürlükte"
     assert parse_fikralar("(Mülga: 1/1/2020-1/1 md.)")[0].yurutluk == "mülga"
+
+
+def test_fikra_after_dipnot_bracket_is_split():
+    # B1 (FAZ 2): cümle '.[1]' dipnot işaretiyle bitince sonraki '(2)' fıkra-başı KAÇIYORDU
+    # (lookbehind '[.:!?]\s|\n|)\s' içinde ']' yok). Gerçek veri: 189065-5 — '(2)' fıkrası
+    # '(1)'e gömülüyordu. Dipnot ']' + boşluk sonrası '(n)' de fıkra-başı sayılmalı.
+    body = "(1) Kurum yükümlüdür.[1] (2) Fona ilişkin esaslar belirlenir. (3) Üçüncü fıkra."
+    fs = parse_fikralar(body)
+    assert [f.no for f in fs] == ["(1)", "(2)", "(3)"]
+
+
+def test_fikra_dipnot_bracket_does_not_oversplit():
+    # B1 KORUMA: ']' her zaman fıkra-başı tetiklemez — ardından '(n)' + boşluk gelmeli.
+    # Cümle-ortası '[1]' atıfı/dipnotu fıkra üretmez.
+    body = "(1) Hüküm[1] uygulanır ve devam eder, ikinci cümle de buradadır."
+    fs = parse_fikralar(body)
+    assert [f.no for f in fs] == ["(1)"]
+
+
+def test_fikra_dipnot_bracket_midsentence_not_split():
+    # B1 KORUMA (yanlış-pozitif): cümle ORTASINDA '(…)[10] (1) zimmet, irtikâp...' deseni —
+    # ']' öncesi nokta YOK (')' var) ve '(n)' sonrası KÜÇÜK harf (cümle devamı). Bu fıkra DEĞİL.
+    # Gerçek veri: 103569-28 (Tababet 1219) — B1 ilk hali bu cümleyi yanlışlıkla bölüyordu.
+    body = ("Hekimlik mesleğinin icrası için kasten işlenen suçlar, Anayasal düzene karşı "
+            "suçlar, (…)[10] (1) zimmet, irtikâp, rüşvet, hırsızlık suçlarından mahkûm "
+            "olmamak şarttır.")
+    fs = parse_fikralar(body)
+    assert [f.no for f in fs] == [None]   # tek numarasız fıkra; '(1)' cümle-ortası, bölünmez
+
+
+def test_ekli_cetvel_does_not_produce_fake_bentler():
+    # B2 (FAZ 2): '(N) SAYILI LİSTE/CETVEL' ekli cetveli sahte fıkra+bent üretiyordu.
+    # Gerçek veri: 104030-5 (Büyükşehir 5747 Yürütme) — '(1) Bakanlar Kurulu yürütür.'
+    # sonrası '(1) SAYILI LİSTE ADANA...' 862 sahte bent. Cetvel bölünmez; içerik korunur.
+    body = ("(1) Bu Kanun hükümlerini Bakanlar Kurulu yürütür. "
+            "(1) SAYILI LİSTE ADANA İLİ MAHALLELER 1. Köy A 2. Köy B 3. Köy C "
+            "(2) SAYILI LİSTE İZMİR İLİ MAHALLELER 1. Köy D 2. Köy E")
+    fs = parse_fikralar(body)
+    assert [f.no for f in fs] == ["(1)"]          # tek gerçek hüküm fıkrası
+    assert fs[0].bentler == []                     # cetvelden sahte bent ÜRETİLMEZ
+    assert "ADANA" in fs[0].text                   # cetvel içeriği KORUNUR (kayıp yok)
+
+
+def test_sayili_kanun_reference_not_treated_as_cetvel():
+    # B2 KORUMA (yanlış-pozitif): 'NNNN sayılı Kanun' meşru fıkra metnidir, cetvel DEĞİL —
+    # ayırt edici desen '(N) SAYILI' + BÜYÜK-harf LİSTE/CETVEL/TARİFE. 'sayılı' (6844 madde) etkilenmez.
+    body = "(1) 5237 sayılı Kanuna göre işlem yapılır. (2) İkinci fıkra hükmü uygulanır."
+    fs = parse_fikralar(body)
+    assert [f.no for f in fs] == ["(1)", "(2)"]
