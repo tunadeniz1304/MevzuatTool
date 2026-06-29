@@ -43,9 +43,57 @@ def test_enrich_asil_joins_tree():
     m = _maddeler(arts, TREE)[0]
     assert m.madde_tipi == "asil"
     assert m.madde_baslik == "Beyanname çeşitleri"
-    assert m.bolum_no == "BİRİNCİ BÖLÜM"
-    assert m.maddeId == "1279029"
+
+
+def test_enrich_strips_leading_islenmis_aralik_note():
+    # Gövde başı içeriksiz-aralık yönlendirme notu ('11- (...işlenmiştir.)') gerçek içerik DEĞİL,
+    # bir sonraki içeriksiz maddenin notu. Gövdeden kırpılmalı. Gerçek veri: 6756 M10.
+    body = ("11- (4/1/1961 tarihli ve 211 sayılı Türk Silahlı Kuvvetleri İç Hizmet Kanunu ile "
+            "ilgili olup yerine işlenmiştir.) MADDE 12 ila 20 - (26/10/1963 tarihli ve 357 sayılı "
+            "Askeri Hakimler Kanunu ile ilgili olup yerine işlenmiştir.)")
+    arts = [Article(no="10", body=body)]
+    m = _maddeler(arts, TREE)[0]
+    assert m.body == ""  # tamamı içeriksiz yönlendirme notu → boş kalmalı
+
+
+def test_enrich_keeps_real_body_with_paren_one():
+    # Koruma: '(1)' fıkrasıyla başlayan GERÇEK madde dokunulmaz (içinde MADDE N ila M atfı olsa bile).
+    # Gerçek veri: 6769 M165.
+    body = "(1) Bu Kanunun uygulanmasına ilişkin yönetmelikler Kurum tarafından yürürlüğe konulur."
+    arts = [Article(no="84", body=body)]
+    m = _maddeler(arts, TREE)[0]
+    assert m.body == body  # gerçek içerik korunur
+
+
+def test_enrich_keeps_body_starting_with_text():
+    # Koruma: düz metinle başlayan gerçek madde dokunulmaz. Gerçek veri: 6758 M37 ('Ekli (3)...').
+    body = "Ekli (3) sayılı listede yer alan kadro ihdas edilerek genel kadroya eklenmiştir."
+    arts = [Article(no="84", body=body)]
+    m = _maddeler(arts, TREE)[0]
+    assert m.body == body
+
+
+def test_madde_status_from_fikra_tree_all_mulga():
+    # Madde statüsü FIKRA AĞACINDAN: TÜM fıkralar mülga → madde mülga. Gerçek veri: 7081 M10
+    # '(1) (Mülga:...) (2) (Mülga:...)'. (Konum-kuralı bunu yürürlükte sanıyordu — kenar durum.)
+    body = "(1) (Mülga: 13/2/2018-7098/EK MADDE 1 md.) (2) (Mülga: 13/2/2018-7098/5 md.)"
+    m = _maddeler([Article(no="84", body=body)], TREE)[0]
+    assert m.yurutluk == "mülga"
+
+
+def test_madde_status_from_fikra_tree_one_active():
+    # En az bir fıkra yürürlükte → madde yürürlükte. Gerçek veri: 5651 M3 (1 fıkra iptal, gerisi var).
+    body = ("(1) Erişim sağlayıcılar esaslara uyar. (2) (İptal: Anayasa Mahkemesinin 2/10/2014 "
+            "tarihli kararı ile) (3) Yer sağlayıcı yükümlülüklere tabidir.")
+    m = _maddeler([Article(no="84", body=body)], TREE)[0]
     assert m.yurutluk == "yürürlükte"
+
+
+def test_madde_status_single_fikra_iptal_is_mulga():
+    # Tek fıkra ve o iptal → madde mülga. Gerçek veri: 7071 M34 '(1) (İptal: AYM ...)'.
+    body = "(1) (İptal: Anayasa Mahkemesinin 14/11/2019 tarihli ve E.2018/1 kararı ile)"
+    m = _maddeler([Article(no="84", body=body)], TREE)[0]
+    assert m.yurutluk == "mülga"
 
 
 def test_enrich_prefixed_inherits_section_and_flags():
@@ -79,6 +127,69 @@ def test_enrich_status_uses_clean_body_not_next_madde_bleed():
     assert m.yurutluk == "yürürlükte"
 
 
+# --- Over-truncation regresyon testleri (gerçek-veri: KVKK M23, 7405 M30, 7315 M3, 7071 M1) ---
+# Kök neden: _strip_bleed marker'ı gövdenin HER YERİNDE arıyordu; bleed yalnız SONDA olur.
+
+# Sonraki maddenin başlığı 'Başkan' — KVKK M23 gerçek deseni (başlık gövdenin İÇİNDE tekrar eder).
+_TREE_OT = parse_tree(
+    "- Madde No: 23 - Kurulun çalışma esasları: (maddeId:23)\n"
+    "- Madde No: 24 - Başkan: (maddeId:24)\n"
+)
+
+
+def test_enrich_does_not_truncate_on_midbody_marker_repeat():
+    # KVKK M23: 'Başkan' kelimesi gövde içinde geçiyor; over-truncate ETMEMELİ (tüm gövde korunur).
+    body = ("(1) Kurulun toplantı günlerini ve gündemini Başkan belirler. "
+            "(2) Kurul, başkan dâhil en az altı üye ile toplanır ve karar alır.")
+    arts = [Article(no="23", body=body), Article(no="24", body="(1) Başkan seçilir.")]
+    m = _maddeler(arts, _TREE_OT)[0]
+    assert "altı üye ile toplanır" in m.body          # gövdenin sonu KORUNDU
+    assert len(m.body) > 100                            # %96 silinmedi
+
+
+# Sonraki başlık = bu maddenin de konusu (7315 M3 'Arşiv araştırması' — gövde onunla başlıyor).
+_TREE_OT2 = parse_tree(
+    "- Madde No: 3 - Genel esaslar: (maddeId:3)\n"
+    "- Madde No: 4 - Arşiv araştırması: (maddeId:4)\n"
+)
+
+
+def test_enrich_does_not_truncate_when_body_starts_with_next_title():
+    body = "(1) Arşiv araştırması, statü gereği yapılan inceleme ve değerlendirmedir; sonuçları saklanır."
+    arts = [Article(no="3", body=body), Article(no="4", body="(1) İçerik.")]
+    m = _maddeler(arts, _TREE_OT2)[0]
+    assert "saklanır" in m.body                          # baştan kesilmedi
+    assert len(m.body) > 50
+
+
+# Tek-karakter / salt-rakam marker (7071 M1: marker '4', gövdedeki 442'de kesiyordu).
+_TREE_OT3 = parse_tree(
+    "- Madde No: 1 - Kapsam: (maddeId:1)\n"
+    "- Madde No: 2 - 4: (maddeId:2)\n"
+)
+
+
+def test_enrich_ignores_too_short_marker():
+    body = "(1) Bu Kanun, 18/3/1924 tarihli ve 442 sayılı Köy Kanununu kapsar."
+    arts = [Article(no="1", body=body), Article(no="2", body="(1) Sonraki.")]
+    m = _maddeler(arts, _TREE_OT3)[0]
+    assert "442 sayılı Köy Kanununu kapsar" in m.body    # '4'te kesilmedi
+
+
+def test_enrich_madde_marker_bleed_at_tail_IS_stripped():
+    # POZİTİF kesim (review açığı): madde-başlığı marker'ı gövdenin SON %15'inde GERÇEK kuyruk-bleed
+    # olarak dururken kırpılmalı. 'Görevler' sonraki madde başlığı, gövde sonuna sızmış.
+    body = "(1) Kurul kararları kesin niteliktedir ve derhâl uygulanır; itiraz yolu kapalıdır. Görevler"
+    arts = [Article(no="5", body=body), Article(no="6", body="(1) İçerik.")]
+    tree = parse_tree(
+        "- Madde No: 5 - Karar: (maddeId:5)\n"
+        "- Madde No: 6 - Görevler: (maddeId:6)\n"
+    )
+    m = _maddeler(arts, tree)[0]
+    assert m.body.endswith("itiraz yolu kapalıdır.")     # kuyruk-bleed 'Görevler' kırpıldı
+    assert "Görevler" not in m.body
+
+
 def test_enrich_plain_madde_missing_in_tree_does_not_crash():
     arts = [
         Article(no="84", body="ağaçtaki."),
@@ -90,6 +201,38 @@ def test_enrich_plain_madde_missing_in_tree_does_not_crash():
     assert m.bolum_no == "BİRİNCİ BÖLÜM"
 
 
+def test_enrich_propagates_kitap_and_ayirim_fields():
+    # #1+#2: KİTAP ve AYIRIM tree'den Madde'ye ayrı alan olarak akmalı (hiyerarşi_yolu'na ek olarak).
+    tree = parse_tree(
+        "- BİRİNCİ KİTAP - Kişiler Hukuku (maddeId:1)\n"
+        "  - İKİNCİ KISIM - Aile (maddeId:2)\n"
+        "    - BİRİNCİ BÖLÜM - Nişanlanma (maddeId:3)\n"
+        "      - BİRİNCİ AYIRIM - Koşullar (maddeId:4)\n"
+        "        - Madde No: 118 - Nişanlanma: (maddeId:1180)\n"
+    )
+    m = _maddeler([Article(no="118", body="(1) Nişanlanma evlenme vaadiyle olur.")], tree)[0]
+    assert m.kitap_no == "BİRİNCİ KİTAP"
+    assert m.kitap_baslik == "Kişiler Hukuku"
+    assert m.ayirim_no == "BİRİNCİ AYIRIM"
+    assert m.ayirim_baslik == "Koşullar"
+    assert m.kisim_no == "İKİNCİ KISIM"
+    assert m.bolum_no == "BİRİNCİ BÖLÜM"
+
+
+def test_enrich_titleless_levels_keep_null_baslik():
+    # null-tutma kararı: ayraçsız (başlıksız) seviyelerde *_baslik None (no-tekrarı YOK). Medeni 4721.
+    tree = parse_tree(
+        "- BİRİNCİ KİTAP (maddeId:1)\n"
+        "  - BİRİNCİ KISIM (maddeId:2)\n"
+        "    - BİRİNCİ BÖLÜM (maddeId:3)\n"
+        "      - Madde No: 8 - Hak ehliyeti: (maddeId:80)\n"
+    )
+    m = _maddeler([Article(no="8", body="(1) Her insanın hak ehliyeti vardır.")], tree)[0]
+    assert m.kitap_no == "BİRİNCİ KİTAP" and m.kitap_baslik is None
+    assert m.kisim_no == "BİRİNCİ KISIM" and m.kisim_baslik is None
+    assert m.bolum_no == "BİRİNCİ BÖLÜM" and m.bolum_baslik is None
+
+
 def test_enrich_populates_new_fields():
     arts = [Article(no="84", body="(Değişik: 9/4/2003-4842/3 md.) (1) Birinci fıkra.")]
     m = _maddeler(arts, TREE)[0]
@@ -97,7 +240,10 @@ def test_enrich_populates_new_fields():
     assert len(m.degisiklik_gecmisi) == 1
     assert m.degisiklik_gecmisi[0].kanun_no == "4842"
     assert "Değişik" not in m.body_temiz
-    assert len(m.fikralar) == 1
+    # Lider künye '(Değişik:...)' preamble (no=None) + gerçek '(1)' fıkra ayrı (Bug 2 fix):
+    # künye fıkra bölmeyi çökertmez; numaralı fıkra korunur.
+    assert [f.no for f in m.fikralar] == [None, "(1)"]
+    assert len([f for f in m.fikralar if f.no]) == 1   # 1 numaralı fıkra
 
 
 def test_enrich_separates_footnote_appendix_into_global():
