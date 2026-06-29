@@ -21,6 +21,7 @@
 | **FAZ 8** | Sarkan kenar-numara (Z4) | DAR | ✅ Tamam (Z4 commit'li, 41 madde 0 FP) | [faz-8-sarkan-kenar-numara.md](faz-planlari/faz-8-sarkan-kenar-numara.md) |
 | **FAZ 9** | Kapanış genişletme (Z2) | ORTA | ⏸️ Ertelendi (semantik, regex 0-FP veremez) | — (master Z2 notu) |
 | **FAZ 10** | Bleed başlık genişletme (Z3) | YÜKSEK | ✅ Tamam (Z3 commit'li, 30 kesim FP=0) | [faz-10-bleed-baslik.md](faz-planlari/faz-10-bleed-baslik.md) |
+| **FAZ 11** | Sarkan roman kenar-numara (Z4-roman) | DAR | ✅ Tamam (commit'li, 14 madde 0 FP) | (faz-8 alt-planı kapsar) |
 
 > Durum kodları: ⬜ Başlanmadı · 🟡 Planlanıyor · 🔵 Uygulanıyor · ✅ Tamam (commit'li) · ⏸️ Beklemede
 
@@ -161,7 +162,8 @@ Geçmiş desen: commit `2158ea7` (yürürlük regresyonu fıkra-ağacıyla düze
 | **Z2** | ⏸️ **ERTELENDİ (çözülemez-güvenle)** — Kapanış-cümlesi genişletme (B4'ün kaçırdığı geri-atıfsız kapanış). **Ölçüm (FAZ 9):** B4-imzalı 16 geri-atıfsız aday içinde kod-sinyali (kelime/fiil) FN-etiketleriyle yalnız **11/16** uyuşuyor; 1 tehlikeli yanlış (`103055-52` TP sanılıp kesilirse over-truncation FP). TP/FP ayrımı **semantik** (cümle listeye mi son bende mi atıf yapıyor), regex 0-FP veremez. B4'ün dar 3-madde kapsamı korunur. | 18 TP | **Yapı (orta)** | ⏸️ ertelendi (kullanıcı, 2026-06-29) |
 | **Z3** | ✅ **ÇÖZÜLDÜ (FAZ 10)** — Bleed başlık kalanı: C1 sözlüğüne 7 güvenli başlık eklendi (Tanımlar/Kapsam/Yönetmelik...). Confusion matrix 30 kesim, **0 FP**. | 30 madde düzeltildi | **Yapı (orta)** | ✅ commit `1a45936` |
 | **Z4** | ✅ **ÇÖZÜLDÜ (FAZ 8)** — Sarkan kenar-numara: sonraki maddenin kenar-numarası (`6.`) gövde kuyruğundan kırpılır. | **41 madde** (FSEK 16, Kooperatifler 22, KMK 3) | **Yapı (düşük)** | ✅ commit `4dcb7de`, 0 FP |
-| **Z4-roman** | 🆕 Roman kenar-numara kuyruğu (`...uygulanmaz. III.`) Z4 deseni (`\d+`) yakalamaz | ~19 madde | Gürültü (kozmetik) | ⬜ açık (düşük öncelik) |
+| **Z4-roman** | ✅ **ÇÖZÜLDÜ (FAZ 11)** — Roman kenar-numara kuyruğu (`...uygulanmaz. III.`); `_SARKAN_KENAR_NUMARA_RE`'ye `[IVX]+` dalı + iki-aşamalı kesim (Z3 sonrası). | **14 madde** (İcra-İflas, Orman, TBK) | Gürültü | ✅ commit `dd9aba6`, 0 FP |
+| **Z3-geniş** | 🆕 Sonraki maddenin TAM içeriği sızmış (`104456-13`: `III. Ormanların muhafazası ...`); `Ormanların muhafazası` C1 sözlüğünde yok → bütün madde dahil sızma | ~2 madde + kuyruk | Yapı (orta) | ⬜ açık (Z3 kalanı) |
 | **Z5** | **Append/dipnot bölgesi sızması** (`5648 SAYILI KANUNA EK...` alt-bende karışıyor) | birkaç (103983-22) | **Gürültü:** D2 alanı | DÜŞÜK (FAZ 5'te D2 ertelendi) |
 
 > **NOT — "dev bent ≠ zehir":** İlk tarama 329 ">2000 krk bent" buldu ama **307'si meşru uzun
