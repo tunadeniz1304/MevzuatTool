@@ -81,11 +81,36 @@ def _govde_tablosuz(m: Madde) -> str:
     return govde.strip()
 
 
+# D1 (FAZ 5): '[n]' dipnot işaretleri text/bent metninde gürültü. metadata.dipnotlar[] bağı
+# m.body üzerinden (enrich, _text'ten AYRI) kurulduğu için buradan silmek bağı bozmaz.
+_DIPNOT_ISARET = re.compile(r"\s*\[\d+\]")
+
+
+def _strip_dipnot_isaret(s: str) -> str:
+    """Metinden '[n]' dipnot işaretlerini temizle (öncesindeki boşluk dahil). Yalnız işaret VARSA
+    dokunur — '[n]' içermeyen metin (ve boşlukları) AYNEN korunur (gereksiz fark üretmez)."""
+    if not s or not _DIPNOT_ISARET.search(s):
+        return s
+    return re.sub(r"\s{2,}", " ", _DIPNOT_ISARET.sub("", s)).strip()
+
+
+def _fikra_dict_temiz(fd: dict) -> dict:
+    """asdict ile dict'e dönmüş fıkra ağacında tüm 'text' alanlarından '[n]' işaretini temizle."""
+    fd = dict(fd)
+    if "text" in fd:
+        fd["text"] = _strip_dipnot_isaret(fd["text"])
+    for k in ("bentler", "alt_bentler"):
+        if k in fd and isinstance(fd[k], list):
+            fd[k] = [_fikra_dict_temiz(x) for x in fd[k]]
+    return fd
+
+
 def _text(m: Madde) -> str:
-    """Embedding girdisi: başlık varsa ilk satır olarak başa, ardından temiz gövde (tablosuz)."""
-    govde = _govde_tablosuz(m)
+    """Embedding girdisi: başlık varsa ilk satır olarak başa, ardından temiz gövde (tablosuz).
+    Başlık ve gövdedeki '[n]' dipnot işaretleri temizlenir (D1)."""
+    govde = _strip_dipnot_isaret(_govde_tablosuz(m))
     if m.madde_baslik:
-        return f"{m.madde_baslik}\n{govde}".strip()
+        return f"{_strip_dipnot_isaret(m.madde_baslik)}\n{govde}".strip()
     return govde
 
 
@@ -124,7 +149,8 @@ def madde_to_chunk(m: Madde, kanun_ad: str, kanun_no: str) -> dict | None:
             "ayirim_no": m.ayirim_no, "ayirim_baslik": m.ayirim_baslik,
             "hiyerarsi_yolu": _hiyerarsi_yolu(m),
             # zengin: iç içe dataclass ağaçları asdict ile JSON-serileştirilebilir dict'e döner
-            "fikralar": [asdict(f) for f in m.fikralar],
+            # (D1: bent/fıkra/alt-bent text'lerinden '[n]' dipnot işareti temizlenir)
+            "fikralar": [_fikra_dict_temiz(asdict(f)) for f in m.fikralar],
             "degisiklik_gecmisi": [asdict(d) for d in m.degisiklik_gecmisi],
             "dipnotlar": [asdict(d) for d in m.dipnotlar],
             "tablolar": list(m.tablolar),

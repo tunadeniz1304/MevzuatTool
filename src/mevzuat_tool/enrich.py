@@ -68,6 +68,20 @@ def _bleed_markers(tree, no):
 #    → yalnız gövdenin son %15'inde ve sonrasında çok az metin kalıyorsa kes (gerçek kuyruk-bleed).
 _MADDE_MARKER_SON_ORAN = 0.85   # madde-başlığı marker'ı yalnız gövdenin son %15'inde kesebilir
 
+# C1 (FAZ 4): tree'de OLMAYAN kolonsuz kapanış-madde başlığı gövde kuyruğuna sızar (tree↔HTML
+# uyuşmazlığı; 332571-16 'Hizmet puanı'). Tree-marker yokken, YÜKSEK-GÜVEN sözlük: bunlar standart
+# kapanış-madde başlıkları — neredeyse hiç meşru cümle SONU olmaz. Korpus frekansı: Yürürlük 260,
+# Geçiş hükümleri 26, Yürütme 13, Yürürlükten kaldırılan hükümler 9... Yalnız cümle-sonu (. ! ?)
+# sonrası + gövde SONUNDA bağımsız ifade olarak dururlarsa kesilir (over-truncation güvenliği).
+_KAPANIS_BASLIK = (
+    "Yürürlük", "Yürütme", "Geçiş hükümleri", "Geçici hükümler",
+    "Yürürlükten kaldırılan hükümler", "Değiştirilen hükümler",
+    "Çeşitli hükümler", "Son hükümler",
+)
+_KAPANIS_BASLIK_RE = re.compile(
+    r"(?<=[.!?])\s+(?:" + "|".join(re.escape(b) for b in _KAPANIS_BASLIK) + r")\s*$"
+)
+
 
 def _strip_bleed(body, level_markers, madde_markers):
     cut = len(body)
@@ -80,6 +94,10 @@ def _strip_bleed(body, level_markers, madde_markers):
         idx = body.rfind(mk)
         if idx != -1 and idx >= esik:
             cut = min(cut, idx)
+    # C1: tree'de olmayan yüksek-güven kapanış-başlığı kuyruğu (cümle-sonu + gövde sonu + son %15).
+    mk = _KAPANIS_BASLIK_RE.search(body)
+    if mk is not None and mk.start() >= esik:
+        cut = min(cut, mk.start())
     return body[:cut].strip()
 
 

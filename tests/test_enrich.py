@@ -190,6 +190,45 @@ def test_enrich_madde_marker_bleed_at_tail_IS_stripped():
     assert "Görevler" not in m.body
 
 
+# --- C1/C2 (FAZ 4): kolonsuz sonraki-madde başlığı + kenar-numara kuyruk sızması ---
+
+def test_enrich_strips_colonless_high_confidence_header_tail():
+    # C1: tree'de OLMAYAN kolonsuz kapanış-başlığı ('Yürürlük') gövde kuyruğuna sızmış. Yüksek-güven
+    # sözlükle kesilir (332571-16 'Hizmet puanı' / 7474 gibi tree↔HTML uyuşmazlığı genel deseni).
+    body = ("(1) Bu maddenin uygulanmasına ilişkin hususlar yönetmelikle belirlenir. Yürürlük")
+    arts = [Article(no="16", body=body), Article(no="17", body="(1) İçerik.")]
+    tree = parse_tree("- Madde No: 16 - Atama: (maddeId:16)\n")   # M17 tree'de YOK (uyuşmazlık)
+    m = _maddeler(arts, tree)[0]
+    assert m.body.endswith("yönetmelikle belirlenir.")
+    assert "Yürürlük" not in m.body
+
+
+def test_enrich_high_confidence_word_midbody_not_truncated():
+    # C1 OVER-TRUNCATION KORUMA: yüksek-güven kelimesi ('Yürürlük') gövde ORTASINDA/cümle-içinde
+    # meşru geçerse KESİLMEZ. Yalnız son %15'te + bağımsız kuyruk ifadesi kesilir.
+    body = ("(1) Yürürlük tarihinden önce başlamış işlemler eski hükümlere tabidir ve bu husus "
+            "ilgili kurumca ayrıca duyurulur, gerekli tedbirler alınır ve uygulamaya konulur.")
+    arts = [Article(no="5", body=body), Article(no="6", body="(1) İçerik.")]
+    tree = parse_tree("- Madde No: 5 - Geçiş: (maddeId:5)\n")
+    m = _maddeler(arts, tree)[0]
+    assert "uygulamaya konulur" in m.body                 # gövde sonu KORUNDU (cümle-içi 'Yürürlük')
+
+
+def test_enrich_strips_kenar_numara_header_tail():
+    # C2: kenar-numaralı sonraki-madde başlığı ('2. Kefalet hâlinde') gövde kuyruğuna sızmış.
+    # Gerçek veri: TBK 6098 M139→M140 (103273-139). Tree-doğrulamalı kesilir.
+    body = ("(1) Alacağın takası, ancak takas edilebileceği anda zamanaşımına uğramamış olması "
+            "koşuluyla ileri sürülebilir. 2. Kefalet hâlinde")
+    arts = [Article(no="139", body=body), Article(no="140", body="(1) İçerik.")]
+    tree = parse_tree(
+        "- Madde No: 139 - 1. Genel olarak: (maddeId:139)\n"
+        "- Madde No: 140 - 2. Kefalet hâlinde: (maddeId:140)\n"
+    )
+    m = _maddeler(arts, tree)[0]
+    assert m.body.endswith("ileri sürülebilir.")
+    assert "Kefalet" not in m.body
+
+
 def test_enrich_plain_madde_missing_in_tree_does_not_crash():
     arts = [
         Article(no="84", body="ağaçtaki."),
