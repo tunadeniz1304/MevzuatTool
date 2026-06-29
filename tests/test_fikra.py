@@ -262,3 +262,121 @@ def test_harf_ust_numara_alt_NOT_inverted_by_b3():
     # harf ÜST (ilk işaret 'a)'); numara '1. 2.' a)'nın İÇİNDE kalır (üst-bent OLMAZ)
     assert [b.isaret for b in f.bentler] == ["a)", "b)"]
     assert "1. Başkalarını" in f.bentler[0].text   # numara harf-bendin içinde
+
+
+# ---- Z1 (FAZ 7): roman-rakam 'i)' 3. seviye sızması ----
+
+def test_roman_i_does_not_split_letter_bent_repeated():
+    # Z1: '2. ... a) ... i) ... b) ... i) ...' — roman 'i)' (3. seviye) harf-bent SANILIYOR,
+    # harf-listesine kardeş giriyor → 'b)' BOŞ kalır (içeriği i)'ye kaçar). Gerçek veri: 103017-Ek2
+    # (Damga V. 488 Ek 2). KESİN-ROMAN sinyali: 'i)' TEKRARLI (harf-listede imkansız).
+    # Doğru davranış: roman 'i)' bir önceki harf-bendin metnine dahil; ayrı alt-bent OLMAZ.
+    # (B3 iki-seviye tetiklensin diye '1.' + '2.' çoklu numara — gerçek veride de öyle.)
+    body = ("Tanımlar şunlardır: "
+            "1. Birinci grup tek tanım, "
+            "2. Aşağıdaki işlemler müstesnadır: "
+            "a) Yatırım programında yer alan yatırımlar. i) Tam mükellef olması hâlinde uygulanır. "
+            "b) Savunma sanayii işlemleri. i) Onaylanan projeler kapsamındadır. "
+            "c) İmalatçı firmaların işlemleri.")
+    f = parse_fikralar(body)[0]
+    ust = f.bentler[1]                                   # '2.' üst-bent
+    altler = ust.alt_bentler
+    # roman 'i)' ayrı alt-bent OLMAZ; yalnız harf-bentler a) b) c)
+    assert [a.isaret for a in altler] == ["a)", "b)", "c)"]
+    # 'b)' BOŞ kalmaz — kendi içeriğini korur, roman i) metni a)/b)'ye gömülü kalır
+    assert "Savunma sanayii" in altler[1].text
+    assert all(len(a.text) > 5 for a in altler)          # hiçbir harf-bent boş değil
+    # içerik kaybı yok: roman i) metni üst-bent / harf-bent text'inde korunur
+    assert "Tam mükellef" in ust.text
+    assert "Onaylanan projeler" in ust.text
+
+
+def test_roman_i_empty_preceding_letter_bent():
+    # Z1: 'i)' TEK ama önceki harf-bent BOŞ ('f)' içeriksiz, çünkü içeriği i)'ye kaçtı) → roman.
+    # Gerçek veri: 103044-227 (Gümrük 4458). 'e) f) i) g) h)' — f) boş, i) f)'nin alt-bendi.
+    body = ("Şartlar şunlardır: "
+            "1. Birinci grup tek tanım, "
+            "2. İkinci grup şartları: "
+            "a) Vatandaş olmak, b) Ehliyet sahibi olmak, c) Haklardan mahrum olmamak, "
+            "d) Suç işlememiş olmak, e) Çıkarılmamış olmak, "
+            "f) i) Hukuk veya iktisat dallarında öğrenim görmüş olmak, "
+            "g) Staj yapmış olmak, h) Sınavı kazanmış olmak.")
+    f = parse_fikralar(body)[0]
+    ust = f.bentler[1]                                   # '2.' üst-bent
+    altler = ust.alt_bentler
+    # roman 'i)' ayrı alt-bent OLMAZ; f) içeriğini korur (boş kalmaz)
+    assert "i)" not in [a.isaret for a in altler]
+    assert [a.isaret for a in altler] == ["a)", "b)", "c)", "d)", "e)", "f)", "g)", "h)"]
+    fbent = [a for a in altler if a.isaret == "f)"][0]
+    assert "Hukuk veya iktisat" in fbent.text             # i) içeriği f)'ye dahil
+    assert len(fbent.text) > 5                             # f) boş değil
+
+
+def test_legit_harf_i_not_treated_as_roman():
+    # Z1 KORUMA (yanlış-pozitif): MEŞRU harf-bent 'i)' (Türkçe alfabe '...h) i) j)...', ı) atlanmış)
+    # roman SANILMAMALI. Gerçek veri: 103111-89 (GVK), 103006-Mukerrer298 (VUK). Sinyal: 'i)' TEK +
+    # komşular dolu + sıralı (önceki harf boş DEĞİL). Bu liste düz harf-bent kalır, dokunulmaz.
+    body = ("Yapılan harcamalar: "
+            "1. Birinci grup tek tanım, "
+            "2. İkinci grup harcamaları: "
+            "a) Ulusal projelere, b) Kültür birikimine, c) Sanat eserlerine, d) Tarihî yapılara, "
+            "e) Müzelere, f) Taşınmaz varlıklara, g) Envanter çalışmalarına, h) Kültür varlıklarına, "
+            "i) Somut olmayan mirasa, j) Kütüphane ve müzelere ilişkin harcamalar.")
+    f = parse_fikralar(body)[0]
+    ust = f.bentler[1]                                   # '2.' üst-bent
+    isaretler = [a.isaret for a in ust.alt_bentler]
+    # 'i)' MEŞRU harf-bent — listede kendi yerinde kalır (roman sanılıp silinmez)
+    assert "i)" in isaretler
+    assert isaretler == ["a)", "b)", "c)", "d)", "e)", "f)", "g)", "h)", "i)", "j)"]
+
+
+# ---- B4 (FAZ 6): liste-kapanış cümlesi son bentten ayrılır ----
+
+def test_liste_kapanis_cumlesi_son_bende_yapismaz():
+    # B4: liste-açan fıkrada (giriş ':' ile biter) kısa-enum bentlerden sonra gelen GERİ-ATIFLI
+    # kapanış cümlesi son bende yapışmamalı — o bende AİT DEĞİL, tüm fıkrayı kapatan hükümdür.
+    # Gerçek veri: 103111-2 (GVK 193 Madde 2, Gelirin unsurları).
+    body = ("Gelire giren kazanç ve iratlar şunlardır: 1. Ticarî kazançlar, 2. Ziraî kazançlar, "
+            "3. Ücretler, 4. Serbest meslek kazançları, 5. Gayrimenkul sermaye iratları, "
+            "6. Menkul sermaye iratları, 7. Diğer kazanç ve iratlar. Bu Kanunda aksine hüküm "
+            "olmadıkça, yukarıda yazılı kazanç ve iratlar gelirin tespitinde gerçek ve safi "
+            "miktarları ile nazara alınır.")
+    f = parse_fikralar(body)[0]
+    assert [b.isaret for b in f.bentler] == ["1.", "2.", "3.", "4.", "5.", "6.", "7."]
+    # son bent SADECE kendi öğesini içerir; kapanış cümlesi AYRILMIŞ
+    assert f.bentler[-1].text == "7. Diğer kazanç ve iratlar."
+    assert "nazara alınır" not in f.bentler[-1].text
+    # kapanış cümlesi fıkra metninde KORUNUR (kayıp yok — embedding girdisi bozulmaz)
+    assert "nazara alınır" in f.text
+
+
+def test_ancak_istisna_cumlesi_bentte_kalir():
+    # B4 KORUMA (yanlış-pozitif — ilk denemenin 46 FP'sinin sınıfı): bendin MEŞRU ikinci cümlesi
+    # ('Ancak ...', 'Bu oran ...') geri-atıflı kapanış DEĞİL — bende KALMALI, kesilmemeli.
+    body = ("Aşağıdaki hâllerde uygulanır: a) Birinci hâl, b) İkinci hâl, c) Üçüncü hâl. "
+            "Ancak, bu hâllerde idare ayrıca gerekçe göstermek zorundadır.")
+    f = parse_fikralar(body)[0]
+    assert [b.isaret for b in f.bentler] == ["a)", "b)", "c)"]
+    assert "Ancak" in f.bentler[-1].text          # istisna cümlesi son bentte KALIR
+
+
+def test_coklu_cumle_bent_kirpilmaz():
+    # B4 KORUMA: bentler zaten çok-cümleli (noktayla biten tam paragraflar) — liste-açan kısa-enum
+    # imzası TUTMAZ (önceki bentler virgülle bitmiyor) → kırpma TETİKLENMEZ.
+    body = ("Şu işlemler yapılır: a) İlk işlem tamamlanır. Sonra rapor düzenlenir. "
+            "b) İkinci işlem yapılır. Bu Kanunda aksine hüküm olsa bile uygulanır.")
+    f = parse_fikralar(body)[0]
+    assert [b.isaret for b in f.bentler] == ["a)", "b)"]
+    # önceki bent 'a)' kısa-enum değil (noktayla bitiyor) → imza tutmaz → son bent dokunulmaz
+    assert "uygulanır" in f.bentler[-1].text
+
+
+def test_geri_atifsiz_baslik_bu_fixle_kirpilmaz():
+    # B4 KORUMA: son öğeden sonra gelen ifade GERİ-ATIFSIZ bir başlık/isim tamlaması ise
+    # (fiil-cümlesi değil) bu fix kesmez — başlık sızması ayrı sorun (FAZ 4 C1).
+    body = ("Birlik organları şunlardır: 1. Genel Kurul, 2. Yönetim Kurulu, "
+            "3. Denetleme Kurulu. Birlik Genel Kurulunun oluşumu")
+    f = parse_fikralar(body)[0]
+    assert [b.isaret for b in f.bentler] == ["1.", "2.", "3."]
+    # 'Birlik Genel Kurulunun oluşumu' geri-atıf değil → B4 kesmez (son bentte kalır)
+    assert "Birlik Genel Kurulunun oluşumu" in f.bentler[-1].text
