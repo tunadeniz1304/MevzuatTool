@@ -144,12 +144,15 @@ _MULGA_MARKER = re.compile(
 #      — 657 Ek2/Geçici1 gibi maddelerde künye tarihle başlar; anahtar kelime aramak yetmez.
 # Gerçek içerik (künye-olmayan metin VEYA '(1)' fıkra numarası) başlayınca biter. Fıkra '(1)'
 # rakam+KAPANIŞ-paren'dir ')' → tarih-künye '(2/1/1961-...' slash'lı, karışmaz.
+# E3 (FAZ 14): künyeler arası '[n]' dipnot işareti ('(Ek:...)[13] (Mülga:...)') künye-dizisini
+# kırıyordu → '(Mülga:)' açılış-bölgesinde sayılmıyor, madde yanlış 'yürürlükte' (103912-Gecici14).
+# Künyeden sonra opsiyonel '[n]' dipnot işaretine izin ver (B1/D1 dipnot dersinin yürürlük versiyonu).
 _KUNYE_PAREN = re.compile(
     r"(?i)^\s*(?:\(\s*(?:"
     r"(?:değişik|ek|mülga|iptal|yeniden\s+düzenleme|mülga\s+ve\s+yeniden)"   # (a) anahtar kelime
     r"|\d+/\d+/\d+"                                                          # (b) tarih ile başlar
     r"|\d+\s+sayılı"                                                         # (c) 'NNNN sayılı ...'
-    r")[^)]*\)\s*)+"
+    r")[^)]*\)(?:\s*\[\d+\])?\s*)+"                                          # ')' + opsiyonel '[n]' + boşluk
 )
 
 
