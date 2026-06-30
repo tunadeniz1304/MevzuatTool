@@ -226,6 +226,15 @@ def test_madde_basi_iptal_kunyesi_tam_mulga():
     assert extract_status(body, konum_duyarli=True) == "mülga"
 
 
+def test_dipnot_isareti_kunye_blogunu_bolmez_tam_mulga():
+    # E3 (FAZ 14): açılış künye bloğunda künyeler arası '[n]' dipnot işareti girince _KUNYE_PAREN
+    # diziyi kıramıyor → '(Mülga:)' açılış-bölgesinde sayılmıyor → madde yanlışlıkla 'yürürlükte'.
+    # Gerçek veri: 103912-Gecici14 (5429) — '(Ek:...)[13] (Mülga: KHK-703/99 md.)' MÜLGA olmalı.
+    from mevzuat_tool.chunker import extract_status
+    body = "(Ek : 13/6/2012-6327/42 md.)[13] (Mülga: 2/7/2018 - KHK-703/99 md.) Yürürlük"
+    assert extract_status(body, konum_duyarli=True) == "mülga"
+
+
 def test_iptal_fikra_kunyesi_tam_mulga():
     # Bug 5: '(İptal fıkra:)' / '(İptal birinci fıkra:)' AYM kararı da iptal sinyalidir ('İptal:'
     # gibi). Madde GERÇEK İÇERİK olmadan SADECE bu künyelerden ibaretse (tüm fıkraları iptal) → mülga.
