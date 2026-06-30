@@ -26,17 +26,37 @@ from mevzuat_tool.chunker import extract_status
 # AMA dipnot-']' sonrası '(n)' YALNIZ ardından BÜYÜK harf gelirse fıkra (gerçek fıkra metni başı).
 # Cümle-ortası '(…)[10] (1) zimmet, irtikâp...' (103569-28): ')' + ']' + '(1)' + KÜÇÜK harf →
 # cümle devamı, fıkra DEĞİL. Büyük-harf şartı bu yanlış-pozitifi eler.
+# E1 (FAZ 12): GÖMÜLÜ FIKRA — bent listesi NOKTASIZ bitip ardından '(n) BÜYÜK' yeni fıkra geldiğinde
+# (örn. '...Diğer gelirler (2) Başkanlığın giderleri şunlardır:') standart lookbehind (nokta/']'/'')')
+# bunu kaçırıyordu → fıkra (2) fıkra (1)'in bentler[]'ine gömülü kalıyordu (102934-7, 103463-4 — gömülü
+# (5)(6)(7), gömülü '(Mülga)' yürürlük filtresini de bozar). Kelime-karakteri (harf/rakam) sonrası
+# '(n)' + BÜYÜK harf de fıkra-başı sayılır. ATIF-FP KORUMASI (kritik): '(n)' sonrası SIRA-SAYISI
+# ('Birinci'..'Onuncu') veya atıf-öncülü ('Bu', 'Aynı', 'Söz', 'Yukarıdaki', 'Anılan', 'İlgili',
+# 'Sözü', 'Bir') gelirse bu önceki fıkraya GÖNDERMEdir ('(2) Birinci fıkrada...'), fıkra DEĞİL —
+# bölünmez (negatif-lookahead). 70 desen → 15 atıf elenir, ~55 gerçek gömülü fıkra ayrılır.
+# E1 atıf-öncülleri: '(n)' sonrası bunlardan biri gelirse fıkra DEĞİL, önceki fıkraya göndermedir.
+#  - sıra sayıları + 'Bu/Aynı/Söz...' = fıkra atfı ('(2) Birinci fıkrada...')
+#  - SAYILI/Sayılı/Numaralı = ekli-belge atfı (CONFUSION MATRIX'ten 15 FP'nin kök neceni):
+#    '(2) SAYILI ÇİZELGE...', '(2) Numaralı Alt Bendindeki Ceza...', '(15) Sayılı listede...',
+#    '(2) Numaralı Kroki...' (103907-39, 103037-20, 104731-1, 105180-16). Bunlar cetvel/tablo/liste
+#    numarasıdır, hüküm fıkrası değil. (B2 cetvel-guard'ın gömülü-fıkra dalındaki karşılığı.)
+_ATIF_ONCUL = (r"(?:Birinci|İkinci|Üçüncü|Dördüncü|Beşinci|Altıncı|Yedinci|Sekizinci|Dokuzuncu|"
+               r"Onuncu|Bu|Aynı|Söz|Sözü|Yukarıdaki|Anılan|İlgili|Bir|SAYILI|Sayılı|Numaralı)\b")
 _FIKRA_BOL = re.compile(
     r"(?=(?:(?<=[.:!?]\s)|(?<=\n))\(\d+\)\s)"        # cümle-sonu/satır-sonu sonrası '(n)'
     r"|(?=(?<=\]\s)\(\d+\)\s(?=[A-ZÇĞİÖŞÜ]))"        # dipnot-']' sonrası '(n)' + BÜYÜK harf
     r"|(?=(?<=\)\s)\(\d+\)\s(?=\())"                  # künye-kapanışı ')' sonrası '(n) (' (künye başı)
     r"|(?=(?<=\)\s)\(\d+\)\s(?=[A-ZÇĞİÖŞÜ]))"        # künye-')' sonrası '(n)' + BÜYÜK harf (fıkra metni)
+    r"|(?=(?<=[\wçğıöşüÇĞİÖŞÜ]\s)\(\d+\)\s(?=[A-ZÇĞİÖŞÜ])(?!" + _ATIF_ONCUL + r"))"
+                                                      # E1: kelime sonrası '(n)' + BÜYÜK (gömülü fıkra);
+                                                      # atıf/ekli-belge öncülü değilse böl
 )
 _FIKRA_NO = re.compile(r"^(\(\d+\))")
-# B2 (FAZ 2): ekli cetvel başlığı '(N) SAYILI LİSTE/CETVEL/TARİFE' — bu noktadan SONRASI cetveldir,
-# fıkra/bent BÖLÜNMEZ (104030-5: '(1) SAYILI LİSTE ...' 862 sahte bent üretiyordu). Ayırt edici:
-# BÜYÜK-harf LİSTE/CETVEL/TARİFE (salt 'sayılı' değil — 'NNNN sayılı Kanun' atfı 6844 maddede meşru).
-_CETVEL_BAS = re.compile(r"\(\d+\)\s+SAYILI\s+(?:LİSTE|CETVEL|TARİFE)")
+# B2 (FAZ 2): ekli cetvel başlığı '(N) SAYILI LİSTE/CETVEL/TARİFE/ÇİZELGE/KROKİ' — bu noktadan
+# SONRASI cetveldir, fıkra/bent BÖLÜNMEZ (104030-5: '(1) SAYILI LİSTE ...' 862 sahte bent üretiyordu).
+# Ayırt edici: BÜYÜK-harf belge türü (salt 'sayılı' değil — 'NNNN sayılı Kanun' atfı 6844 maddede meşru).
+# FAZ 12 confusion matrix: ÇİZELGE/KROKİ eklendi (103907-39 '(1) SAYILI ÇİZELGE', 105180-16 kroki).
+_CETVEL_BAS = re.compile(r"\(\d+\)\s+SAYILI\s+(?:LİSTE|CETVEL|TARİFE|ÇİZELGE|KROKİ)")
 # Boşluk-sınırlı (normalize-sonrası tek-satır metin) bent işaretçileri:
 _BENT_NUM_ISARET = re.compile(r"(?:(?<=\s)|^)(\d+)\.\s")
 _BENT_HARF_ISARET = re.compile(r"(?:(?<=\s)|^)([a-zçğıöşü])\)\s")

@@ -99,3 +99,4 @@ docs/reviews/
 
 # ---- PDF'ler kapsam dışı (CLAUDE.md ilke 2) — yalnız yerel analiz, versiyonlanmaz ----
 *.pdf
+.tmp_adversarial/
