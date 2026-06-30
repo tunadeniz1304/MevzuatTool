@@ -442,6 +442,18 @@ def test_embedded_fikra_does_not_split_sayili_cetvel_reference():
         assert [f.no for f in fs] == ["(1)"], f"ekli-belge atfı bölündü: {body[:50]!r}"
 
 
+def test_cyrillic_homoglyph_bent_marker_recognized():
+    # E2 (FAZ 13, İKİNCİL A): bent işareti Kiril homoglyph ('а' U+0430 Latin 'a' yerine) olunca
+    # _BENT_HARF_ISARET tanımıyor → bent kaybolur (dizi 'b)' ile başlıyor). Gerçek veri: 103907-8
+    # (Disiplin cezaları 7068, fıkra (3)/(4)'te 'а) Üç günlüğe kadar...' bent a) kayıp).
+    body = ("Cezalar şunlardır: а) Üç günlüğe kadar aylıktan kesme, "
+            "b) Dört aya kadar durdurma, c) Meslekten çıkarma")
+    f = parse_fikralar(body)[0]
+    # Kiril 'а)' Latin 'a)' olarak tanınır → 3 bent (a) b) c))
+    assert [b.isaret for b in f.bentler] == ["a)", "b)", "c)"]
+    assert "Üç günlüğe" in f.bentler[0].text
+
+
 def test_cetvel_cizelge_after_sentence_end_not_split():
     # E1/B2 FP-KORUMA: cümle-SONU (nokta) sonrası gelen '(N) SAYILI ÇİZELGE/KROKİ' de cetveldir,
     # bölünmemeli. B2 _CETVEL_BAS yalnız LİSTE/CETVEL/TARİFE tanıyordu, ÇİZELGE/KROKİ eksikti.
