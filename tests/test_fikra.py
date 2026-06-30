@@ -380,3 +380,75 @@ def test_geri_atifsiz_baslik_bu_fixle_kirpilmaz():
     assert [b.isaret for b in f.bentler] == ["1.", "2.", "3."]
     # 'Birlik Genel Kurulunun oluşumu' geri-atıf değil → B4 kesmez (son bentte kalır)
     assert "Birlik Genel Kurulunun oluşumu" in f.bentler[-1].text
+
+
+# ---- E1 (FAZ 12): gömülü fıkra — noktasız bent-öğesi sonrası '(N)' fıkrası ----
+
+def test_embedded_fikra_after_dotless_bent_is_split():
+    # E1: bent listesi noktasız bitiyor ('Diğer gelirler'), ardından '(2) ... şunlardır:' yeni fıkra
+    # geliyor ama _FIKRA_BOL cümle-sonu noktası beklediği için bölemiyor → fıkra (2) fıkra (1)'in
+    # bentler[]'ine gömülü kalıyor. Gerçek veri: 102934-7 (Uludağ 7432, gelir+gider fıkraları).
+    body = ("(1) Başkanlığın gelirleri şunlardır: a) Hazine yardımları b) Marka gelirleri "
+            "c) Diğer gelirler (2) Başkanlığın giderleri şunlardır: a) Etüt giderleri "
+            "b) Personel giderleri c) Diğer giderler")
+    fs = parse_fikralar(body)
+    assert [f.no for f in fs] == ["(1)", "(2)"]        # gömülü (2) ayrıldı
+    assert [b.isaret for b in fs[0].bentler] == ["a)", "b)", "c)"]   # fıkra (1): gelir bentleri
+    assert [b.isaret for b in fs[1].bentler] == ["a)", "b)", "c)"]   # fıkra (2): gider bentleri
+    assert "giderleri" in fs[1].text and "gelirleri" not in fs[1].text
+
+
+def test_embedded_multiple_fikralar_split():
+    # E1: birden çok fıkra gömülü ('(5)','(6)','(7)'). Gerçek veri: 103463-4 (TBMM Teşkilat 6253).
+    body = ("(4) Yasama birimleri bağlıdır: a) Kanunlar Başkanlığı b) Bütçe Başkanlığı "
+            "c) Tutanak Başkanlığı (5) İdari birimler bağlıdır: a) İnsan Kaynakları "
+            "b) Destek Hizmetleri (6) Bilgi birimleri bağlıdır: a) Araştırma Başkanlığı")
+    fs = parse_fikralar(body)
+    assert [f.no for f in fs] == ["(4)", "(5)", "(6)"]
+
+
+def test_paren_number_reference_after_word_not_split():
+    # E1 FP-KORUMA (KRİTİK): '(N)' sonrası ATIF-kelimesi (Birinci/İkinci.../Bu/Aynı/Söz) gelirse
+    # bu önceki fıkraya GÖNDERME, yeni fıkra DEĞİL — bölünmemeli. Gerçek atıf vakaları:
+    # 104443-6 '(2) Birinci...', 104439-5 '(2) Bu...', 104314-3 '(9) Sekizinci...'.
+    for atif in ["Birinci fıkrada", "İkinci fıkra", "Bu Kanunun", "Aynı maddede",
+                 "Söz konusu", "Sekizinci fıkra hükmü", "Yukarıdaki bentlerde"]:
+        body = f"(1) Bir hüküm metni vardır ve devam eder (2) {atif} belirtilen esaslar uygulanır."
+        fs = parse_fikralar(body)
+        assert [f.no for f in fs] == ["(1)"], f"atıf bölündü: {atif!r}"
+
+
+def test_dotless_embedded_does_not_break_normal_sentence_split():
+    # E1 GERİYE-UYUM: cümle-sonu noktalı normal fıkra bölme BİREBİR korunur (yeni dal bozmamalı).
+    body = "(1) Birinci fıkra hükmü. (2) İkinci fıkra hükmü. (3) Üçüncü fıkra hükmü."
+    fs = parse_fikralar(body)
+    assert [f.no for f in fs] == ["(1)", "(2)", "(3)"]
+
+
+def test_embedded_fikra_does_not_split_sayili_cetvel_reference():
+    # E1 FP-KORUMA (confusion matrix'ten — 15 FP'nin kök neceni): '(N)' sonrası 'SAYILI ÇİZELGE/
+    # CETVEL/LİSTE/KROKİ' veya 'Numaralı Alt Bent/Kroki' gelirse bu ekli-belge atfıdır, fıkra DEĞİL.
+    # Gerçek FP'ler: 103907-39 '(2) SAYILI ÇİZELGE...', 103037-20 '(2) Numaralı Alt Bendindeki...',
+    # 104731-1 '(15) Sayılı listede...', 105180-16 '(2) Numaralı Kroki...'.
+    fp_desenler = [
+        "(1) Bu Kanunu yürütür (2) SAYILI ÇİZELGE EMNİYET PERSONELİ DİSİPLİN CEZA PUANLARI",
+        "(1) Ceza uygulanır (2) Numaralı Alt Bendindeki Ceza Miktarları 324.273 1.621.847",
+        "(1) Köyleri kapsar (15) Sayılı listede adları yazılı köyleri kapsamak üzere",
+        "(1) Yürütür (2) Numaralı Kroki Kanunun Adı uygulanır",
+        "(1) Esaslar uygulanır (1) Sayılı Cetvelin 5 sayılı açıklama esasları uygulanır",
+    ]
+    for body in fp_desenler:
+        fs = parse_fikralar(body)
+        assert [f.no for f in fs] == ["(1)"], f"ekli-belge atfı bölündü: {body[:50]!r}"
+
+
+def test_cetvel_cizelge_after_sentence_end_not_split():
+    # E1/B2 FP-KORUMA: cümle-SONU (nokta) sonrası gelen '(N) SAYILI ÇİZELGE/KROKİ' de cetveldir,
+    # bölünmemeli. B2 _CETVEL_BAS yalnız LİSTE/CETVEL/TARİFE tanıyordu, ÇİZELGE/KROKİ eksikti.
+    # Gerçek FP: 103907-39 ('...yürütür. (1) SAYILI ÇİZELGE... (2) SAYILI ÇİZELGE...').
+    body = ("(1) Bu Kanun hükümlerini Bakanlar Kurulu yürütür. "
+            "(1) SAYILI ÇİZELGE EMNİYET PERSONELİ DİSİPLİN CEZA PUANLARI cinsi puanı "
+            "(2) SAYILI ÇİZELGE JANDARMA PERSONELİ ceza puanları")
+    fs = parse_fikralar(body)
+    assert [f.no for f in fs] == ["(1)"]      # tek hüküm fıkrası; çizelgeler sahte fıkra üretmez
+    assert "ÇİZELGE" in fs[0].text             # çizelge içeriği korunur (kayıp yok)
