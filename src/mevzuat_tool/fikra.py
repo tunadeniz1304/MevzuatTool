@@ -276,8 +276,22 @@ def _parse_hukum(body: str) -> list:
     return out
 
 
+# E2 (FAZ 13, İKİNCİL A): bent işareti Kiril homoglyph ('а)' U+0430 yerine Latin 'a)') olunca
+# _BENT_HARF_ISARET tanımıyor → bent kayboluyor (103907-8 fıkra (3)/(4): 'а) Üç günlüğe...' bent a)
+# kayıp). İŞARET KONUMUNDAKİ Kiril harfi Latin'e çevir (а→a, с→c, е→e, о→o, р→p, у→y, х→x; büyük de).
+# YALNIZ 'Kiril)' deseni (bent/alt-bent işareti) — metin içeriğindeki Kiril'e dokunmaz (FP yok,
+# çünkü desen tek-harf + ')' + işaret konumu). Türkçe metinde 'harf)' yalnız bent işaretidir.
+_KIRIL_LATIN = str.maketrans("асеорухАСЕОРУХ", "aceopyxACEOPYX")
+_KIRIL_ISARET = re.compile(r"(?:(?<=\s)|^)([асеорухАСЕОРУХ])\)")
+
+
+def _normalize_kiril_isaret(body: str) -> str:
+    """Bent-işareti konumundaki ('<boşluk>Kiril)') Kiril harfi Latin'e çevir. İçerik dokunulmaz."""
+    return _KIRIL_ISARET.sub(lambda m: m.group(1).translate(_KIRIL_LATIN) + ")", body)
+
+
 def parse_fikralar(body: str) -> list:
-    body = body.strip()
+    body = _normalize_kiril_isaret(body.strip())
     if not body:
         return []
     # B2: ekli cetvel '(N) SAYILI LİSTE/CETVEL/TARİFE' başlığı varsa, o noktadan sonrası cetveldir —
