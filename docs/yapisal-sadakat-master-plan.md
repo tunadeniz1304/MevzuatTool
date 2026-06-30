@@ -24,7 +24,7 @@
 | **FAZ 11** | Sarkan roman kenar-numara (Z4-roman) | DAR | ✅ Tamam (commit'li, 14 madde 0 FP) | (faz-8 alt-planı kapsar) |
 | **FAZ 12** | Gömülü fıkra (E1) — adversarial denetimle bulundu | YÜKSEK | ✅ Tamam (commit'li, 75 madde, confusion matrix) | [faz-12-gomulu-fikra.md](faz-planlari/faz-12-gomulu-fikra.md) |
 | **FAZ 13** | Kiril harf (E2) ✅ + Ezilmiş-liste (SINIF 2) ⏸️ertelendi | ÇOK YÜKSEK | ✅ Kiril commit'li (1 madde 0 FP); SINIF 2 ertelendi (semantik) | [faz-13-ezilmis-liste-kiril.md](faz-planlari/faz-13-ezilmis-liste-kiril.md) |
-| **FAZ 14** | Bleed geçici-madde (SINIF 3) + İKİNCİL B | DÜŞÜK | 🔵 Uygulanıyor | (bu oturum) |
+| **FAZ 14** | Yürürlük dipnot-künye (E3) ✅ + bleed-text/İKİNCİL B kozmetik | DÜŞÜK | ✅ E3 commit'li (2 madde mülga, 0 FP); bleed-text fix-yok | [faz-14-bleed-gecici-yururluk.md](faz-planlari/faz-14-bleed-gecici-yururluk.md) |
 
 > Durum kodları: ⬜ Başlanmadı · 🟡 Planlanıyor · 🔵 Uygulanıyor · ✅ Tamam (commit'li) · ⏸️ Beklemede
 
