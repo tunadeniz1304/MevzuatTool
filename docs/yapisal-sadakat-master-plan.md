@@ -168,6 +168,7 @@ Geçmiş desen: commit `2158ea7` (yürürlük regresyonu fıkra-ağacıyla düze
 | **Z4-roman** | ✅ **ÇÖZÜLDÜ (FAZ 11)** — Roman kenar-numara kuyruğu (`...uygulanmaz. III.`); `_SARKAN_KENAR_NUMARA_RE`'ye `[IVX]+` dalı + iki-aşamalı kesim (Z3 sonrası). | **14 madde** (İcra-İflas, Orman, TBK) | Gürültü | ✅ commit `dd9aba6`, 0 FP |
 | **Z3-geniş** | 🆕 Sonraki maddenin TAM içeriği sızmış (`104456-13`: `III. Ormanların muhafazası ...`); `Ormanların muhafazası` C1 sözlüğünde yok → bütün madde dahil sızma | ~2 madde + kuyruk | Yapı (orta) | ⬜ açık (Z3 kalanı) |
 | **Z5** | **Append/dipnot bölgesi sızması** (`5648 SAYILI KANUNA EK...` alt-bende karışıyor) | birkaç (103983-22) | **Gürültü:** D2 alanı | DÜŞÜK (FAZ 5'te D2 ertelendi) |
+| **Z6** | 🆕 **Parantez-atıf bent'e yapışması** (`104055-8`: `d) (c) ve (ç) bentlerinde...` → `d)` bendi `(`'de kesilip BOŞ kalıyor, `(c)`/`(ç)` atfı ayrı "bent" sanılıyor). E1'in (gömülü fıkra) bent-seviyesi kardeşi; `_ATIF_ONCUL` mantığının bent-içi versiyonu gerekir. | **1 madde** (korpus-sağlık taraması, 2026-07-01) | **Yapı (düşük):** `d)`+`e)` boş düğüm; AMA `text` sağlam (kelime kaybı 0), retrieval'a etki minimal | ⏸️ ertelendi (frekans 1 + riskli: `d) (c)` atıf ile `d) (1)` meşru-fıkra ayrımı semantik, 0-FP veremez; E-tuzağı riski) |
 
 > **NOT — "dev bent ≠ zehir":** İlk tarama 329 ">2000 krk bent" buldu ama **307'si meşru uzun
 > hüküm** (`102965-11` KDV istisna `c)` 2080 krk = gerçekten uzun, yapı sağlam; `103689-135`
