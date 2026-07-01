@@ -72,13 +72,26 @@ Güncel mimari görünümü: [`arch.md`](arch.md). Kapsam: [`mevzuat-mvp-kapsam.
 
 ---
 
-## Açık Kararlar (karar bekliyor)
+## Faz 5-6 Kararları
 
 ## ADR-0007 — Embedding modeli
-- **Durum:** Önerildi (aday: BGE-M3)
-- **Bağlam:** Türkçe hukuki metinde iyi performans + hybrid/multilingual destek gerekiyor.
-- **Seçenekler:** BGE-M3 (multilingual, dense+sparse+colbert), Türkçe fine-tuned alternatifler, OpenAI-uyumlu API embedding.
-- **Karar:** Faz 5'te kesinleşecek. Şimdilik aday BGE-M3.
+- **Durum:** ✅ Kabul edildi — **BGE-M3** (2026-07-01)
+- **Bağlam:** Türkçe hukuki metinde iyi performans + hybrid + uzun-madde bağlamı gerekiyor.
+- **Seçenekler (hazır modeller incelendi):**
+  - **BGE-M3** (BAAI): XLM-RoBERTa-large, 1024 boyut, **8192 token bağlam**, dense+sparse tek model.
+  - **YTÜ COSMOS turkish-e5-large:** TR-MTEB retrieval 77.0 (en yüksek Türkçe) AMA **512 token** (uzun madde kesilir), yalnız dense.
+  - **EmbeddingGemma-300m:** 2048 bağlam, Matryoshka, verimli AMA yalnız dense.
+  - **Mursit/Mecellem** (ModernBERT-large): hukuk-özel AMA sözleşmede güçlü, **kanun/regülasyonda orta** (56.87 genel); yalnız dense.
+- **Karar:** **BGE-M3.** Gerekçe (projeye özgü):
+  1. **Hybrid native** — dense+sparse tek modelden çıkar → Qdrant'a ikisi birden verilir (CLAUDE.md
+     hybrid=MVP tanımı). Diğer adaylar yalnız dense → BM25 ayrı kurulurdu.
+  2. **8192 bağlam** — korpusta uzun maddeler (p90≈1754 krk, bazıları 100k+). COSMOS'un 512 sınırı
+     uzun maddenin sonunu (ceza/istisna/yürürlük fıkraları) keser → retrieval kör noktası. BGE-M3'te tam sığar.
+  3. **Supervisor uyumu** — elindeki kanun-embedder-v1 zaten BGE-M3 fine-tune → ileride "hazır vs
+     fine-tuned" A/B testi aynı aile içinde adil yapılır.
+- **Sonuç:** COSMOS Türkçe skoru (77.0) daha yüksek AMA 512-bağlam + dense-only bizim uzun-madde +
+  hybrid ihtiyacında elenir. Kesin doğrulama Faz 6'da **kendi gold setiyle A/B** (benchmark değil, öz-veri).
+- **Not (kapsam):** Hazır BGE-M3'ü *kullanmak* retrieval → kapsam-içi. Fine-tune *etmek* kapsam-dışı (gelecek).
 
 ## ADR-0008 — Vektör store: Qdrant vs pgvector
 - **Durum:** ✅ Kabul edildi — **Qdrant** (2026-07-01)
