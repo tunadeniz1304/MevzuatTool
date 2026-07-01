@@ -81,12 +81,23 @@ Güncel mimari görünümü: [`arch.md`](arch.md). Kapsam: [`mevzuat-mvp-kapsam.
 - **Karar:** Faz 5'te kesinleşecek. Şimdilik aday BGE-M3.
 
 ## ADR-0008 — Vektör store: Qdrant vs pgvector
-- **Durum:** Açık (karar bekliyor)
+- **Durum:** ✅ Kabul edildi — **Qdrant** (2026-07-01)
 - **Bağlam:** Hybrid arama + metadata filtreleme + dockerize kolaylığı gerekiyor.
 - **Seçenekler:**
   - **Qdrant:** native hybrid/payload filtre, ayrı servis.
   - **pgvector:** tek Postgres, SQL filtre, sparse için ek iş.
-- **Karar:** Faz 5 öncesi verilecek. (Etkilenen: arch.md, docker-compose.)
+- **Karar:** **Qdrant.** Gerekçe (projeye özgü):
+  1. **Hybrid native** — CLAUDE.md'nin çekirdek gereksinimi (dense+BM25) MVP'nin *tanımı*, opsiyon değil.
+     Qdrant dense+sparse vektörü tek "point"te tutar, füzyonu (RRF) Query API'de dahili yapar.
+     pgvector yalnız dense; BM25 + füzyon elle kurulurdu (ekstra faz + kendi RRF debug'ı).
+  2. **Yürürlük filtresi = MVP-kritik** — payload filtre arama *sırasında* çalışır (mülga maddeler
+     HNSW'de hiç değerlendirmeye alınmaz; "önce getir sonra ele → 10'dan az kalır" sorunu yok).
+  3. **Dockerize** — tek servis hazır image (CLAUDE.md docker-compose hedefi).
+  4. **Ölçek/hız** — HNSW (approx. nearest neighbor); 31k'da anlık, milyonlara logaritmik ölçeklenir.
+  5. **Öğrenme** — hybrid API füzyon mantığını açıkça gösterir (kavramsal şeffaflık).
+- **Sonuç:** docker-compose'a Qdrant servisi; ingestion korpus.jsonl → dense+sparse+payload point.
+  pgvector "zaten Postgres olan sistem" senaryosu için reddedildi (bizde bağımsız retrieval servisi).
+- **Not (kapsam):** Qdrant'ı *kullanmak* retrieval'ın parçası → kapsam-içi. Embedder *eğitmek* değil.
 
 ## ADR-0009 — Reranker kullanılacak mı?
 - **Durum:** Açık (opsiyonel) — **metriğe bağlı**
