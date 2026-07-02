@@ -113,9 +113,26 @@ Güncel mimari görünümü: [`arch.md`](arch.md). Kapsam: [`mevzuat-mvp-kapsam.
 - **Not (kapsam):** Qdrant'ı *kullanmak* retrieval'ın parçası → kapsam-içi. Embedder *eğitmek* değil.
 
 ## ADR-0009 — Reranker kullanılacak mı?
-- **Durum:** Açık (opsiyonel) — **metriğe bağlı**
-- **Bağlam:** Reranker precision/sıralamayı (precision@k, nDCG, MRR) artırır ama recall'u artırmaz; gecikme + komplekslik ekler.
-- **Karar:** MVP'de **opsiyonel kalır.** Önce reranker'sız (hybrid) ölç; precision metrikleri (precision@k / nDCG / MRR) hedefin altındaysa ekle, yeterliyse ekleme. Karar **metriklere göre** verilir.
+- **Durum:** ✅ Kabul (değerli) — **entegrasyon ertelendi** (2026-07-02)
+- **Bağlam:** Reranker precision/sıralamayı (nDCG, MRR, R@k) artırır ama recall'u artırmaz; gecikme + komplekslik ekler.
+- **Ölçüm (2000 sorgu, altınset gold, bge-reranker-v2-m3, Colab T4):**
+
+  | Metrik | Hybrid | +Reranker | Fark |
+  |---|---|---|---|
+  | Recall@1 | 0.4325 | 0.4525 | +0.020 |
+  | Recall@5 | 0.5980 | 0.6530 | **+0.055** |
+  | Recall@10 | 0.6665 | 0.7060 | +0.040 |
+  | MRR | 0.5099 | 0.5411 | +0.031 |
+  | nDCG@10 | 0.5432 | 0.5784 | +0.035 |
+
+- **Karar:** Reranker **işe yarıyor** (tüm metrikler pozitif, R@5 +0.055, R@10 +0.040 → literatür tipik +0.03-0.08
+  aralığında). Hybrid+reranker R@10=0.706. **Kalıcı kullanılacak
+  AMA entegrasyon ERTELENDİ:** yerel 4GB VRAM'de embed(BGE-M3)+reranker sığmıyor → PC'de yavaş/kırılgan.
+  Entegrasyon Faz 6/7'de (Colab-üretimi veya reranker'ı ayrı servis/GPU'da). Şimdilik ölçüm-kanıtı + scriptler saklı.
+- **Not:** Reranker'ın R@50 tavanı (0.775) tam yakalanmadı (+0.04/0.11) — çok-versiyonlu kanun (6111 vs 7326)
+  reranker'ı da yanıltıyor. Yol: gold'da aynı-konu toleransı VEYA fine-tune (future).
+- **Araçlar:** `scripts/metrik_rerank.py` (yerel deney), `scripts/rerank_hazirla.py` + `colab/rerank_olc.ipynb`
+  (Colab ölçüm: PC top-50 aday çıkarır → Colab T4 reranker'lar). Ağır iş bulutta, retriever PC'de.
 
 ---
 
