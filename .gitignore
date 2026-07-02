@@ -106,3 +106,9 @@ docs/reviews/
 altınset/
 prompted_view.html
 *_view.html
+
+# ---- Colab veri çıktıları (büyük, versiyonlanmaz; scriptler/notebook'lar kalır) ----
+colab/*.jsonl
+colab/*.npy
+colab/*.json
+colab/outputs/
