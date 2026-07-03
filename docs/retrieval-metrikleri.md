@@ -46,6 +46,39 @@ Sorgu → BGE-M3 embed (PC, transformers CLS) → Qdrant hybrid (dense+sparse) �
 - Reranker **işe yarıyor** (ADR-0009). Hybrid+reranker R@10=0.706 → fine-tuned 0.76'ya 5 puan.
 - **Entegrasyon ertelendi** (yerel 4GB VRAM darboğazı); ölçüm-kanıtı + scriptler saklı.
 
+## Füzyon: WSUM_050 (RRF yerine) — UYGULANDI
+
+RRF sadece sırayı kullanır, gerçek skoru atar. WSUM_050 = skorları min-max normalize edip
+0.5*dense + 0.5*sparse topla → skor-büyüklüğü bilgisi korunur. `search_qdrant.py` bunu kullanır.
+
+| Metrik | RRF | WSUM_050 | Fark |
+|---|---|---|---|
+| R@1 | 0.4215 | 0.4595 | **+0.038** |
+| R@5 | 0.6080 | 0.6285 | +0.021 |
+| R@10 | 0.6790 | 0.6855 | +0.007 |
+| R@20 | 0.7320 | 0.7335 | +0.002 |
+| R@50 | 0.7830 | 0.7810 | -0.002 |
+| R@100 | 0.8095 | 0.8110 | +0.002 |
+| MRR | 0.5094 | 0.5382 | **+0.029** |
+| nDCG@10 | 0.5456 | 0.5696 | **+0.024** |
+
+Kazanç **üst sıralarda** yoğun (R@1/MRR/nDCG), geniş recall değişmez → WSUM sıralamayı iyileştirir,
+recall tavanını değil. **Sıfır maliyet** (füzyon yöntemi, aynı model/retriever). → kalıcı uygulandı.
+
+## Ablasyon: dense vs sparse vs hybrid (2000 sorgu)
+
+| Yöntem | R@1 | R@5 | R@10 | MRR | nDCG |
+|---|---|---|---|---|---|
+| DENSE_ONLY | 0.4030 | 0.5665 | 0.6375 | 0.4747 | 0.5136 |
+| SPARSE_ONLY | 0.2555 | 0.4470 | 0.5260 | 0.3382 | 0.3830 |
+| HYBRID_RRF | 0.4225 | 0.6105 | 0.6690 | 0.5026 | 0.5427 |
+
+- **Hybrid en iyi:** dense-only'dan +0.032, sparse-only'dan +0.143 → CLAUDE.md "hybrid=doğru vanilla" ispatı.
+- **Dense baskın bacak:** anlam (0.637) >> kelime (0.526). Hukuk-resmi-dilde embedding belirleyici.
+  İleride iyileştirme → dense'i güçlendir (fine-tune) en çok kazandırır.
+- **Çok-versiyon toleransı (ölçüm 1):** KATI 0.667 ≈ AYNI_AD 0.667 (artefakt değil). AMA aynı-KANUN
+  toleransı R@10=0.889 → sistem doğru KANUNU %89 buluyor, doğru MADDEYİ %67. Darboğaz = madde ayrımı.
+
 ## Bilinen sınırlar / gözlemler
 
 1. **Çok-versiyonlu kanun:** Yapılandırma kanunları (6111/6736/7143/7326/7440 m.5) aynı konu, farklı no.

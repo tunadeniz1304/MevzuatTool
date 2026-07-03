@@ -26,7 +26,7 @@ SEED = 4721
 N = int(sys.argv[1]) if len(sys.argv) > 1 else 2000
 TOP_K = 100          # en geniş k
 ADAY_K = 200         # her bacak bu kadar aday (RRF top-100 için bol)
-KLER = [1, 5, 10, 50, 100]
+KLER = [1, 5, 10, 20, 50, 75, 100]
 
 
 def hybrid_ara(client, sorgu, flt):
