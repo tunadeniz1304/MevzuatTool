@@ -72,26 +72,87 @@ Güncel mimari görünümü: [`arch.md`](arch.md). Kapsam: [`mevzuat-mvp-kapsam.
 
 ---
 
-## Açık Kararlar (karar bekliyor)
+## Faz 5-6 Kararları
 
 ## ADR-0007 — Embedding modeli
-- **Durum:** Önerildi (aday: BGE-M3)
-- **Bağlam:** Türkçe hukuki metinde iyi performans + hybrid/multilingual destek gerekiyor.
-- **Seçenekler:** BGE-M3 (multilingual, dense+sparse+colbert), Türkçe fine-tuned alternatifler, OpenAI-uyumlu API embedding.
-- **Karar:** Faz 5'te kesinleşecek. Şimdilik aday BGE-M3.
+- **Durum:** ✅ Kabul edildi — **BGE-M3** (2026-07-01)
+- **Bağlam:** Türkçe hukuki metinde iyi performans + hybrid + uzun-madde bağlamı gerekiyor.
+- **Seçenekler (hazır modeller incelendi):**
+  - **BGE-M3** (BAAI): XLM-RoBERTa-large, 1024 boyut, **8192 token bağlam**, dense+sparse tek model.
+  - **YTÜ COSMOS turkish-e5-large:** TR-MTEB retrieval 77.0 (en yüksek Türkçe) AMA **512 token** (uzun madde kesilir), yalnız dense.
+  - **EmbeddingGemma-300m:** 2048 bağlam, Matryoshka, verimli AMA yalnız dense.
+  - **Mursit/Mecellem** (ModernBERT-large): hukuk-özel AMA sözleşmede güçlü, **kanun/regülasyonda orta** (56.87 genel); yalnız dense.
+- **Karar:** **BGE-M3.** Gerekçe (projeye özgü):
+  1. **Hybrid native** — dense+sparse tek modelden çıkar → Qdrant'a ikisi birden verilir (CLAUDE.md
+     hybrid=MVP tanımı). Diğer adaylar yalnız dense → BM25 ayrı kurulurdu.
+  2. **8192 bağlam** — korpusta uzun maddeler (p90≈1754 krk, bazıları 100k+). COSMOS'un 512 sınırı
+     uzun maddenin sonunu (ceza/istisna/yürürlük fıkraları) keser → retrieval kör noktası. BGE-M3'te tam sığar.
+  3. **Supervisor uyumu** — elindeki kanun-embedder-v1 zaten BGE-M3 fine-tune → ileride "hazır vs
+     fine-tuned" A/B testi aynı aile içinde adil yapılır.
+- **Sonuç:** COSMOS Türkçe skoru (77.0) daha yüksek AMA 512-bağlam + dense-only bizim uzun-madde +
+  hybrid ihtiyacında elenir. Kesin doğrulama Faz 6'da **kendi gold setiyle A/B** (benchmark değil, öz-veri).
+- **Not (kapsam):** Hazır BGE-M3'ü *kullanmak* retrieval → kapsam-içi. Fine-tune *etmek* kapsam-dışı (gelecek).
 
 ## ADR-0008 — Vektör store: Qdrant vs pgvector
-- **Durum:** Açık (karar bekliyor)
+- **Durum:** ✅ Kabul edildi — **Qdrant** (2026-07-01)
 - **Bağlam:** Hybrid arama + metadata filtreleme + dockerize kolaylığı gerekiyor.
 - **Seçenekler:**
   - **Qdrant:** native hybrid/payload filtre, ayrı servis.
   - **pgvector:** tek Postgres, SQL filtre, sparse için ek iş.
-- **Karar:** Faz 5 öncesi verilecek. (Etkilenen: arch.md, docker-compose.)
+- **Karar:** **Qdrant.** Gerekçe (projeye özgü):
+  1. **Hybrid native** — CLAUDE.md'nin çekirdek gereksinimi (dense+BM25) MVP'nin *tanımı*, opsiyon değil.
+     Qdrant dense+sparse vektörü tek "point"te tutar, füzyonu (RRF) Query API'de dahili yapar.
+     pgvector yalnız dense; BM25 + füzyon elle kurulurdu (ekstra faz + kendi RRF debug'ı).
+  2. **Yürürlük filtresi = MVP-kritik** — payload filtre arama *sırasında* çalışır (mülga maddeler
+     HNSW'de hiç değerlendirmeye alınmaz; "önce getir sonra ele → 10'dan az kalır" sorunu yok).
+  3. **Dockerize** — tek servis hazır image (CLAUDE.md docker-compose hedefi).
+  4. **Ölçek/hız** — HNSW (approx. nearest neighbor); 31k'da anlık, milyonlara logaritmik ölçeklenir.
+  5. **Öğrenme** — hybrid API füzyon mantığını açıkça gösterir (kavramsal şeffaflık).
+- **Sonuç:** docker-compose'a Qdrant servisi; ingestion korpus.jsonl → dense+sparse+payload point.
+  pgvector "zaten Postgres olan sistem" senaryosu için reddedildi (bizde bağımsız retrieval servisi).
+- **Not (kapsam):** Qdrant'ı *kullanmak* retrieval'ın parçası → kapsam-içi. Embedder *eğitmek* değil.
 
 ## ADR-0009 — Reranker kullanılacak mı?
-- **Durum:** Açık (opsiyonel) — **metriğe bağlı**
-- **Bağlam:** Reranker precision/sıralamayı (precision@k, nDCG, MRR) artırır ama recall'u artırmaz; gecikme + komplekslik ekler.
-- **Karar:** MVP'de **opsiyonel kalır.** Önce reranker'sız (hybrid) ölç; precision metrikleri (precision@k / nDCG / MRR) hedefin altındaysa ekle, yeterliyse ekleme. Karar **metriklere göre** verilir.
+- **Durum:** ✅ Kabul (değerli) — **entegrasyon ertelendi** (2026-07-02)
+- **Bağlam:** Reranker precision/sıralamayı (nDCG, MRR, R@k) artırır ama recall'u artırmaz; gecikme + komplekslik ekler.
+- **Ölçüm (2000 sorgu, altınset gold, bge-reranker-v2-m3, Colab T4):**
+
+  | Metrik | Hybrid | +Reranker | Fark |
+  |---|---|---|---|
+  | Recall@1 | 0.4325 | 0.4525 | +0.020 |
+  | Recall@5 | 0.5980 | 0.6530 | **+0.055** |
+  | Recall@10 | 0.6665 | 0.7060 | +0.040 |
+  | MRR | 0.5099 | 0.5411 | +0.031 |
+  | nDCG@10 | 0.5432 | 0.5784 | +0.035 |
+
+- **Karar:** Reranker **işe yarıyor** (tüm metrikler pozitif, R@5 +0.055, R@10 +0.040 → literatür tipik +0.03-0.08
+  aralığında). Hybrid+reranker R@10=0.706 → supervisor fine-tuned 0.76'ya 5 puan yaklaşır. **Kalıcı kullanılacak
+  AMA entegrasyon ERTELENDİ:** yerel 4GB VRAM'de embed(BGE-M3)+reranker sığmıyor → PC'de yavaş/kırılgan.
+  Entegrasyon Faz 6/7'de (Colab-üretimi veya reranker'ı ayrı servis/GPU'da). Şimdilik ölçüm-kanıtı + scriptler saklı.
+- **Not:** Reranker'ın R@50 tavanı (0.775) tam yakalanmadı (+0.04/0.11) — çok-versiyonlu kanun (6111 vs 7326)
+  reranker'ı da yanıltıyor. Yol: gold'da aynı-konu toleransı VEYA fine-tune (future).
+- **Araçlar:** `scripts/metrik_rerank.py` (yerel deney), `scripts/rerank_hazirla.py` + `colab/rerank_olc.ipynb`
+  (Colab ölçüm: PC top-50 aday çıkarır → Colab T4 reranker'lar). Ağır iş bulutta, retriever PC'de.
+
+---
+
+## ADR-0010 — Füzyon: 3-bacak WSUM (dense + BGE-sparse + klasik BM25)
+- **Durum:** ✅ Kabul + **uygulandı** (2026-07-03)
+- **Bağlam:** ADR-0006 hybrid = dense + BGE-M3 öğrenilmiş sparse (`sparse_linear.pt`). Klasik BM25 (istatistiksel
+  TF-IDF) hiç denenmemişti. Darboğaz teşhisi: sistem doğru KANUNU %89, doğru MADDEYİ %67 buluyor → madde-ayrımı
+  zayıf. Klasik BM25 nadir/ayırt-edici terimlere IDF ile yüksek ağırlık verir → tam bu darboğaza aday.
+- **Ölçüm (2000 sorgu, altınset gold, korpus `text` üzerine rank_bm25, metadata YOK → sızıntısız):**
+  - **ÖLÇÜM 4:** klasik BM25 tek başına R@10=0.588 → BGE-sparse'ı (0.526) geçti. 3-bacak (eşit) her metrikte
+    +0.03/+0.05.
+  - **ÖLÇÜM 5 (ağırlık taraması):** EŞİT (.33/.33/.34) R@1=0.491/MRR=0.562 en iyi; DENSE_AĞIR (.50/.20/.30)
+    R@10=0.710 en iyi. DENSE_BM25 (BGE-sparse=0) en zayıf → **üç bacak da katkı yapıyor.**
+- **Karar:** 3-bacak WSUM füzyon, **EŞİT ağırlık** (0.33/0.33/0.34). EŞİT seçildi çünkü R@1/R@5/MRR
+  (üst-sıra kalitesi) en iyi + ağırlık-ayarı yok → altınsete overfit yok. Farklar küçük (~0.01), ağırlığa
+  tolerant. Yolculuk: RRF 0.667 → WSUM_050 0.685 → 3-bacak 0.700 (R@10), R@1 0.436→0.491.
+- **Sonuç:** `search_qdrant.py` başlangıçta korpus `text`'ten BM25 index kurar (27954 yürürlükte madde, ~3sn),
+  her sorguda 3 bacağı normalize + eşit ağırlıkla toplar. GPU/fine-tune YOK. rank_bm25 saf-Python bağımlılık.
+  BGE-sparse atılamaz (ölçümle kanıtlı). Reranker (ADR-0009) hâlâ üstüne eklenebilir (ayrık kazanç).
+- **Araçlar:** `scripts/metrik_bm25.py` (ÖLÇÜM 4), `scripts/metrik_bm25_agirlik.py` (ÖLÇÜM 5).
 
 ---
 
