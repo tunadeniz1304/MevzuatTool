@@ -136,6 +136,26 @@ Güncel mimari görünümü: [`arch.md`](arch.md). Kapsam: [`mevzuat-mvp-kapsam.
 
 ---
 
+## ADR-0010 — Füzyon: 3-bacak WSUM (dense + BGE-sparse + klasik BM25)
+- **Durum:** ✅ Kabul + **uygulandı** (2026-07-03)
+- **Bağlam:** ADR-0006 hybrid = dense + BGE-M3 öğrenilmiş sparse (`sparse_linear.pt`). Klasik BM25 (istatistiksel
+  TF-IDF) hiç denenmemişti. Darboğaz teşhisi: sistem doğru KANUNU %89, doğru MADDEYİ %67 buluyor → madde-ayrımı
+  zayıf. Klasik BM25 nadir/ayırt-edici terimlere IDF ile yüksek ağırlık verir → tam bu darboğaza aday.
+- **Ölçüm (2000 sorgu, altınset gold, korpus `text` üzerine rank_bm25, metadata YOK → sızıntısız):**
+  - **ÖLÇÜM 4:** klasik BM25 tek başına R@10=0.588 → BGE-sparse'ı (0.526) geçti. 3-bacak (eşit) her metrikte
+    +0.03/+0.05.
+  - **ÖLÇÜM 5 (ağırlık taraması):** EŞİT (.33/.33/.34) R@1=0.491/MRR=0.562 en iyi; DENSE_AĞIR (.50/.20/.30)
+    R@10=0.710 en iyi. DENSE_BM25 (BGE-sparse=0) en zayıf → **üç bacak da katkı yapıyor.**
+- **Karar:** 3-bacak WSUM füzyon, **EŞİT ağırlık** (0.33/0.33/0.34). EŞİT seçildi çünkü R@1/R@5/MRR
+  (üst-sıra kalitesi) en iyi + ağırlık-ayarı yok → altınsete overfit yok. Farklar küçük (~0.01), ağırlığa
+  tolerant. Yolculuk: RRF 0.667 → WSUM_050 0.685 → 3-bacak 0.700 (R@10), R@1 0.436→0.491.
+- **Sonuç:** `search_qdrant.py` başlangıçta korpus `text`'ten BM25 index kurar (27954 yürürlükte madde, ~3sn),
+  her sorguda 3 bacağı normalize + eşit ağırlıkla toplar. GPU/fine-tune YOK. rank_bm25 saf-Python bağımlılık.
+  BGE-sparse atılamaz (ölçümle kanıtlı). Reranker (ADR-0009) hâlâ üstüne eklenebilir (ayrık kazanç).
+- **Araçlar:** `scripts/metrik_bm25.py` (ÖLÇÜM 4), `scripts/metrik_bm25_agirlik.py` (ÖLÇÜM 5).
+
+---
+
 ## Karar Şablonu (yeni ADR için kopyala)
 ```
 ## ADR-XXXX — <başlık>

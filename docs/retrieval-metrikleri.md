@@ -8,13 +8,14 @@
 
 ```
 Korpus (31.416 madde) → BGE-M3 embed (Colab, dense+sparse) → Qdrant (dense+sparse+payload)
-Sorgu → BGE-M3 embed (PC, transformers CLS) → Qdrant hybrid (dense+sparse) → RRF füzyon
-        + yürürlük filtresi (yalnız yürürlükte maddeler)
+Sorgu → BGE-M3 embed (PC) → dense + BGE-sparse (Qdrant) + klasik-BM25 (rank_bm25)
+        → 3-bacak WSUM füzyon (EŞİT) + yürürlük filtresi (yalnız yürürlükte)
 ```
 
 - **Embedder:** BGE-M3 (ADR-0007). Dense=CLS pooling (FlagEmbedding ile birebir, 0.9998 aynı-metin).
-- **Vektör store:** Qdrant (ADR-0008), RRF füzyon native.
-- **Sparse:** BGE-M3 öğrenilmiş sparse (klasik BM25 değil; `sparse_linear.pt`). BM25 kıyası: future.
+- **Vektör store:** Qdrant (ADR-0008), dense + BGE-sparse.
+- **Füzyon:** 3-bacak WSUM (dense + BGE-sparse + klasik-BM25), min-max normalize ağırlıklı toplam.
+  Evrim: RRF → WSUM_050 (2-bacak) → 3-bacak EŞİT (ÖLÇÜM 4-5). Klasik BM25 = rank_bm25, korpus text.
 
 ## Baseline: Hybrid (dense+sparse+RRF), 2000 sorgu
 
@@ -65,6 +66,42 @@ RRF sadece sırayı kullanır, gerçek skoru atar. WSUM_050 = skorları min-max 
 Kazanç **üst sıralarda** yoğun (R@1/MRR/nDCG), geniş recall değişmez → WSUM sıralamayı iyileştirir,
 recall tavanını değil. **Sıfır maliyet** (füzyon yöntemi, aynı model/retriever). → kalıcı uygulandı.
 
+## 3-bacak: + klasik BM25 (ÖLÇÜM 4-5) — UYGULANDI
+
+Şu ana kadarki "sparse" = BGE-M3 **öğrenilmiş** sparse. Klasik **BM25** (rank_bm25, TF-IDF+doc-len)
+korpus `text` üzerine ayrı bir üçüncü bacak olarak eklendi (metadata YOK → sızıntı yok). Klasik BM25
+nadir/ayırt-edici terimlere IDF ile yüksek ağırlık verir → **madde-ayrımı darboğazına** keskin.
+
+**ÖLÇÜM 4 (eşit ağırlık, 2000 sorgu):**
+
+| Yöntem | R@1 | R@5 | R@10 | MRR | nDCG |
+|---|---|---|---|---|---|
+| WSUM_050 (2-bacak, önceki) | 0.4450 | 0.6120 | 0.6690 | 0.5185 | 0.5548 |
+| **3-BACAK (+BM25)** | **0.4910** | **0.6560** | **0.7000** | **0.5626** | **0.5959** |
+| BM25_ONLY | 0.3705 | 0.5305 | 0.5880 | 0.4394 | 0.4750 |
+
+- Klasik BM25 tek başına R@10=0.588 → BGE-sparse ablasyonunu (0.526) **geçti.** Klasik BM25 daha güçlü
+  sparse bacak. 3-bacak her metrikte +0.03/+0.05.
+
+**ÖLÇÜM 5 (ağırlık taraması, 2000 sorgu; d=dense s=BGE-sparse b=BM25):**
+
+| Yöntem | (d,s,b) | R@1 | R@5 | R@10 | MRR | nDCG |
+|---|---|---|---|---|---|---|
+| WSUM_050 (2-bacak) | (.50,.50,0) | 0.4465 | 0.6120 | 0.6690 | 0.5196 | 0.5556 |
+| **EŞİT ← uygulandı** | (.33,.33,.34) | **0.4905** | **0.6545** | 0.6995 | **0.5622** | 0.5955 |
+| DENSE_AĞIR | (.50,.20,.30) | 0.4885 | 0.6525 | **0.7095** | 0.5597 | **0.5957** |
+| BM25_AĞIR | (.35,.15,.50) | 0.4715 | 0.6410 | 0.6960 | 0.5439 | 0.5804 |
+| SPARSE_KIS | (.45,.10,.45) | 0.4870 | 0.6445 | 0.7005 | 0.5570 | 0.5916 |
+| DENSE_BM25 (s yok) | (.50,0,.50) | 0.4660 | 0.6340 | 0.6905 | 0.5419 | 0.5778 |
+
+- **EŞİT seçildi:** R@1/R@5/MRR (üst-sıra kalitesi) en iyi; ağırlık-ayarı yok → altınsete overfit yok.
+  DENSE_AĞIR R@10'da +0.01 önde ama R@1/MRR gerisinde — üst-sıra tercih edildi. Farklar küçük (~0.01),
+  ağırlığa tolerant. `search_qdrant.py` 3-bacak EŞİT kullanır.
+- **BGE-sparse atılamaz:** DENSE_BM25 (s=0) en zayıf üçlü → üç bacak da katkı yapıyor (eş-anlam sinyali
+  az ama gerçek). Ölçmeden atsaydık kaybederdik.
+- **Yolculuk:** RRF 0.667 → WSUM_050 0.685 → 3-bacak 0.700 (R@10), R@1 0.436 → 0.491. Fine-tuned 0.76'ya
+  6 puan; GPU/fine-tune YOK, sadece füzyon + klasik BM25.
+
 ## Ablasyon: dense vs sparse vs hybrid (2000 sorgu)
 
 | Yöntem | R@1 | R@5 | R@10 | MRR | nDCG |
@@ -93,7 +130,9 @@ recall tavanını değil. **Sıfır maliyet** (füzyon yöntemi, aynı model/ret
 | Script | İş |
 |---|---|
 | `scripts/ingest_qdrant.py` | Colab vektörlerini Qdrant'a yükle |
-| `scripts/search_qdrant.py` | Hybrid arama (dense+sparse+RRF+yürürlük) |
+| `scripts/search_qdrant.py` | 3-bacak arama (dense+BGE-sparse+klasik-BM25 WSUM+yürürlük) |
+| `scripts/metrik_bm25.py` | ÖLÇÜM 4: klasik BM25 üçüncü bacak katkısı |
+| `scripts/metrik_bm25_agirlik.py` | ÖLÇÜM 5: 3-bacak ağırlık taraması |
 | `scripts/metrik_olc.py` | R@1/5/10 + MRR + nDCG (hybrid) |
 | `scripts/metrik_egri.py` | Recall eğrisi R@1/5/10/50/100 |
 | `scripts/metrik_rerank.py` | Reranker deneyi (yerel, 4GB'da yavaş) |
