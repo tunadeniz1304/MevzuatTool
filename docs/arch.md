@@ -16,7 +16,7 @@ mevzuat.gov.tr → mevzuat-mcp API → [yapısal chunker] → [metadata zenginle
                  (search/tree/content)   (madde/fıkra)     (yürürlük/mülga, R.G.)   {id,text,metadata}
                                                                                           │
                  ┌────────────────────────── INDEXING ──────────────────────────┐         │
-                 │  [embedder (BGE-M3?)] → [vektör store: Qdrant|pgvector]  ◄──── korpus.jsonl
+                 │  [embedder (BGE-M3?)] → [vektör store: Qdrant (ADR-0008)]  ◄──── korpus.jsonl
                  │                          + BM25/sparse (hybrid)           │
                  └───────────────────────────────────────────────────────────┘
                                                                                           │
@@ -41,7 +41,7 @@ mevzuat.gov.tr → mevzuat-mcp API → [yapısal chunker] → [metadata zenginle
 | **Metadata zenginleştirici** | yürürlük/mülga, R.G., path, kaynak | ⬜ planlandı |
 | **Korpus artifact** | JSONL `{id, text, metadata}` (modüler sınır) | ⬜ planlandı |
 | **Embedder** | Türkçe-uyumlu gömme (ör. BGE-M3) | ⬜ planlandı |
-| **Vektör store** | dense index + filtre | ⬜ karar açık (Qdrant↔pgvector) |
+| **Vektör store** | dense+sparse index + payload filtre | ✅ Qdrant (ADR-0008, hybrid native + yürürlük filtre) |
 | **Sparse/BM25** | hybrid arama lexical bacağı | ⬜ planlandı |
 | **Retrieval servisi** | atıf + NL modu, (ops.) reranker, API | ⬜ planlandı |
 | **Reranker** | precision artırma | ⬜ opsiyonel / karar açık |
@@ -70,7 +70,7 @@ mevzuat.gov.tr → mevzuat-mcp API → [yapısal chunker] → [metadata zenginle
 | mevzuat-mcp erişimi | yerel MCP server + MCP client (ADR-0012) | ✅ karar |
 | Dil/runtime | Python (varsayılan) | 🟡 örtük varsayım |
 | Embedding | BGE-M3 (aday) | 🟡 öneri |
-| Vektör store | Qdrant **veya** pgvector | ⬜ açık |
+| Vektör store | **Qdrant** (ADR-0008) | ✅ karar verildi |
 | Arama | Hybrid (dense + BM25/sparse) | ✅ karar |
 | Reranker | — | ⬜ opsiyonel |
 | Korpus formatı | JSONL `{id, text, metadata}` | ✅ karar |

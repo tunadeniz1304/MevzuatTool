@@ -101,3 +101,14 @@ docs/reviews/
 *.pdf
 .tmp_adversarial/
 .tmp_kalite/
+
+# ---- Dış/büyük veri + yerel görüntüleyici çıktıları (versiyonlanmaz) ----
+altınset/
+prompted_view.html
+*_view.html
+
+# ---- Colab veri çıktıları (büyük, versiyonlanmaz; scriptler/notebook'lar kalır) ----
+colab/*.jsonl
+colab/*.npy
+colab/*.json
+colab/outputs/
