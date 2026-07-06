@@ -56,8 +56,16 @@ class Article:
 # Bu yalnız bir sonraki madde VARSA kırpılır (son maddede yutacak başlık yoktur; gerçek
 # 'şunlardır:' liste-başı korunur). Gerçek veri: yutulan başlıklar 'Yürütme','Kapsam',
 # 'Tanımlar' gibi gerçek madde başlıkları; liste-başı kelimesi (şöyledir/şunlardır) hiç görülmedi.
+#
+# Liste-başı sözcükleriyle biten cümle (şunlardır:, aşağıdakiler:) gerçek liste açılışıdır → kırpma.
+_LISTE_BASI = re.compile(
+    r"(?i)(?:şunlar|aşağıdaki|şöyle|gibidir|belirtilen|sayılanlar|hususlar|kimseler|olanlar|halinde)"
+    r"[\wçğıöşüâî ]*:\s*$"
+)
+# Gövde-taşma (genişletilmiş): sonraki maddenin BAŞLIĞI ('Müracaat, şikayet ve dava açma:') gövde
+# kuyruğuna sızmış. Virgül + max 10 kelime kapsanır (uzun/virgüllü başlıklar). Liste-başı guard ayrı.
 _BLEED_BASLIK = re.compile(
-    r"(?<=[.!?])\s+[A-ZÇĞİÖŞÜ][\wçğıöşüâî]*(?:\s+[\wçğıöşüâî]+){0,4}:\s*$"
+    r"(?<=[.!?])\s+[A-ZÇĞİÖŞÜ][\wçğıöşüâî,]*(?:\s+[\wçğıöşüâî,]+){0,9}:\s*$"
 )
 
 # Seviye-başlık bleed: gövde kuyruğuna sızan 'X. BÖLÜM/KISIM/KİTAP/AYIRIM/FASIL ...' yapısal
@@ -240,7 +248,9 @@ def split_articles(text: str) -> list[Article]:
         body = _SEVIYE_BASLIK_BLEED.sub("", body).strip()
         body = _strip_kanun_sonu_ek(body)
         if not son_madde:  # sonraki maddenin (kolonlu) başlığı gövde kuyruğuna sızmışsa kırp
-            body = _BLEED_BASLIK.sub("", body).strip()
+            m_bleed = _BLEED_BASLIK.search(body)
+            if m_bleed and not _LISTE_BASI.search(body[m_bleed.start():]):  # liste-başı değilse kırp
+                body = body[:m_bleed.start()].strip()
         out.extend(_split_yapisik_madde(no, body))
     return out
 

@@ -497,3 +497,27 @@ def test_bakan_yurutur_with_lowercase_tail_not_cut():
             "işlemlerini yürütür.")
     arts = split_articles(text)
     assert "ilgili kurumlar" in arts[0].body  # küçük-harf kuyruk kesilmedi
+
+
+def test_bleed_baslik_wide_comma_and_long_title():
+    # FAZ 18a: uzun/virgüllü sonraki-madde başlığı gövde kuyruğuna sızmış. Gerçek veri:
+    # 657:20 '...çekilebilirler. Müracaat, şikayet ve dava açma:'; 7201:53 (8 kelime başlık).
+    text = ("MADDE 20- (1) Memurlar esaslara göre memurluktan çekilebilirler. "
+            "Müracaat, şikayet ve dava açma: MADDE 21- (1) Sonraki madde.")
+    arts = split_articles(text)
+    assert arts[0].body == "(1) Memurlar esaslara göre memurluktan çekilebilirler."  # başlık kırpıldı
+    assert [a.no for a in arts] == ["20", "21"]
+
+
+def test_bleed_baslik_list_intro_not_cut():
+    # FP-koruma: 'aşağıdakiler şunlardır:' gerçek LİSTE-BAŞI → kırpılmaz (guard).
+    text = ("MADDE 20- (1) Bu maddede sayılanlar aşağıdaki şunlardır: MADDE 21- (1) Sonraki.")
+    arts = split_articles(text)
+    assert "şunlardır:" in arts[0].body  # liste-başı korundu
+
+
+def test_bleed_baslik_existing_short_title_still_cut():
+    # Mevcut davranış KORUNUR: kısa (≤4 kelime) kolonlu başlık hâlâ kırpılıyor. Gerçek veri: 3402:40.
+    text = "MADDE 40- (1) Kadastro mahkemesine bildirilir. Hatalar ve düzeltme işlemleri: MADDE 41- (1) X."
+    arts = split_articles(text)
+    assert arts[0].body == "(1) Kadastro mahkemesine bildirilir."
