@@ -479,3 +479,21 @@ def test_embedded_madde_without_sentence_boundary_not_split():
     text = "MADDE 1- (1) baslangicMADDE 2- (1) devam"
     arts = split_articles(text)
     assert [a.no for a in arts] == ["1"]  # cümle-sonu yok → bölme yok
+
+
+def test_strips_kanun_sonu_ek_after_bakan_yurutur():
+    # FAZ 17: eski kanunlarda 'X Bakanı/Bakanları yürütür' anchor'ı. Gerçek veri: 269:6
+    # '...Savunma ve Maliye Bakanları yürütür. 269 SAYILI KANUNA EK VE DEĞİŞİKLİK GETİREN ...LİSTE'
+    text = ("MADDE 6- (1) Bu Kanunu Millî Savunma ve Maliye Bakanları yürütür. "
+            "269 SAYILI KANUNA EK VE DEĞİŞİKLİK GETİREN MEVZUATIN YÜRÜRLÜĞE GİRİŞ TARİHİNİ GÖSTERİR LİSTE "
+            "KANUN NO FARKLI TARİHTE YÜRÜRLÜĞE GİREN MADDELER")
+    arts = split_articles(text)
+    assert arts[0].body == "(1) Bu Kanunu Millî Savunma ve Maliye Bakanları yürütür."  # kuyruk kesildi
+
+
+def test_bakan_yurutur_with_lowercase_tail_not_cut():
+    # FP-koruma: 'X Bakanı yürütür' + KÜÇÜK-harf hüküm devamı → KESME (tümü-büyük değil).
+    text = ("MADDE 6- (1) Bu Kanunu Maliye Bakanı yürütür ve ilgili kurumlar bu hükme göre "
+            "işlemlerini yürütür.")
+    arts = split_articles(text)
+    assert "ilgili kurumlar" in arts[0].body  # küçük-harf kuyruk kesilmedi

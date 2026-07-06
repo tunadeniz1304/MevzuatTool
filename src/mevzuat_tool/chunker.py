@@ -89,7 +89,10 @@ _SEVIYE_BASLIK_BLEED = re.compile(
 # OLMALI — küçük-harf başlarsa (meşru hüküm/düz-metin çöp: 7326:18 CB Kararı) KESME → ertelenen semantik;
 # (3) meşru 'Yürürlük' maddeleri 'yürütür' içermez, anchor dokunmaz.
 _KANUN_SONU_ANCHOR = re.compile(
-    r"(?i)(?:bakanlar\s+kurulu|cumhurbaşkanı)\s+yürütür\s*\.?"
+    r"(?i)(?:"
+    r"(?:bakanlar\s+kurulu|cumhurbaşkanı)"
+    r"|(?:\w+\s+)?(?:\w+\s+ve\s+)?\w+\s+bakan(?:ı|ları)"   # 'Millî Savunma ve Maliye Bakanları'
+    r")\s+yürütür\s*\.?"
 )
 
 # FAZ 15 GAP (657:239 ve benzerleri): tümü-büyük kanun-sonu ek başlığının hemen içine/ardına
