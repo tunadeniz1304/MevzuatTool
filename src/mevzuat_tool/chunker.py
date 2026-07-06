@@ -79,6 +79,68 @@ _SEVIYE_BASLIK_BLEED = re.compile(
 )
 
 
+# Kanun-sonu ek bleed (FAZ 15 / BUG 9): kanunun SON maddesi 'yürütme'dir ('...Bakanlar Kurulu/
+# Cumhurbaşkanı yürütür') — kısa, tek cümle. Ama split_articles son maddede end=len(text) olduğu
+# için, ardından gelen kanun-sonu ekleri (değişiklik-listesi tablosu 'X SAYILI KANUNA EK VE
+# DEĞİŞİKLİK GETİREN...', kadro/tarife cetvelleri 'N SAYILI LİSTE/CETVEL', 'EK GÖSTERGE CETVELİ')
+# gövdeye giriyor (5996:50=5791 kar, 7440:25...). ANCHOR = 'yürütür' cümlesi; kuyruk (anchor sonrası)
+# TÜMÜ-BÜYÜK belge başlığıyla başlıyorsa oradan sona kes. Ölçüm: 432 kesim, 0 FP (hepsi çöp).
+# 0-FP KAPILARI: (1) anchor ŞART (anchorsuz salt-sınır 299 tüm-madde-kaybı); (2) kuyruk tümü-büyük
+# OLMALI — küçük-harf başlarsa (meşru hüküm/düz-metin çöp: 7326:18 CB Kararı) KESME → ertelenen semantik;
+# (3) meşru 'Yürürlük' maddeleri 'yürütür' içermez, anchor dokunmaz.
+_KANUN_SONU_ANCHOR = re.compile(
+    r"(?i)(?:bakanlar\s+kurulu|cumhurbaşkanı)\s+yürütür\s*\.?"
+)
+
+# FAZ 15 GAP (657:239 ve benzerleri): tümü-büyük kanun-sonu ek başlığının hemen içine/ardına
+# değişiklik künyesi '(Ek: ...)','(Mülga: ...)','(Değişik: ...)' vb. (KÜÇÜK harf) sızmış olabilir
+# ('I SAYILI CETVEL (Ek: 9/4/1990-KHK-418/3 md.; İptal: ...; Yeniden düzenleme: ...) (Değişik:...)
+# HİZMET SINIFLARI...'). Bu künyeler enrich aşamasında temizle_kunyeler ile SİLİNİR ama
+# _strip_kanun_sonu_ek DAHA ÖNCE (split_articles içinde) çalışır — künye metni ilk 80 karakterin
+# büyük-harf oranını düşürüp (0.25-0.45) guard'ı yanlışlıkla "meşru küçük-harf kuyruk" sandırıyor.
+# Künye kalıbı degisiklik.py _KUNYE ile AYNI aile (anahtar kelime + ':') — kapanış ')' YOK sayılabilir
+# (uzun künye 80-karakter pencereyi taşabilir; kapanışı aranan pencerede olmayabilir) → açgözlü
+# '.*' YERİNE ')' bulunana kadar VEYA pencere sonuna kadar ilerler (span sınırlı, ReDoS riski yok).
+_KUNYE_ORAN_ATLA = re.compile(
+    r"(?i)\((?:değişik|ek(?:\s+cetvel|\s+kroki\b[^:)]*)?|mülga|iptal|ekleme|"
+    r"yeniden\s+düzenleme|aynen\s+kabul)\s*:[^)]*\)?"
+)
+
+
+def _buyuk_oran_kunyesiz(kuyruk: str, hedef: int = 80) -> float | None:
+    """SABİT ilk 'hedef' karakterlik pencerenin büyük-harf oranı — künye parantezleri ('(Ek:...)'
+    vb.) ölçüme katılmadan. Künye chunker'ın kendi kesim kararı için gürültü (gerçek içerik değil,
+    ayrıca enrich'te temizle_kunyeler ile zaten silinecek).
+    ÖNEMLİ: pencere GENİŞLETİLMEZ (künye çıkınca eksileni tamamlamak için ileri gidilmez) — deneyle
+    (102952-23 regresyonu) kanıtlandı ki genişletme, künye SONRASI gerçek (mesru Title-Case tablo
+    başlığı gibi) küçük/karışık-harf içeriği pencereye çekip önceden doğru kesilen bir maddeyi
+    YANLIŞLIKLA kesilmez hale getirebiliyor. Bunun yerine SABİT pencere içindeki künye(ler) atılır;
+    kalan harf azsa (hatta 0), oran o kadarıyla hesaplanır — daha az örnek ama yön hep aynı tarafa
+    (künyesiz veri OLMASAYDI zaten öyle ölçülecekti)."""
+    ilk = kuyruk[:hedef]
+    kunyesiz = _KUNYE_ORAN_ATLA.sub("", ilk)
+    harf = [c for c in kunyesiz if c.isalpha()]
+    if not harf:
+        return None
+    return sum(c.isupper() for c in harf) / len(harf)
+
+
+def _strip_kanun_sonu_ek(body: str) -> str:
+    """Son-madde 'yürütür' anchor'ı sonrası TÜMÜ-BÜYÜK kanun-sonu ek kuyruğunu kırp (0-FP).
+    Anchor yoksa VEYA kuyruk (künye parantezleri hariç tutularak ölçülünce) tümü-büyük değilse
+    body değişmez."""
+    a = _KANUN_SONU_ANCHOR.search(body)
+    if not a:
+        return body
+    kuyruk = body[a.end():].lstrip(". \n")
+    if len(kuyruk) < 30:            # kuyruk yok/kısa → temiz madde
+        return body
+    buyuk_oran = _buyuk_oran_kunyesiz(kuyruk)
+    if buyuk_oran is None or buyuk_oran <= 0.85:  # küçük-harf kuyruk (meşru/düz-metin çöp) → KESME
+        return body
+    return body[:a.end()].strip()   # anchor'a kadar tut, tümü-büyük kuyruğu (künye dahil) at
+
+
 # Kanun-sonu 'işlenemeyen madde eki': '(TARİHLİ VE NNNN) SAYILI ... KANUNA İŞLENEMEYEN ...'
 # başlığı. Başka kanunlarla bu kanuna eklenmek istenip işlenememiş maddelerin listesidir — bu
 # kanunun maddesi DEĞİL. Buradan sonrası madde olarak parse edilmemeli (yoksa tekrarlı 'Geçici 1'
@@ -109,6 +171,7 @@ def split_articles(text: str) -> list[Article]:
         # Seviye-başlık ('X. BÖLÜM/KISIM ...') gövde kuyruğuna sızmışsa oradan sona kadar kırp.
         # (son madde dâhil — kanun-sonu 'Çeşitli ve Son Hükümler' başlığı son maddede de sızabilir)
         body = _SEVIYE_BASLIK_BLEED.sub("", body).strip()
+        body = _strip_kanun_sonu_ek(body)
         if not son_madde:  # sonraki maddenin (kolonlu) başlığı gövde kuyruğuna sızmışsa kırp
             body = _BLEED_BASLIK.sub("", body).strip()
         out.append(Article(no=no, body=body))
