@@ -33,17 +33,28 @@ _ISLENMIS_NOTU = re.compile(
 def _sadece_islenmis_notu(govde: str) -> bool:
     """Gövde tamamen içeriksiz yönlendirme notu mu? (gerçek hüküm yok).
 
-    FAZ 20 dar istisna: regex eşleşse bile, gövde parantezle BAŞLAMIYORSA (ne çıplak '(' ne de
-    madde-no önekli '4- 5- (' biçiminde) → bu cümle-içi 'ile ilgili olup' geçen GERÇEK hüküm
-    (ör. VUK 213:93 "Tahakkuk fişinden gayri, vergilendirme ile ilgili olup, hüküm ifade eden..."),
-    redirect notu DEĞİL; korpusta tutulur (False döner). Gerçek redirect notları HEP parantez
-    İÇİNDE (madde-no önekiyle veya çıplak) gelir — bu ayırt edici, uzunluk değil.
+    FAZ 20 ÜÇLÜ istisna: regex eşleşse bile, gövde AŞAĞIDAKİ ÜÇ ŞARTI BİRDEN sağlıyorsa → bu
+    cümle-içi 'ile ilgili olup' geçen GERÇEK hüküm (ör. VUK 213:93 "Tahakkuk fişinden gayri,
+    vergilendirme ile ilgili olup, hüküm ifade eden..."), redirect notu DEĞİL; korpusta tutulur
+    (False döner):
+      1. Parantezle BAŞLAMIYOR (ne çıplak '(' ne madde-no önekli '4- 5- (' biçiminde).
+      2. UZUN (>200 kar) — kısa gövdeler gerçek hüküm için yeterli içerik taşımaz.
+      3. REDIRECT-BAŞLANGICI DEĞİL — tarih / 'N sayılı' / 'MADDE N' ile BAŞLAMIYOR. Gerçek
+         redirect notları (6487:1-11 gibi) parantezsiz olsa bile HEP tarih veya 'N sayılı Kanun'
+         ifadesiyle açılır; gerçek hüküm normal bir cümleyle başlar.
+    Üçü birden sağlanmazsa → redirect notu, ELENİR (True döner).
     """
     g = govde.strip()
     if not _ISLENMIS_NOTU.match(g):
         return False
-    baslar_paren = g.startswith("(") or bool(re.match(r"^[\d\s.,-]*\(", g))
-    return baslar_paren
+    baslar_paren = bool(g.startswith("(") or re.match(r"^[\d\s.,-]*\(", g))
+    redirect_bas = bool(re.match(
+        r"^\s*(?:\d+[-\s]*)*\(?\s*(?:\d{1,2}[./]\d{1,2}[./]\d{2,4}|MADDE\s+\d+|\d+\s+sayılı)",
+        g, re.IGNORECASE,
+    ))
+    if not baslar_paren and len(g) > 200 and not redirect_bas:
+        return False   # gerçek hüküm → koru
+    return True        # redirect notu → ele
 
 
 _PREFIX_ETIKET = {"gecici": "Geçici", "ek": "Ek", "mukerrer": "Mükerrer"}
