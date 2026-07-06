@@ -56,9 +56,39 @@ class Article:
 # Bu yalnız bir sonraki madde VARSA kırpılır (son maddede yutacak başlık yoktur; gerçek
 # 'şunlardır:' liste-başı korunur). Gerçek veri: yutulan başlıklar 'Yürütme','Kapsam',
 # 'Tanımlar' gibi gerçek madde başlıkları; liste-başı kelimesi (şöyledir/şunlardır) hiç görülmedi.
-_BLEED_BASLIK = re.compile(
-    r"(?<=[.!?])\s+[A-ZÇĞİÖŞÜ][\wçğıöşüâî]*(?:\s+[\wçğıöşüâî]+){0,4}:\s*$"
+#
+# Liste-başı sözcükleriyle biten cümle (şunlardır:, aşağıdakiler:) gerçek liste açılışıdır → kırpma.
+# FAZ 18a guard genişletme: 'şartlar|unsurlar|nedenler|sebepler|esaslar|haller|kişiler' kökleri
+# eklendi — bunlar da yaygın liste-başı/belirsiz başlık kalıpları ('genel şartları:',
+# 'manevi unsurları:', 'yararlanamayacak kişiler:'). Gerçek veri: 193:46, 2802:36 — 2 belirsiz vaka,
+# TP (gerçek bleed) olsalar bile 0-FP güvenliği için KORUNUR (kesilmez). Master plan: "0-FP
+# veremezsen ertele" — belirsizi kesmemek doğru taraf.
+_LISTE_BASI = re.compile(
+    r"(?i)(?:şunlar|aşağıdaki|şöyle|gibidir|belirtilen|sayılanlar|hususlar|kimseler|kişiler|"
+    r"olanlar|halinde|şartlar|unsurlar|nedenler|sebepler|esaslar|haller)"
+    r"[\wçğıöşüâî ]*:\s*$"
 )
+# Gövde-taşma (genişletilmiş): sonraki maddenin BAŞLIĞI ('Müracaat, şikayet ve dava açma:') gövde
+# kuyruğuna sızmış. Virgül + max 10 kelime kapsanır (uzun/virgüllü başlıklar). Liste-başı guard ayrı.
+_BLEED_BASLIK = re.compile(
+    r"(?<=[.!?])\s+[A-ZÇĞİÖŞÜ][\wçğıöşüâî,]*(?:\s+[\wçğıöşüâî,]+){0,9}:\s*$"
+)
+
+# Gövde-taşma (ROMA-başlık varyantı, FAZ 18b): sonraki maddenin ROMA-numaralı başlığı ('III -
+# Kuruluş:') gövde kuyruğuna sızmış. Gerçek veri: 1739 (Milli Eğitim Temel Kanunu) roma-numaralı
+# madde başlıkları kullanıyor. İmza: cümle-sonu + ROMA rakamı + ' - ' + Title-Case başlık + ':'
+# (kolon ŞART). E-tuzağı kanunları (4721,6098,6102,5846,2709 vb.) için ayrı hariç-tutma YOK —
+# split_articles kanun_no görmüyor. Onun yerine TEK-ROMA guard: body içinde bu 'X - ' roma-imzası
+# BİRDEN FAZLA geçiyorsa (madde-içi roma-numaralı LİSTE, ör. FSEK 'I - İlim eserleri: ... II - ...')
+# KIRPMA — çoklu-roma madde-içi yapıdır, sonraki-madde başlığı değildir. Yalnız TEK roma-imzası
+# (bleed eşleşmesinin kendisi) varsa kırp. Controller ölçümü: E-tuzağı-dışı 55 vakada çoklu-roma=0
+# (hepsi TP, tek-roma), E-tuzağı'da çoklu-roma yaygın → bu guard E-tuzağı'yı doğal korur.
+_BLEED_ROMA_BASLIK = re.compile(
+    r"(?<=[.!?])\s+[IVX]{1,4}\s*-\s+[A-ZÇĞİÖŞÜ][\wçğıöşüâî,]*(?:\s+[\wçğıöşüâî,]+){0,9}:\s*$"
+)
+# Madde-içi roma-imzası sayacı (guard): 'X - ' biçimi (kolon şartı yok — liste içi 'I - ... II - ...'
+# kolonla da kolonsuz da olabilir; sayaç yalnız kaç roma-numaralı bölüm işareti geçtiğini ölçer).
+_ROMA_IMZA_SAYAC = re.compile(r"(?:(?<=[.!?])|(?<=^))\s*[IVX]{1,4}\s*-\s+[A-ZÇĞİÖŞÜ]")
 
 # Seviye-başlık bleed: gövde kuyruğuna sızan 'X. BÖLÜM/KISIM/KİTAP/AYIRIM/FASIL ...' yapısal
 # başlığı. Madde içinde yeni bir BÖLÜM/KISIM başlamaz — o, bir sonraki yapısal birimin başlığıdır
@@ -89,7 +119,10 @@ _SEVIYE_BASLIK_BLEED = re.compile(
 # OLMALI — küçük-harf başlarsa (meşru hüküm/düz-metin çöp: 7326:18 CB Kararı) KESME → ertelenen semantik;
 # (3) meşru 'Yürürlük' maddeleri 'yürütür' içermez, anchor dokunmaz.
 _KANUN_SONU_ANCHOR = re.compile(
-    r"(?i)(?:bakanlar\s+kurulu|cumhurbaşkanı)\s+yürütür\s*\.?"
+    r"(?i)(?:"
+    r"(?:bakanlar\s+kurulu|cumhurbaşkanı)"
+    r"|(?:\w+\s+)?(?:\w+\s+ve\s+)?\w+\s+bakan(?:ı|ları)"   # 'Millî Savunma ve Maliye Bakanları'
+    r")\s+yürütür\s*\.?"
 )
 
 # FAZ 15 GAP (657:239 ve benzerleri): tümü-büyük kanun-sonu ek başlığının hemen içine/ardına
@@ -237,7 +270,15 @@ def split_articles(text: str) -> list[Article]:
         body = _SEVIYE_BASLIK_BLEED.sub("", body).strip()
         body = _strip_kanun_sonu_ek(body)
         if not son_madde:  # sonraki maddenin (kolonlu) başlığı gövde kuyruğuna sızmışsa kırp
-            body = _BLEED_BASLIK.sub("", body).strip()
+            m_bleed = _BLEED_BASLIK.search(body)
+            if m_bleed and not _LISTE_BASI.search(body[m_bleed.start():]):  # liste-başı değilse kırp
+                body = body[:m_bleed.start()].strip()
+            else:
+                # ROMA-başlık varyantı (FAZ 18b): yalnız TEK roma-imzası varsa (madde-içi çoklu-roma
+                # liste DEĞİL) kırp — E-tuzağı (FSEK/TTK iç-roma-listeleri) bu guard ile korunur.
+                m_roma = _BLEED_ROMA_BASLIK.search(body)
+                if m_roma and len(_ROMA_IMZA_SAYAC.findall(body)) <= 1:
+                    body = body[:m_roma.start()].strip()
         out.extend(_split_yapisik_madde(no, body))
     return out
 
