@@ -104,7 +104,10 @@ Master plan FAZ 1-14 disiplininin aynısı. **"Eskiden çalışan yerleri bozmam
      FAZ 16: 6100 HMK 3 madde + komşuları).
    - Status-flip 0 (bleed kırpma yürürlüğü değiştirmemeli).
    - Fıkra/bent dağılımı: FAZ 16'da 131/132/133 ayrılınca fıkra-sayısı değişir (beklenen).
-   - **E-tuzağı 5-kanun** (TMK/TBK/TTK/FSEK/Anayasa) DEĞİŞMEZ (sert kapı).
+   - **E-tuzağı 5-kanun** (TMK/TBK/TTK/FSEK/Anayasa) **bent/fıkra YAPISI DEĞİŞMEZ** (sert kapı). NOT
+     (FAZ 15 kararı): kanun-sonu bleed bu kanunların da SON maddesinde olabilir (FSEK 5846:91, TTK
+     6102:1535 "yürütür"+değişiklik-listesi çöpü) — bu maddelerde çöp-temizliği (text kısalması) MEŞRUDUR,
+     yapı (fıkra/bent) korunduğu sürece E-tuzağı ihlali sayılmaz. Sert kapı = yapısal-sadakat, salt text-eşitlik değil.
    - Çürütülen-meşru vakalar (Ekli-sayılı-liste madde-başı) DEĞİŞMEZ (sert kapı).
 4. **Confusion matrix** (FAZ 15 — FP-riskli): yeni her kesimi TP(gerçek çöp)/FP(meşru içerik) sınıflandır
    (adversarial agent, kaynak-doğrulamalı). FP=0 → commit; FP>0 → daralt veya ERTELE.
