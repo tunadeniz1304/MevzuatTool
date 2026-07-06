@@ -445,3 +445,30 @@ def test_embedded_title_with_internal_ordinal_dot_split_at_real_sentence_end():
     assert [a.no for a in arts] == ["5", "6"]
     assert arts[0].body == "(1) Onceki madde biter."
     assert arts[1].body == "5. fikra hukmune gore duzenlenen sartlari\n(1) Yeni madde icerigi."
+
+
+def test_normal_spaced_madde_not_double_split():
+    # FP-koruma: boşlukla ayrılmış normal 'MADDE 2- (1)' zaten ana _MADDE ile yakalanır;
+    # yapışık-tespit onu TEKRAR bölmemeli (lookbehind sözcük-karakteri şartı boşluğu eler).
+    text = "MADDE 1- (1) Birinci hüküm. MADDE 2- (1) İkinci hüküm."
+    arts = split_articles(text)
+    assert [a.no for a in arts] == ["1", "2"]
+    assert arts[0].body == "(1) Birinci hüküm."
+    assert arts[1].body == "(1) İkinci hüküm."
+
+
+def test_embedded_reference_not_split_as_madde():
+    # FP-koruma: gövde-içi atıf yapışık-madde SAYILMAZ. 'maddeMADDE' gibi kapama görülse bile,
+    # imza 'MADDE <no>- (' (tire + fıkra parantezi) gerektirir; atıf bu biçimde değil.
+    text = "MADDE 1- (1) Bu Kanunun 5 inci maddesine göre işlem yapılır ve MADDE 5 hükmü saklıdır."
+    arts = split_articles(text)
+    assert [a.no for a in arts] == ["1"]  # atıf madde olarak bölünmez
+    assert "5 inci maddesine göre" in arts[0].body
+
+
+def test_embedded_madde_without_sentence_boundary_not_split():
+    # FP-koruma / edge: yapışık 'MADDE N- (' var AMA öncesinde cümle-sonu ([.!?]) YOK →
+    # başlığı önceki gövdeden ayıramayız → o gömülü madde bölünmez (yanlış başlık üretme).
+    text = "MADDE 1- (1) baslangicMADDE 2- (1) devam"
+    arts = split_articles(text)
+    assert [a.no for a in arts] == ["1"]  # cümle-sonu yok → bölme yok
