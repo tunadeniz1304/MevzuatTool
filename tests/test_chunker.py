@@ -479,3 +479,72 @@ def test_embedded_madde_without_sentence_boundary_not_split():
     text = "MADDE 1- (1) baslangicMADDE 2- (1) devam"
     arts = split_articles(text)
     assert [a.no for a in arts] == ["1"]  # cümle-sonu yok → bölme yok
+
+
+def test_strips_kanun_sonu_ek_after_bakan_yurutur():
+    # FAZ 17: eski kanunlarda 'X Bakanı/Bakanları yürütür' anchor'ı. Gerçek veri: 269:6
+    # '...Savunma ve Maliye Bakanları yürütür. 269 SAYILI KANUNA EK VE DEĞİŞİKLİK GETİREN ...LİSTE'
+    text = ("MADDE 6- (1) Bu Kanunu Millî Savunma ve Maliye Bakanları yürütür. "
+            "269 SAYILI KANUNA EK VE DEĞİŞİKLİK GETİREN MEVZUATIN YÜRÜRLÜĞE GİRİŞ TARİHİNİ GÖSTERİR LİSTE "
+            "KANUN NO FARKLI TARİHTE YÜRÜRLÜĞE GİREN MADDELER")
+    arts = split_articles(text)
+    assert arts[0].body == "(1) Bu Kanunu Millî Savunma ve Maliye Bakanları yürütür."  # kuyruk kesildi
+
+
+def test_bakan_yurutur_with_lowercase_tail_not_cut():
+    # FP-koruma: 'X Bakanı yürütür' + KÜÇÜK-harf hüküm devamı → KESME (tümü-büyük değil).
+    text = ("MADDE 6- (1) Bu Kanunu Maliye Bakanı yürütür ve ilgili kurumlar bu hükme göre "
+            "işlemlerini yürütür.")
+    arts = split_articles(text)
+    assert "ilgili kurumlar" in arts[0].body  # küçük-harf kuyruk kesilmedi
+
+
+def test_bleed_baslik_wide_comma_and_long_title():
+    # FAZ 18a: uzun/virgüllü sonraki-madde başlığı gövde kuyruğuna sızmış. Gerçek veri:
+    # 657:20 '...çekilebilirler. Müracaat, şikayet ve dava açma:'; 7201:53 (8 kelime başlık).
+    text = ("MADDE 20- (1) Memurlar esaslara göre memurluktan çekilebilirler. "
+            "Müracaat, şikayet ve dava açma: MADDE 21- (1) Sonraki madde.")
+    arts = split_articles(text)
+    assert arts[0].body == "(1) Memurlar esaslara göre memurluktan çekilebilirler."  # başlık kırpıldı
+    assert [a.no for a in arts] == ["20", "21"]
+
+
+def test_bleed_baslik_list_intro_not_cut():
+    # FP-koruma: 'aşağıdakiler şunlardır:' gerçek LİSTE-BAŞI → kırpılmaz (guard).
+    text = ("MADDE 20- (1) Bu maddede sayılanlar aşağıdaki şunlardır: MADDE 21- (1) Sonraki.")
+    arts = split_articles(text)
+    assert "şunlardır:" in arts[0].body  # liste-başı korundu
+
+
+def test_bleed_baslik_existing_short_title_still_cut():
+    # Mevcut davranış KORUNUR: kısa (≤4 kelime) kolonlu başlık hâlâ kırpılıyor. Gerçek veri: 3402:40.
+    text = "MADDE 40- (1) Kadastro mahkemesine bildirilir. Hatalar ve düzeltme işlemleri: MADDE 41- (1) X."
+    arts = split_articles(text)
+    assert arts[0].body == "(1) Kadastro mahkemesine bildirilir."
+
+
+def test_bleed_baslik_extended_list_intro_roots_not_cut():
+    # FAZ 18a guard genişletme: 'şartları:/kişiler:/unsurları:' gibi liste-başı/belirsiz başlıklar
+    # kesilmez (0-FP güvenliği — belirsizi kesmemek doğru taraf). Gerçek veri: 193:46, 2802:36.
+    for tail in ["Basit usule tabi olmanın genel şartları:", "Yararlanamayacak kişiler:",
+                 "Suçun manevi unsurları:"]:
+        text = f"MADDE 10- (1) Bir hüküm cümlesi tamamlanır. {tail} MADDE 11- (1) Sonraki."
+        arts = split_articles(text)
+        assert tail.rstrip(':') in arts[0].body or tail in arts[0].body, f"kesilmemeliydi: {tail}"
+
+
+def test_bleed_roma_baslik_single_cut():
+    # FAZ 18b: sonraki maddenin ROMA-başlığı gövdeye sızmış (tek roma). Gerçek veri: 1739:23.
+    text = "MADDE 23- (1) Gerekli çalışmalar yapılır. III - Kuruluş: MADDE 24- (1) Sonraki."
+    arts = split_articles(text)
+    assert arts[0].body == "(1) Gerekli çalışmalar yapılır."  # roma-başlık kırpıldı
+    assert [a.no for a in arts] == ["23", "24"]
+
+
+def test_bleed_roma_multi_not_cut():
+    # FP-koruma: madde-içi ÇOKLU roma listesi (I - ... II - ... III -) sonraki-madde DEĞİL, madde-içi
+    # yapı → KIRPILMAZ (E-tuzağı FSEK/TTK iç-roma-listeleri korunur).
+    text = ("MADDE 3- (1) Eserler şunlardır: I - İlim eserleri: metin. II - Musiki eserleri: nota. "
+            "III - Güzel sanat eserleri: MADDE 4- (1) Sonraki.")
+    arts = split_articles(text)
+    assert "III - Güzel sanat eserleri:" in arts[0].body  # çoklu-roma, kırpılmadı
