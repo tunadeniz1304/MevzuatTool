@@ -92,24 +92,53 @@ _KANUN_SONU_ANCHOR = re.compile(
     r"(?i)(?:bakanlar\s+kurulu|cumhurbaşkanı)\s+yürütür\s*\.?"
 )
 
+# FAZ 15 GAP (657:239 ve benzerleri): tümü-büyük kanun-sonu ek başlığının hemen içine/ardına
+# değişiklik künyesi '(Ek: ...)','(Mülga: ...)','(Değişik: ...)' vb. (KÜÇÜK harf) sızmış olabilir
+# ('I SAYILI CETVEL (Ek: 9/4/1990-KHK-418/3 md.; İptal: ...; Yeniden düzenleme: ...) (Değişik:...)
+# HİZMET SINIFLARI...'). Bu künyeler enrich aşamasında temizle_kunyeler ile SİLİNİR ama
+# _strip_kanun_sonu_ek DAHA ÖNCE (split_articles içinde) çalışır — künye metni ilk 80 karakterin
+# büyük-harf oranını düşürüp (0.25-0.45) guard'ı yanlışlıkla "meşru küçük-harf kuyruk" sandırıyor.
+# Künye kalıbı degisiklik.py _KUNYE ile AYNI aile (anahtar kelime + ':') — kapanış ')' YOK sayılabilir
+# (uzun künye 80-karakter pencereyi taşabilir; kapanışı aranan pencerede olmayabilir) → açgözlü
+# '.*' YERİNE ')' bulunana kadar VEYA pencere sonuna kadar ilerler (span sınırlı, ReDoS riski yok).
+_KUNYE_ORAN_ATLA = re.compile(
+    r"(?i)\((?:değişik|ek(?:\s+cetvel|\s+kroki\b[^:)]*)?|mülga|iptal|ekleme|"
+    r"yeniden\s+düzenleme|aynen\s+kabul)\s*:[^)]*\)?"
+)
+
+
+def _buyuk_oran_kunyesiz(kuyruk: str, hedef: int = 80) -> float | None:
+    """SABİT ilk 'hedef' karakterlik pencerenin büyük-harf oranı — künye parantezleri ('(Ek:...)'
+    vb.) ölçüme katılmadan. Künye chunker'ın kendi kesim kararı için gürültü (gerçek içerik değil,
+    ayrıca enrich'te temizle_kunyeler ile zaten silinecek).
+    ÖNEMLİ: pencere GENİŞLETİLMEZ (künye çıkınca eksileni tamamlamak için ileri gidilmez) — deneyle
+    (102952-23 regresyonu) kanıtlandı ki genişletme, künye SONRASI gerçek (mesru Title-Case tablo
+    başlığı gibi) küçük/karışık-harf içeriği pencereye çekip önceden doğru kesilen bir maddeyi
+    YANLIŞLIKLA kesilmez hale getirebiliyor. Bunun yerine SABİT pencere içindeki künye(ler) atılır;
+    kalan harf azsa (hatta 0), oran o kadarıyla hesaplanır — daha az örnek ama yön hep aynı tarafa
+    (künyesiz veri OLMASAYDI zaten öyle ölçülecekti)."""
+    ilk = kuyruk[:hedef]
+    kunyesiz = _KUNYE_ORAN_ATLA.sub("", ilk)
+    harf = [c for c in kunyesiz if c.isalpha()]
+    if not harf:
+        return None
+    return sum(c.isupper() for c in harf) / len(harf)
+
 
 def _strip_kanun_sonu_ek(body: str) -> str:
     """Son-madde 'yürütür' anchor'ı sonrası TÜMÜ-BÜYÜK kanun-sonu ek kuyruğunu kırp (0-FP).
-    Anchor yoksa VEYA kuyruk tümü-büyük değilse body değişmez."""
+    Anchor yoksa VEYA kuyruk (künye parantezleri hariç tutularak ölçülünce) tümü-büyük değilse
+    body değişmez."""
     a = _KANUN_SONU_ANCHOR.search(body)
     if not a:
         return body
     kuyruk = body[a.end():].lstrip(". \n")
     if len(kuyruk) < 30:            # kuyruk yok/kısa → temiz madde
         return body
-    ilk = kuyruk[:80]
-    harf = [c for c in ilk if c.isalpha()]
-    if not harf:
+    buyuk_oran = _buyuk_oran_kunyesiz(kuyruk)
+    if buyuk_oran is None or buyuk_oran <= 0.85:  # küçük-harf kuyruk (meşru/düz-metin çöp) → KESME
         return body
-    buyuk_oran = sum(c.isupper() for c in harf) / len(harf)
-    if buyuk_oran <= 0.85:          # küçük-harf kuyruk (meşru/düz-metin çöp) → KESME (ertele)
-        return body
-    return body[:a.end()].strip()   # anchor'a kadar tut, tümü-büyük kuyruğu at
+    return body[:a.end()].strip()   # anchor'a kadar tut, tümü-büyük kuyruğu (künye dahil) at
 
 
 # Kanun-sonu 'işlenemeyen madde eki': '(TARİHLİ VE NNNN) SAYILI ... KANUNA İŞLENEMEYEN ...'
