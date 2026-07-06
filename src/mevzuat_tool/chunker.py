@@ -152,6 +152,55 @@ _ISLENEMEYEN_EKI = re.compile(
 )
 
 
+# Yapışık madde-bleed (FAZ 16 / BUG 2): kaynak metinde sonraki maddenin başlığı önceki gövdeye
+# BOŞLUKSUZ yapışık ('...şartlarıMADDE 132- (1)'). Türkçe küçük 'ı'/'i'/'r'/'n' + 'M' arası \b
+# OLUŞMAZ → ana _MADDE deseni yakalayamaz → madde önceki gövdeye gömülür. Post-tespit: gövdede
+# '<sözcük-karakteri>MADDE <no>- (' yapışık imzası aranır. Dar imza (tam-büyük MADDE + tire + '(' fıkra)
+# atıfları ('MADDE 5'e göre', '132 nci maddesi') ELER. Ölçüm: korpus-genelinde desen 4/4 gerçek, 0 FP.
+_YAPISIK_MADDE = re.compile(
+    r"(?<=[\wçğıöşüâîÇĞİÖŞÜ])"                          # ÖNÜNDE sözcük-karakteri (asıl bug: \b yok)
+    rf"MADDE\s+({_NUM})-\s*(?=\()"                      # MADDE <no>- ( → fıkra imzası (0-FP dar)
+)
+
+
+def _split_yapisik_madde(no: str, body: str) -> list[Article]:
+    """Gövdede önceki içeriğe yapışık gömülü madde(ler) varsa ayrı Article'lara böl (FAZ 16, 0-FP).
+    Bölme noktası: gömülü 'MADDE'den geriye en yakın cümle-sonu ([.!?]) = gömülü maddenin başlık başı.
+    Cümle-sonu bulunamazsa (başlık önceki gövdeden ayrılamaz) o gömülü madde bölünmez (0-FP korunur).
+    Yapışık madde yoksa [Article(no, body)] döner (davranış değişmez)."""
+    marks = list(_YAPISIK_MADDE.finditer(body))
+    if not marks:
+        return [Article(no=no, body=body)]
+    # 1) Kesim noktalarını topla: (baslik_bas, MADDE-isareti-sonu, gomulu_no). baslik_bas = gömülü
+    #    'MADDE'den geriye en yakın cümle-sonu + 1. Cümle-sonu yoksa o gömülü madde atlanır.
+    kesimler: list[tuple[int, int, str]] = []
+    tarama_bas = 0  # cümle-sonu araması bir önceki gömülü maddenin gövde-başından itibaren
+    for m in marks:
+        kesim = max((body.rfind(ch, tarama_bas, m.start()) for ch in ".!?"), default=-1)
+        if kesim < 0:
+            continue  # cümle-sonu yok → başlığı ayıramayız → bu gömülü maddeyi bölme (0-FP)
+        kesimler.append((kesim + 1, m.end(), m.group(1)))
+        tarama_bas = m.end()
+    if not kesimler:
+        return [Article(no=no, body=body)]
+    # 2) Ardışık dilimle. Üst madde: body başından ilk başlık-başına kadar. Sonra her gömülü madde:
+    #    (başlık = kesim..MADDE) + (gövde = MADDE-sonu.. sonraki başlık-başı VEYA body sonu).
+    out: list[Article] = [Article(no=no, body=body[:kesimler[0][0]].strip())]
+    for i, (baslik_bas, madde_sonu, gomulu_no) in enumerate(kesimler):
+        baslik = body[baslik_bas:_yapisik_madde_baslik_sonu(body, madde_sonu)].strip()
+        govde_son = kesimler[i + 1][0] if i + 1 < len(kesimler) else len(body)
+        govde = body[madde_sonu:govde_son].strip()
+        out.append(Article(no=gomulu_no, body=f"{baslik}\n{govde}" if baslik else govde))
+    return out
+
+
+def _yapisik_madde_baslik_sonu(body: str, madde_sonu: int) -> int:
+    """Başlık, kesim noktasından gömülü 'MADDE' işaretinin BAŞINA kadar uzanır. madde_sonu = 'MADDE N- '
+    işaretinin SONU; başlık için işaretin başını geri hesapla ('MADDE' kelimesinin ilk harfi)."""
+    # madde_sonu'ndan geriye 'MADDE' kelimesinin başını bul (regex zaten eşleşti, güvenli).
+    return body.rfind("MADDE", 0, madde_sonu)
+
+
 def split_articles(text: str) -> list[Article]:
     # Kanun-sonu işlenemeyen-madde ekini at (başka kanunlara ait; hayalet chunk kaynağı).
     eki = _ISLENEMEYEN_EKI.search(text)
@@ -174,7 +223,7 @@ def split_articles(text: str) -> list[Article]:
         body = _strip_kanun_sonu_ek(body)
         if not son_madde:  # sonraki maddenin (kolonlu) başlığı gövde kuyruğuna sızmışsa kırp
             body = _BLEED_BASLIK.sub("", body).strip()
-        out.append(Article(no=no, body=body))
+        out.extend(_split_yapisik_madde(no, body))
     return out
 
 
