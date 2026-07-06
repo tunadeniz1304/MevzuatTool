@@ -132,10 +132,15 @@ def madde_to_chunk(m: Madde, kanun_ad: str, kanun_no: str) -> dict | None:
     # (CLAUDE.md ilke 5; yurutluk='mülga' ile işaretli). Sadece YÜRÜRLÜKTEKİ artefaktlar elenir.
     if m.yurutluk != "mülga" and _saf_artefakt(govde_t):
         return None
+    # FAZ 19: tertip-çakışması — kanun_no globalde benzersiz DEĞİL (14 kanun_no altında 2 farklı
+    # kanun; ör. 3201 = Emniyet Teşkilat + Yurt Dışı Sosyal Güvenlik). m.id ('MID-madde') ilk
+    # parçası (mid) benzersizdir → retrieval'da kanun-bazlı filtreleme için mevzuat_id kullanılmalı.
+    mevzuat_id = m.id.split("-")[0] if m.id else None
     return {
         "id": m.id,
         "text": text,
         "metadata": {
+            "mevzuat_id": mevzuat_id,
             "kanun_no": kanun_no,
             "kanun_ad": kanun_ad,
             "madde_no": m.no,

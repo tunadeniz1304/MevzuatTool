@@ -222,3 +222,13 @@ def test_mulga_madde_is_included_but_marked():
     c = madde_to_chunk(m, kanun_ad="KVKK", kanun_no="6698")
     assert c is not None
     assert c["metadata"]["yurutluk"] == "mülga"
+
+
+def test_madde_to_chunk_has_mevzuat_id():
+    # FAZ 19: tertip-çakışması — metadata'ya benzersiz mevzuat_id (id ilk parçası) eklenir.
+    # kanun_no benzersiz değil (3201 iki kanun: Emniyet Teşkilat + Yurt Dışı Sosyal Güvenlik)
+    # ama mevzuat_id (mid tabanlı) benzersizdir.
+    m = _madde("5", "(1) Örnek hüküm metni burada yer alır.")
+    c = madde_to_chunk(m, kanun_ad="EMNİYET TEŞKİLAT KANUNU", kanun_no="3201")
+    assert c["metadata"]["mevzuat_id"] == "104383"     # id ilk parçası (MID)
+    assert c["metadata"]["kanun_no"] == "3201"          # kanun_no aynen korunur
