@@ -79,6 +79,39 @@ _SEVIYE_BASLIK_BLEED = re.compile(
 )
 
 
+# Kanun-sonu ek bleed (FAZ 15 / BUG 9): kanunun SON maddesi 'yürütme'dir ('...Bakanlar Kurulu/
+# Cumhurbaşkanı yürütür') — kısa, tek cümle. Ama split_articles son maddede end=len(text) olduğu
+# için, ardından gelen kanun-sonu ekleri (değişiklik-listesi tablosu 'X SAYILI KANUNA EK VE
+# DEĞİŞİKLİK GETİREN...', kadro/tarife cetvelleri 'N SAYILI LİSTE/CETVEL', 'EK GÖSTERGE CETVELİ')
+# gövdeye giriyor (5996:50=5791 kar, 7440:25...). ANCHOR = 'yürütür' cümlesi; kuyruk (anchor sonrası)
+# TÜMÜ-BÜYÜK belge başlığıyla başlıyorsa oradan sona kes. Ölçüm: 432 kesim, 0 FP (hepsi çöp).
+# 0-FP KAPILARI: (1) anchor ŞART (anchorsuz salt-sınır 299 tüm-madde-kaybı); (2) kuyruk tümü-büyük
+# OLMALI — küçük-harf başlarsa (meşru hüküm/düz-metin çöp: 7326:18 CB Kararı) KESME → ertelenen semantik;
+# (3) meşru 'Yürürlük' maddeleri 'yürütür' içermez, anchor dokunmaz.
+_KANUN_SONU_ANCHOR = re.compile(
+    r"(?i)(?:bakanlar\s+kurulu|cumhurbaşkanı)\s+yürütür\s*\.?"
+)
+
+
+def _strip_kanun_sonu_ek(body: str) -> str:
+    """Son-madde 'yürütür' anchor'ı sonrası TÜMÜ-BÜYÜK kanun-sonu ek kuyruğunu kırp (0-FP).
+    Anchor yoksa VEYA kuyruk tümü-büyük değilse body değişmez."""
+    a = _KANUN_SONU_ANCHOR.search(body)
+    if not a:
+        return body
+    kuyruk = body[a.end():].lstrip(". \n")
+    if len(kuyruk) < 30:            # kuyruk yok/kısa → temiz madde
+        return body
+    ilk = kuyruk[:80]
+    harf = [c for c in ilk if c.isalpha()]
+    if not harf:
+        return body
+    buyuk_oran = sum(c.isupper() for c in harf) / len(harf)
+    if buyuk_oran <= 0.85:          # küçük-harf kuyruk (meşru/düz-metin çöp) → KESME (ertele)
+        return body
+    return body[:a.end()].strip()   # anchor'a kadar tut, tümü-büyük kuyruğu at
+
+
 # Kanun-sonu 'işlenemeyen madde eki': '(TARİHLİ VE NNNN) SAYILI ... KANUNA İŞLENEMEYEN ...'
 # başlığı. Başka kanunlarla bu kanuna eklenmek istenip işlenememiş maddelerin listesidir — bu
 # kanunun maddesi DEĞİL. Buradan sonrası madde olarak parse edilmemeli (yoksa tekrarlı 'Geçici 1'
@@ -109,6 +142,7 @@ def split_articles(text: str) -> list[Article]:
         # Seviye-başlık ('X. BÖLÜM/KISIM ...') gövde kuyruğuna sızmışsa oradan sona kadar kırp.
         # (son madde dâhil — kanun-sonu 'Çeşitli ve Son Hükümler' başlığı son maddede de sızabilir)
         body = _SEVIYE_BASLIK_BLEED.sub("", body).strip()
+        body = _strip_kanun_sonu_ek(body)
         if not son_madde:  # sonraki maddenin (kolonlu) başlığı gövde kuyruğuna sızmışsa kırp
             body = _BLEED_BASLIK.sub("", body).strip()
         out.append(Article(no=no, body=body))

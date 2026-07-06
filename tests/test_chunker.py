@@ -324,3 +324,17 @@ def test_prefix_and_suffix_maddeler_get_unique_no():
     nos = [a.no for a in split_articles(text)]
     assert nos == ["1", "Geçici 1", "Ek 2", "Mükerrer 257", "257/A"]
     assert len(nos) == len(set(nos))  # benzersiz, çakışma yok
+
+
+def test_strips_kanun_sonu_ek_after_yurutme():
+    # BUG 9 (FAZ 15): son madde 'yürütür' + kanun-sonu ek (tümü-büyük cetvel/liste) gövdeye sızmış.
+    # Gerçek veri (5996:50 Gıda K., 7440:25): '...Bakanlar Kurulu yürütür. GIDA VE YEM İŞLETMELERİ...
+    # 5996 SAYILI KANUNA EK VE DEĞİŞİKLİK GETİREN...'. Anchor sonrası tümü-büyük kuyruk kırpılmalı.
+    text = ("MADDE 49- (1) Bu Kanun yayımı tarihinde yürürlüğe girer. "
+            "MADDE 50- (1) Bu Kanun hükümlerini Bakanlar Kurulu yürütür. "
+            "7440 SAYILI KANUNA EK VE DEĞİŞİKLİK GETİREN MEVZUATIN VEYA ANAYASA "
+            "MAHKEMESİ KARARLARININ YÜRÜRLÜĞE GİRİŞ TARİHİNİ GÖSTERİR LİSTE "
+            "Değiştiren Kanunun Numarası 7456 Yürürlüğe Giriş Tarihi 15/7/2023")
+    arts = split_articles(text)
+    assert [a.no for a in arts] == ["49", "50"]
+    assert arts[1].body == "(1) Bu Kanun hükümlerini Bakanlar Kurulu yürütür."  # kuyruk kesildi
