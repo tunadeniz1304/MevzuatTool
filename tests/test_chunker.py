@@ -406,3 +406,76 @@ def test_yururluk_madde_with_uppercase_law_ref_not_over_cut():
             "1/1/2024 tarihinde yürürlüğe girer.")
     arts = split_articles(text)
     assert "6098 SAYILI" in arts[0].body  # yürürlük maddesi kesilmez (anchor yok)
+
+
+def test_splits_embedded_madde_stuck_to_previous_body():
+    # FAZ 16 (BUG 2): kaynak metinde sonraki maddenin başlığı önceki gövdeye BOŞLUKSUZ yapışık.
+    # Türkçe küçük 'ı' + 'M' arası \b oluşmaz → _MADDE yakalayamaz → madde gömülür. Gerçek veri:
+    # 6100 (HMK) M131 '...şartlarıMADDE 132- (1)...' ve '...süresiMADDE 133- (1)...'.
+    # FAZ 16 çift-başlık düzeltmesi: gömülü madde body'si BAŞLIKSIZ olmalı — başlık metni
+    # (kesim..MADDE arası) API madde-ağacından (node.baslik) zaten gelip corpus.py'de prepend
+    # edilecek; body'ye tekrar gömülürse çift başlık oluşur (M132/M133/M135/M165 gerçek bug).
+    text = ("MADDE 131- (1) Süresinden sonra karşı dava açılamaz. "
+            "Karşı dava açılabilmesinin şartlarıMADDE 132- (1) Karşı dava açılabilmesi için şu şartlar aranır. "
+            "Karşı davanın açılması ve süresiMADDE 133- (1) Karşı dava cevap dilekçesiyle açılır.")
+    arts = split_articles(text)
+    assert [a.no for a in arts] == ["131", "132", "133"]
+    assert arts[0].body == "(1) Süresinden sonra karşı dava açılamaz."
+    assert arts[1].body == "(1) Karşı dava açılabilmesi için şu şartlar aranır."
+    assert arts[2].body == "(1) Karşı dava cevap dilekçesiyle açılır."
+
+
+def test_splits_single_embedded_madde():
+    # Tek gömülü madde vakası. Gerçek veri: 6100 M134 '...hükümlerMADDE 135- (1)...', M164 '...sorunMADDE 165- (1)...'.
+    # Gömülü body başlıksız olmalı (çift-başlık fix) — bkz. yukarıdaki test yorumu.
+    text = ("MADDE 134- (1) Asıl dava sona erer. "
+            "Uygulanacak hükümlerMADDE 135- (1) Bu Kanunun hükümleri uygulanır.")
+    arts = split_articles(text)
+    assert [a.no for a in arts] == ["134", "135"]
+    assert arts[0].body == "(1) Asıl dava sona erer."
+    assert arts[1].body == "(1) Bu Kanunun hükümleri uygulanır."
+
+
+def test_embedded_title_with_internal_ordinal_dot_split_at_real_sentence_end():
+    # CRITICAL fix (task-reviewer bulgusu): _split_yapisik_madde eskiden `rfind` ile EN SAĞDAKİ
+    # noktayı cümle-sonu sanıyordu. Türkçe başlıkta sıra-noktası ('5. fıkra') veya kısaltma noktası
+    # gerçek cümle-sonu DEĞİLDİR (nokta sonrası küçük harfle devam eder). Gerçek cümle-sonu:
+    # [.!?] + boşluk + BÜYÜK harfle başlayan yeni birim. Bu testte gömülü başlık '5. fıkra...' ile
+    # başlıyor — eski kod yanlışlıkla '5.' içindeki noktadan bölüyordu (madde 5 gövdesine fazladan
+    # '5.' sızıyor, madde 6 başlığından '5.' düşüyordu). Testin asıl amacı burada da korunuyor:
+    # bölme noktası madde 5 gövdesinin '...biter.' ile TEMİZ bitmesini doğrular (madde 5'e '5.'
+    # sızmıyor). Çift-başlık fix'i sonrası gömülü başlık metni artık body'ye gömülmüyor (atılıyor;
+    # gerçek parser'da başlık node.baslik'ten gelir) — madde 6 body'si başlıksız yalnız fıkra.
+    text = ("MADDE 5- (1) Onceki madde biter. 5. fikra hukmune gore duzenlenen sartlari"
+            "MADDE 6- (1) Yeni madde icerigi.")
+    arts = split_articles(text)
+    assert [a.no for a in arts] == ["5", "6"]
+    assert arts[0].body == "(1) Onceki madde biter."
+    assert arts[1].body == "(1) Yeni madde icerigi."
+
+
+def test_normal_spaced_madde_not_double_split():
+    # FP-koruma: boşlukla ayrılmış normal 'MADDE 2- (1)' zaten ana _MADDE ile yakalanır;
+    # yapışık-tespit onu TEKRAR bölmemeli (lookbehind sözcük-karakteri şartı boşluğu eler).
+    text = "MADDE 1- (1) Birinci hüküm. MADDE 2- (1) İkinci hüküm."
+    arts = split_articles(text)
+    assert [a.no for a in arts] == ["1", "2"]
+    assert arts[0].body == "(1) Birinci hüküm."
+    assert arts[1].body == "(1) İkinci hüküm."
+
+
+def test_embedded_reference_not_split_as_madde():
+    # FP-koruma: gövde-içi atıf yapışık-madde SAYILMAZ. 'maddeMADDE' gibi kapama görülse bile,
+    # imza 'MADDE <no>- (' (tire + fıkra parantezi) gerektirir; atıf bu biçimde değil.
+    text = "MADDE 1- (1) Bu Kanunun 5 inci maddesine göre işlem yapılır ve MADDE 5 hükmü saklıdır."
+    arts = split_articles(text)
+    assert [a.no for a in arts] == ["1"]  # atıf madde olarak bölünmez
+    assert "5 inci maddesine göre" in arts[0].body
+
+
+def test_embedded_madde_without_sentence_boundary_not_split():
+    # FP-koruma / edge: yapışık 'MADDE N- (' var AMA öncesinde cümle-sonu ([.!?]) YOK →
+    # başlığı önceki gövdeden ayıramayız → o gömülü madde bölünmez (yanlış başlık üretme).
+    text = "MADDE 1- (1) baslangicMADDE 2- (1) devam"
+    arts = split_articles(text)
+    assert [a.no for a in arts] == ["1"]  # cümle-sonu yok → bölme yok
