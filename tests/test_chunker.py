@@ -406,3 +406,27 @@ def test_yururluk_madde_with_uppercase_law_ref_not_over_cut():
             "1/1/2024 tarihinde yürürlüğe girer.")
     arts = split_articles(text)
     assert "6098 SAYILI" in arts[0].body  # yürürlük maddesi kesilmez (anchor yok)
+
+
+def test_splits_embedded_madde_stuck_to_previous_body():
+    # FAZ 16 (BUG 2): kaynak metinde sonraki maddenin başlığı önceki gövdeye BOŞLUKSUZ yapışık.
+    # Türkçe küçük 'ı' + 'M' arası \b oluşmaz → _MADDE yakalayamaz → madde gömülür. Gerçek veri:
+    # 6100 (HMK) M131 '...şartlarıMADDE 132- (1)...' ve '...süresiMADDE 133- (1)...'.
+    text = ("MADDE 131- (1) Süresinden sonra karşı dava açılamaz. "
+            "Karşı dava açılabilmesinin şartlarıMADDE 132- (1) Karşı dava açılabilmesi için şu şartlar aranır. "
+            "Karşı davanın açılması ve süresiMADDE 133- (1) Karşı dava cevap dilekçesiyle açılır.")
+    arts = split_articles(text)
+    assert [a.no for a in arts] == ["131", "132", "133"]
+    assert arts[0].body == "(1) Süresinden sonra karşı dava açılamaz."
+    assert arts[1].body == "Karşı dava açılabilmesinin şartları\n(1) Karşı dava açılabilmesi için şu şartlar aranır."
+    assert arts[2].body == "Karşı davanın açılması ve süresi\n(1) Karşı dava cevap dilekçesiyle açılır."
+
+
+def test_splits_single_embedded_madde():
+    # Tek gömülü madde vakası. Gerçek veri: 6100 M134 '...hükümlerMADDE 135- (1)...', M164 '...sorunMADDE 165- (1)...'.
+    text = ("MADDE 134- (1) Asıl dava sona erer. "
+            "Uygulanacak hükümlerMADDE 135- (1) Bu Kanunun hükümleri uygulanır.")
+    arts = split_articles(text)
+    assert [a.no for a in arts] == ["134", "135"]
+    assert arts[0].body == "(1) Asıl dava sona erer."
+    assert arts[1].body == "Uygulanacak hükümler\n(1) Bu Kanunun hükümleri uygulanır."
