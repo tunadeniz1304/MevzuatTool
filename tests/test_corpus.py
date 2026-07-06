@@ -231,6 +231,20 @@ def test_redirect_notu_kapanis_parantezli_kisa_hala_filtered():
     assert c is None
 
 
+def test_uzun_kanun_adli_redirect_notu_hala_filtered():
+    # FAZ 20 Critical fix: {0,200} karakter sınırı, uzun kanun-adlı redirect notlarını (200+ kar)
+    # artık ELEMİYORDU (4 gerçek regresyon: 6824:24, 6745:56, 6009:56, 6569:39). Gerçek ayırt edici
+    # parantez-zorunlu olmasıdır, uzunluk değil → sınır kaldırılır, hâlâ elenmeli.
+    body = (
+        "(22/1/1990 tarihli ve 399 sayılı Kamu İktisadi Teşebbüsleri Personel Rejiminin Düzenlenmesi "
+        "ve 233 Sayılı Kanun Hükmünde Kararnamenin Bazı Maddelerinin Yürürlükten Kaldırılmasına Dair "
+        "Kanun Hükmünde Kararname ile ilgili olup yerine işlenmiştir.)"
+    )
+    m = _madde("24", body)
+    c = madde_to_chunk(m, kanun_ad="X DEĞİŞİKLİK KANUNU", kanun_no="6824")
+    assert c is None
+
+
 def test_maddeler_to_chunks_filters_empty():
     arts = [Article(no="11", body="(1) Dolu madde."), Article(no="12", body="   ")]
     maddeler, _ = enrich(arts, TREE, MID)
