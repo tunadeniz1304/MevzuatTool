@@ -245,6 +245,26 @@ def test_uzun_kanun_adli_redirect_notu_hala_filtered():
     assert c is None
 
 
+def test_madde_no_onekli_redirect_notu_filtered():
+    # FAZ 20 regresyon vakası: önceki fix (parantez-ZORUNLU regex) madde-no önekli redirect
+    # notlarını ("4- 5- (...)" biçiminde, açılış '(' madde-no önekinden SONRA gelir) artık
+    # eleyemiyordu → 164 redirect notu korpusa sızdı. Dar-istisna yaklaşımı: orijinal regex
+    # (parantez OPSİYONEL) + istisna yalnız parantezsiz-uzun gövdeye uygulanır; bu vaka parantez
+    # İÇERİYOR (madde-no önekiyle) → istisna uygulanmaz, hâlâ elenmeli.
+    body = "4- 5- (634 sayılı Kat Mülkiyeti Kanunu ile ilgili olup, yerine işlenmiştir.)"
+    m = _madde("1", body)
+    c = madde_to_chunk(m, kanun_ad="X DEĞİŞİKLİK KANUNU", kanun_no="634")
+    assert c is None
+
+
+def test_boslukli_tireli_madde_no_onekli_redirect_notu_filtered():
+    # Aynı regresyon vakasının boşluklu-tire varyantı ("6 - 7 - 8 - (...)").
+    body = "6 - 7 - 8 - (4447 sayılı Kanunun bazı maddeleri ile ilgili olup, yerine işlenmiştir.)"
+    m = _madde("1", body)
+    c = madde_to_chunk(m, kanun_ad="X DEĞİŞİKLİK KANUNU", kanun_no="4447")
+    assert c is None
+
+
 def test_maddeler_to_chunks_filters_empty():
     arts = [Article(no="11", body="(1) Dolu madde."), Article(no="12", body="   ")]
     maddeler, _ = enrich(arts, TREE, MID)
