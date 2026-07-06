@@ -324,3 +324,85 @@ def test_prefix_and_suffix_maddeler_get_unique_no():
     nos = [a.no for a in split_articles(text)]
     assert nos == ["1", "Geçici 1", "Ek 2", "Mükerrer 257", "257/A"]
     assert len(nos) == len(set(nos))  # benzersiz, çakışma yok
+
+
+def test_strips_kanun_sonu_ek_after_yurutme():
+    # BUG 9 (FAZ 15): son madde 'yürütür' + kanun-sonu ek (tümü-büyük cetvel/liste) gövdeye sızmış.
+    # Gerçek veri (5996:50 Gıda K., 7440:25): '...Bakanlar Kurulu yürütür. GIDA VE YEM İŞLETMELERİ...
+    # 5996 SAYILI KANUNA EK VE DEĞİŞİKLİK GETİREN...'. Anchor sonrası tümü-büyük kuyruk kırpılmalı.
+    text = ("MADDE 49- (1) Bu Kanun yayımı tarihinde yürürlüğe girer. "
+            "MADDE 50- (1) Bu Kanun hükümlerini Bakanlar Kurulu yürütür. "
+            "7440 SAYILI KANUNA EK VE DEĞİŞİKLİK GETİREN MEVZUATIN VEYA ANAYASA "
+            "MAHKEMESİ KARARLARININ YÜRÜRLÜĞE GİRİŞ TARİHİNİ GÖSTERİR LİSTE "
+            "Değiştiren Kanunun Numarası 7456 Yürürlüğe Giriş Tarihi 15/7/2023")
+    arts = split_articles(text)
+    assert [a.no for a in arts] == ["49", "50"]
+    assert arts[1].body == "(1) Bu Kanun hükümlerini Bakanlar Kurulu yürütür."  # kuyruk kesildi
+
+
+def test_strips_kanun_sonu_ek_with_kunye_between_title_and_cetvel():
+    # FAZ 15 GAP: kanun-sonu ek TÜMÜ-BÜYÜK başlıkla başlıyor ama hemen ardından (Ek:.../İptal:...
+    # /Değişik:...) değişiklik künyesi (KÜÇÜK harf) araya giriyor -> ilk 80 karakterin büyük-harf
+    # oranı düşüyor (0.45), anchor guard'ı yanlışlıkla "meşru küçük-harf kuyruk" sanıp kesmiyor.
+    # Gerçek veri: 657 (Devlet Memurları K.) m.239 -> 'yürütür.' sonrası 'I SAYILI CETVEL (Ek: ...
+    # İptal: ...; Yeniden düzenleme: ...) (Değişik:...) HİZMET SINIFLARI...' (16.6K karakter sızıntı).
+    text = ("MADDE 239- Bu Kanun hükümlerini Bakanlar Kurulu yürütür. "
+            "I SAYILI CETVEL (Ek: 9/4/1990-KHK-418/3 md.; İptal: Anayasa Mahkemesinin 5/2/1992 "
+            "tarihli ve E.1990/22, K.1992/6 sayılı Kararı ile; Yeniden düzenleme: 18/5/1994-KHK-"
+            "527/3 md.) (Değişik:1/7/2022-7417/6 md.) HİZMET SINIFLARI İTİBARİYLE UNVAN VEYA "
+            "AYLIK ALINAN DERECELERE GÖRE EK GÖSTERGELER UNVANI Derece Ek Göstergeler")
+    arts = split_articles(text)
+    assert arts[0].body == "Bu Kanun hükümlerini Bakanlar Kurulu yürütür."  # kuyruk (künye dahil) kesildi
+
+
+def test_strips_kanun_sonu_ek_with_short_title_then_kunye():
+    # FAZ 15 GAP varyant: KISA tümü-büyük başlık ('EK - 1 SAYILI CETVEL') hemen ardından künye
+    # (boşluklu ':' biçimiyle '(Mülga : ...)' de dahil), sonra daha fazla tümü-büyük içerik devam
+    # ediyor (103531:16 deseni — 1184 karakter sızıntı).
+    text = ("MADDE 16- Bu Kanun hükümlerini Bakanlar Kurulu yürütür. "
+            "EK - 1 SAYILI CETVEL (Mülga : 2/7/2018-KHK-703/81 md.) 4636 SAYILI KANUNA EK VE "
+            "DEĞİŞİKLİK GETİREN MEVZUATIN VEYA ANAYASA MAHKEMESİ TARAFINDAN İPTAL EDİLEN "
+            "HÜKÜMLERİN YÜRÜRLÜĞE GİRİŞ TARİHİNİ GÖSTERİR LİSTE Değiştiren Kanunun Numarası 4636")
+    arts = split_articles(text)
+    assert arts[0].body == "Bu Kanun hükümlerini Bakanlar Kurulu yürütür."  # künye+cetvel kuyruğu kesildi
+
+
+def test_kunye_strip_does_not_extend_window_into_mixed_case_table():
+    # REGRESYON KORUMASI: künye-atlama pencereyi GENİŞLETMEMELİ. İlk deneme (künye çıkınca hedef
+    # kadar harf toplanana kadar ileri git) 102952-23'ü BOZDU — künye kısa başlıktan hemen sonra
+    # gelince pencere genişleyip künye SONRASI meşru Title-Case tablo başlığını (küçük/karışık
+    # harf) içine çekti, oran 0.93 (kesim doğru) -> 0.84'e düştü (kesim YANLIŞLIKLA durdu).
+    # Gerçek veri: 3269 (Uzman Erbaş K.) m.23 -> 'yürütür.' + 'EK-1 SAYILI CETVEL (Ek: 10/2/2004-
+    # 5085/14 md.) UZMAN ERBAŞLAR İÇİN AYLIK GÖSTERGE TABLOSU Dereceler Kademeler 1 2 3...'.
+    # SABİT pencere (genişletmesiz) künyeyi atınca kalan harfler ('EK-1 SAYILI CETVEL...UZMAN
+    # ERBAŞLAR İÇİN AYLIK GÖSTERGE TABLOSU') hâlâ tümü-büyük -> kesim doğru kalmalı.
+    text = ("MADDE 23- Bu Kanun hükümlerini Bakanlar Kurulu yürütür. "
+            "EK-1 SAYILI CETVEL (Ek: 10/2/2004-5085/14 md.) UZMAN ERBAŞLAR İÇİN AYLIK GÖSTERGE "
+            "TABLOSU Dereceler Kademeler 1 2 3 4 5 6 7 8 9 122 1320 1380 1440 1500")
+    arts = split_articles(text)
+    assert arts[0].body == "Bu Kanun hükümlerini Bakanlar Kurulu yürütür."  # kuyruk (künye dahil) kesildi
+
+
+def test_yurutme_without_ek_kept():
+    # Koruma: 'yürütür' + kanun-sonu ek YOK (temiz yürütme maddesi) → kırpma yapılmaz.
+    text = "MADDE 10- (1) Bu Kanun hükümlerini Cumhurbaşkanı yürütür."
+    arts = split_articles(text)
+    assert arts[0].body == "(1) Bu Kanun hükümlerini Cumhurbaşkanı yürütür."
+
+
+def test_yurutme_with_lowercase_tail_not_cut():
+    # Koruma: 'yürütür' sonrası KÜÇÜK-harf devam (meşru hüküm/düz-metin çöp) → KESME (bu faz dışı,
+    # ertelenen semantik vaka: 7326:18 CB Kararı düz metin). Sadece tümü-büyük çöp kesilir.
+    text = ("MADDE 18- (1) Bu Kanun hükümlerini Cumhurbaşkanı yürütür. Bu Kanunun uygulanması "
+            "ile ilgili olarak Cumhurbaşkanı Kararı ile düzenleme yapılır.")
+    arts = split_articles(text)
+    assert arts[0].body.endswith("düzenleme yapılır.")  # küçük-harf kuyruk KESİLMEZ
+
+
+def test_yururluk_madde_with_uppercase_law_ref_not_over_cut():
+    # Koruma: 'yürürlük' maddesi (yürürlüğe-giriş) 'yürütür' içermez → anchor hiç eşleşmez,
+    # tümü-büyük kanun-adı atfı olsa bile dokunulmaz.
+    text = ("MADDE 20- (1) Bu Kanunun 5 inci maddesi 6098 SAYILI TÜRK BORÇLAR KANUNU ile birlikte "
+            "1/1/2024 tarihinde yürürlüğe girer.")
+    arts = split_articles(text)
+    assert "6098 SAYILI" in arts[0].body  # yürürlük maddesi kesilmez (anchor yok)
