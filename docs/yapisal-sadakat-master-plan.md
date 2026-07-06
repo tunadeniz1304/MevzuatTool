@@ -27,6 +27,7 @@
 | **FAZ 14** | Yürürlük dipnot-künye (E3) ✅ + bleed-text/İKİNCİL B kozmetik | DÜŞÜK | ✅ E3 commit'li (2 madde mülga, 0 FP); bleed-text fix-yok | [faz-14-bleed-gecici-yururluk.md](faz-planlari/faz-14-bleed-gecici-yururluk.md) |
 | **FAZ 15** | Son-madde kanun-sonu ek bleed (BUG 9) — altınset karşılaştırmasıyla bulundu | YÜKSEK | ✅ Tamam (commit'li, 424 kesim + künye-fix, confusion matrix FP=0, +5 yürürlük düzeltmesi; ~97 Title-Case kayıt ertelendi 0-FP imkansız) | [faz-15-kanun-sonu-bleed.md](faz-planlari/faz-15-kanun-sonu-bleed.md) |
 | **FAZ 16** | Madde-bleed / yapışık başlık (BUG 2) — Türkçe `ı`+`M` arası `\b` oluşmaması | ORTA-DÜŞÜK | ✅ Tamam (commit'li, 4 madde HMK 6100, post-tespit + çift-başlık fix, confusion matrix FP=0, 6100-dışı 0 değişim) | [faz-16-madde-bleed.md](faz-planlari/faz-16-madde-bleed.md) |
+| **FAZ 17-20** | Korpus zehir temizliği (3-kaynaklı analiz: altınset + cowork + ham-hakem) | YÜKSEK | ✅ Tamam (commit'li: anchor kör-nokta 6 + madde-arası bleed kolonlu/roma ~297 + tertip-çakışması mevzuat_id 14 kanun + gövde-kaybı 213:93/7143; toplam 303 text + 2 madde, status-flip 0, fıkra dağılımı değişmedi, 0-FP) | [faz-17-20-korpus-zehir-temizligi.md](faz-planlari/faz-17-20-korpus-zehir-temizligi.md) |
 
 > Durum kodları: ⬜ Başlanmadı · 🟡 Planlanıyor · 🔵 Uygulanıyor · ✅ Tamam (commit'li) · ⏸️ Beklemede
 

@@ -523,14 +523,22 @@ def test_bleed_baslik_existing_short_title_still_cut():
     assert arts[0].body == "(1) Kadastro mahkemesine bildirilir."
 
 
-def test_bleed_baslik_extended_list_intro_roots_not_cut():
-    # FAZ 18a guard genişletme: 'şartları:/kişiler:/unsurları:' gibi liste-başı/belirsiz başlıklar
-    # kesilmez (0-FP güvenliği — belirsizi kesmemek doğru taraf). Gerçek veri: 193:46, 2802:36.
-    for tail in ["Basit usule tabi olmanın genel şartları:", "Yararlanamayacak kişiler:",
-                 "Suçun manevi unsurları:"]:
+def test_bleed_baslik_isim_tamlamasi_title_is_cut():
+    # FAZ 18a düzeltme (whole-branch review MUST-FIX): 'X olanlar:'/'X sebepler:' gibi
+    # İSİM-TAMLAMASI kalıpları aslında SONRAKİ MADDENİN BAŞLIĞIdır, liste-başı DEĞİL → kesilir.
+    # Eski geniş _LISTE_BASI bunları yanlışlıkla liste-başı sanıp koruyordu (56 TP kaybı).
+    # Gerçek veri: 'Harçtan muaf olanlar:', 'Mücbir sebepler:' gibi başlıklar.
+    for tail in ["Harçtan muaf olanlar:", "Mücbir sebepler:", "Yürütmeye memur olanlar:"]:
         text = f"MADDE 10- (1) Bir hüküm cümlesi tamamlanır. {tail} MADDE 11- (1) Sonraki."
         arts = split_articles(text)
-        assert tail.rstrip(':') in arts[0].body or tail in arts[0].body, f"kesilmemeliydi: {tail}"
+        assert arts[0].body == "(1) Bir hüküm cümlesi tamamlanır.", f"kesilmeliydi: {tail}"
+
+
+def test_bleed_baslik_yuklem_list_intro_still_protected():
+    # Gerçek liste-başı (yüklem-formu: şunlardır/şöyledir) hâlâ KORUNUR — guard tetiklenir.
+    text = "MADDE 10- (1) Sayılanlar şunlardır: MADDE 11- (1) Sonraki."
+    arts = split_articles(text)
+    assert "şunlardır:" in arts[0].body  # yüklem liste-başı korundu
 
 
 def test_bleed_roma_baslik_single_cut():
