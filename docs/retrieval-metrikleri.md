@@ -102,6 +102,49 @@ nadir/ayırt-edici terimlere IDF ile yüksek ağırlık verir → **madde-ayrım
 - **Yolculuk:** RRF 0.667 → WSUM_050 0.685 → 3-bacak 0.700 (R@10), R@1 0.436 → 0.491. Fine-tuned 0.76'ya
   6 puan; GPU/fine-tune YOK, sadece füzyon + klasik BM25.
 
+**3-bacak EŞİT tam profil (2000 sorgu, ADAY=200) vs WSUM_050 (2-bacak):**
+
+| Metrik | WSUM_050 | 3-BACAK EŞİT | Fark |
+|---|---|---|---|
+| R@1 | 0.4605 | 0.4900 | +0.030 |
+| R@5 | 0.6285 | 0.6680 | +0.040 |
+| R@10 | 0.6855 | 0.7155 | +0.030 |
+| R@20 | 0.7335 | 0.7550 | +0.022 |
+| R@50 | 0.7810 | 0.7925 | +0.012 |
+| R@75 | 0.7995 | 0.8120 | +0.013 |
+| R@100 | 0.8110 | 0.8220 | +0.011 |
+| MRR | 0.5387 | 0.5708 | +0.032 |
+| nDCG@10 | 0.5700 | 0.6025 | +0.033 |
+
+- Kazanç **üst-sıralarda yoğun** (R@1/5/10 +0.03/+0.04), geniş recall'da küçülür (R@100 +0.01). BM25 doğru
+  maddeyi **tepeye taşıyor** (sıralama iyileştirmesi), korpus tavanını değil.
+
+## Madde-seviyesi vs Kanun-seviyesi (3-bacak EŞİT, 2000 sorgu)
+
+Aynı sıralama iki hedef tanımıyla puanlandı: **MADDE** = (kanun_no, madde_no) tam eşleşme (üretim katılığı);
+**KANUN** = yalnız kanun_no eşleşme (doğru mevzuata ulaşıldı mı — madde-ince-ayrımı affedilir).
+
+| Metrik | MADDE | KANUN | Fark |
+|---|---|---|---|
+| R@1 | 0.4900 | 0.7280 | +0.238 |
+| R@5 | 0.6680 | 0.8735 | +0.206 |
+| **R@10** | 0.7155 | **0.9110** | +0.196 |
+| R@20 | 0.7550 | 0.9370 | +0.182 |
+| R@50 | 0.7925 | 0.9590 | +0.167 |
+| R@75 | 0.8120 | 0.9655 | +0.154 |
+| R@100 | 0.8220 | **0.9665** | +0.145 |
+| MRR | 0.5708 | 0.7953 | +0.225 |
+| nDCG@10 | 0.6025 | 0.8214 | +0.219 |
+
+- **Darboğaz nicelenmiş:** sistem doğru **KANUNU** R@10=%91 (R@100=%97) buluyor ama doğru **MADDEYİ** %72.
+  Fark ~%20 = "madde-ayrımı darboğazı". "Düşük" görünen madde-R@50/75/100 aslında **erişim başarısızlığı
+  DEĞİL** — doğru mevzuata ulaşılıyor, aynı kanun içinde komşu maddeler ayrıştırılamıyor.
+- **Gerçek erişim tavanı** = KANUN R@100 (0.967), madde 0.822 değil. Kalan %3.3: korpus-dışı + çok-versiyonlu
+  kanun artefaktı.
+- **İyileştirme yönü:** darboğaz erişimde değil sıralamada → **reranker** (top-50 aday içinde metin-bazlı
+  ince madde-kıyası) ve **fine-tune** (dense'i madde-ayırt edecek şekilde) tam bu boşluğu hedefler. Madde
+  R@10 teorik tavanı = KANUN eğrisi 0.91. Query expansion GEREKSİZ (kapsama zaten yüksek).
+
 ## Ablasyon: dense vs sparse vs hybrid (2000 sorgu)
 
 | Yöntem | R@1 | R@5 | R@10 | MRR | nDCG |
