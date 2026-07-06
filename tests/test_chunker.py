@@ -338,3 +338,28 @@ def test_strips_kanun_sonu_ek_after_yurutme():
     arts = split_articles(text)
     assert [a.no for a in arts] == ["49", "50"]
     assert arts[1].body == "(1) Bu Kanun hükümlerini Bakanlar Kurulu yürütür."  # kuyruk kesildi
+
+
+def test_yurutme_without_ek_kept():
+    # Koruma: 'yürütür' + kanun-sonu ek YOK (temiz yürütme maddesi) → kırpma yapılmaz.
+    text = "MADDE 10- (1) Bu Kanun hükümlerini Cumhurbaşkanı yürütür."
+    arts = split_articles(text)
+    assert arts[0].body == "(1) Bu Kanun hükümlerini Cumhurbaşkanı yürütür."
+
+
+def test_yurutme_with_lowercase_tail_not_cut():
+    # Koruma: 'yürütür' sonrası KÜÇÜK-harf devam (meşru hüküm/düz-metin çöp) → KESME (bu faz dışı,
+    # ertelenen semantik vaka: 7326:18 CB Kararı düz metin). Sadece tümü-büyük çöp kesilir.
+    text = ("MADDE 18- (1) Bu Kanun hükümlerini Cumhurbaşkanı yürütür. Bu Kanunun uygulanması "
+            "ile ilgili olarak Cumhurbaşkanı Kararı ile düzenleme yapılır.")
+    arts = split_articles(text)
+    assert arts[0].body.endswith("düzenleme yapılır.")  # küçük-harf kuyruk KESİLMEZ
+
+
+def test_yururluk_madde_with_uppercase_law_ref_not_over_cut():
+    # Koruma: 'yürürlük' maddesi (yürürlüğe-giriş) 'yürütür' içermez → anchor hiç eşleşmez,
+    # tümü-büyük kanun-adı atfı olsa bile dokunulmaz.
+    text = ("MADDE 20- (1) Bu Kanunun 5 inci maddesi 6098 SAYILI TÜRK BORÇLAR KANUNU ile birlikte "
+            "1/1/2024 tarihinde yürürlüğe girer.")
+    arts = split_articles(text)
+    assert "6098 SAYILI" in arts[0].body  # yürürlük maddesi kesilmez (anchor yok)
