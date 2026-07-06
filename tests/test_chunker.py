@@ -430,3 +430,18 @@ def test_splits_single_embedded_madde():
     assert [a.no for a in arts] == ["134", "135"]
     assert arts[0].body == "(1) Asıl dava sona erer."
     assert arts[1].body == "Uygulanacak hükümler\n(1) Bu Kanunun hükümleri uygulanır."
+
+
+def test_embedded_title_with_internal_ordinal_dot_split_at_real_sentence_end():
+    # CRITICAL fix (task-reviewer bulgusu): _split_yapisik_madde eskiden `rfind` ile EN SAĞDAKİ
+    # noktayı cümle-sonu sanıyordu. Türkçe başlıkta sıra-noktası ('5. fıkra') veya kısaltma noktası
+    # gerçek cümle-sonu DEĞİLDİR (nokta sonrası küçük harfle devam eder). Gerçek cümle-sonu:
+    # [.!?] + boşluk + BÜYÜK harfle başlayan yeni birim. Bu testte gömülü başlık '5. fıkra...' ile
+    # başlıyor — eski kod yanlışlıkla '5.' içindeki noktadan bölüyordu (madde 5 gövdesine fazladan
+    # '5.' sızıyor, madde 6 başlığından '5.' düşüyordu).
+    text = ("MADDE 5- (1) Onceki madde biter. 5. fikra hukmune gore duzenlenen sartlari"
+            "MADDE 6- (1) Yeni madde icerigi.")
+    arts = split_articles(text)
+    assert [a.no for a in arts] == ["5", "6"]
+    assert arts[0].body == "(1) Onceki madde biter."
+    assert arts[1].body == "5. fikra hukmune gore duzenlenen sartlari\n(1) Yeni madde icerigi."

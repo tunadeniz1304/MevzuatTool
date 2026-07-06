@@ -162,24 +162,39 @@ _YAPISIK_MADDE = re.compile(
     rf"MADDE\s+({_NUM})-\s*(?=\()"                      # MADDE <no>- ( → fıkra imzası (0-FP dar)
 )
 
+# GERÇEK cümle-sonu (task-reviewer CRITICAL bulgusu — FAZ 16 fix): [.!?] + boşluk(lar) + BÜYÜK
+# harf VEYA RAKAMLA başlayan yeni birim (ör. gömülü başlık '5. fıkra hükmüne göre...' RAKAMLA
+# başlayabilir — 657:Ek2 gibi vakalar). Sıra-noktası ('5. fıkra') veya kısaltma noktası ('md.',
+# 'T.C.') nokta sonrası KÜÇÜK HARFLE devam eder → bu desenle EŞLEŞMEZ (elenir; eski `rfind` kodu
+# bunu yanlışlıkla cümle-sonu sanıyordu). Rakam sınıfı yalnız boşluktan HEMEN SONRAKİ karakteri
+# kontrol eder — 'duzenlenen 5. fıkra' gibi CÜMLE İÇİ ordinal referanslar bu konumda değil (önlerinde
+# gerçek cümle-sonu yok), dolayısıyla yanlış-pozitif üretmez. _BLEED_BASLIK'teki sezgiyle aynı aile:
+# (?<=[.!?])\s+[A-ZÇĞİÖŞÜ]... match.end() = yeni başlığın başı (ara boşluk atılır).
+_GERCEK_CUMLE_SONU = re.compile(r"[.!?]\s+(?=[A-ZÇĞİÖŞÜ0-9])")
+
 
 def _split_yapisik_madde(no: str, body: str) -> list[Article]:
     """Gövdede önceki içeriğe yapışık gömülü madde(ler) varsa ayrı Article'lara böl (FAZ 16, 0-FP).
-    Bölme noktası: gömülü 'MADDE'den geriye en yakın cümle-sonu ([.!?]) = gömülü maddenin başlık başı.
-    Cümle-sonu bulunamazsa (başlık önceki gövdeden ayrılamaz) o gömülü madde bölünmez (0-FP korunur).
+    Bölme noktası: gömülü 'MADDE'den geriye en yakın GERÇEK cümle-sonu ([.!?] + boşluk + BÜYÜK harf)
+    = gömülü maddenin başlık başı. Sıra-noktası ('5. fıkra') veya kısaltma noktası ('md.') nokta
+    sonrası küçük harfle devam ettiği için gerçek cümle-sonu SAYILMAZ (task-reviewer CRITICAL fix).
+    Gerçek cümle-sonu bulunamazsa (başlık önceki gövdeden ayrılamaz) o gömülü madde bölünmez (0-FP).
     Yapışık madde yoksa [Article(no, body)] döner (davranış değişmez)."""
     marks = list(_YAPISIK_MADDE.finditer(body))
     if not marks:
         return [Article(no=no, body=body)]
     # 1) Kesim noktalarını topla: (baslik_bas, MADDE-isareti-sonu, gomulu_no). baslik_bas = gömülü
-    #    'MADDE'den geriye en yakın cümle-sonu + 1. Cümle-sonu yoksa o gömülü madde atlanır.
+    #    'MADDE'den geriye en yakın GERÇEK cümle-sonu eşleşmesinin sonu (büyük harfin başı).
+    #    Gerçek cümle-sonu yoksa o gömülü madde atlanır.
     kesimler: list[tuple[int, int, str]] = []
     tarama_bas = 0  # cümle-sonu araması bir önceki gömülü maddenin gövde-başından itibaren
     for m in marks:
-        kesim = max((body.rfind(ch, tarama_bas, m.start()) for ch in ".!?"), default=-1)
+        kesim = -1
+        for sonu in _GERCEK_CUMLE_SONU.finditer(body, tarama_bas, m.start()):
+            kesim = sonu.end()  # en sağdaki (MADDE'ye en yakın) eşleşmeyi tut
         if kesim < 0:
-            continue  # cümle-sonu yok → başlığı ayıramayız → bu gömülü maddeyi bölme (0-FP)
-        kesimler.append((kesim + 1, m.end(), m.group(1)))
+            continue  # gerçek cümle-sonu yok → başlığı ayıramayız → bu gömülü maddeyi bölme (0-FP)
+        kesimler.append((kesim, m.end(), m.group(1)))
         tarama_bas = m.end()
     if not kesimler:
         return [Article(no=no, body=body)]
