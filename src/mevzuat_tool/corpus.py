@@ -16,22 +16,34 @@ from mevzuat_tool.enrich import Madde
 # '(... ile ilgili olup ... işlenmiştir.)' gibi bir nottan ibaret — gerçek hüküm BAŞKA kanuna
 # işlenmiş, burada yok (değişiklik paketlerinde yaygın; RAG'a girerse boş/yanıltıcı sonuç).
 # Yalnız gövde BAŞTAN SONA bu desense filtreler; içinde 'işlenmiştir' geçen GERÇEK madde dokunulmaz.
-# FAZ 20 fix (213:93 gövde-kaybı): gerçek redirect notları HEP parantez İÇİNDE; kapanış ')'
-# ZORUNLU tutulur ki parantezsiz gerçek hüküm cümleleri (ör. VUK M93 "...vergilendirme ile
-# ilgili olup, hüküm ifade eden..." — hiç ')' yok) yanlışlıkla yutulmasın.
-# FAZ 20 Critical fix: karakter sınırı ({0,200}) KALDIRILDI — uzun kanun-adlı redirect notları
-# (200+ kar, ör. "...399 sayılı Kamu İktisadi Teşebbüsleri Personel Rejiminin Düzenlenmesi...")
-# parantez-zorunlu şartıyla zaten ayırt ediliyor; uzunluk sınırı gereksizdi ve gerçek redirect
-# notlarını kaçırıyordu (6824:24, 6745:56, 6009:56, 6569:39 regresyonu).
+# FAZ 20 (213:93 gövde-kaybı) — YAKLAŞIM DEĞİŞİKLİĞİ: parantez-ZORUNLU regex (önceki 2 fix) 164
+# redirect notunu (madde-no önekli veya parantezsiz varyant, ör. "4- 5- (634 sayılı ... ile ilgili
+# olup, yerine işlenmiştir.)") artık ELEYEMEDİ → 168 FP regresyon. Regex ORİJİNAL parantez-OPSİYONEL
+# haline döndürüldü (tüm redirect varyantlarını yakalar); ayırt etme işi artık aşağıdaki
+# _sadece_islenmis_notu içindeki DAR İSTİSNA'ya taşındı: yalnız parantezle BAŞLAMAYAN gövdeler
+# gerçek hüküm sayılır (ör. VUK 213:93 "Tahakkuk fişinden gayri, vergilendirme ile ilgili olup,
+# hüküm ifade eden..." — cümle içi, parantezsiz). Gerçek redirect notları HEP parantez İÇİNDE
+# (çıplak veya madde-no önekiyle) gelir; bu ayırt edici, uzunluk DEĞİL.
 _ISLENMIS_NOTU = re.compile(
-    r"^\(\s*[^)]*?(?:yerine\s+işlenmiş|ile\s+ilgili\s+olup)[^)]*?\)\.?\s*$",
+    r"^\(?\s*[^)]*?(?:yerine\s+işlenmiş|ile\s+ilgili\s+olup)[^)]*?\)?\.?\s*$",
     re.IGNORECASE,
 )
 
 
 def _sadece_islenmis_notu(govde: str) -> bool:
-    """Gövde tamamen içeriksiz yönlendirme notu mu? (gerçek hüküm yok)."""
-    return bool(_ISLENMIS_NOTU.match(govde.strip()))
+    """Gövde tamamen içeriksiz yönlendirme notu mu? (gerçek hüküm yok).
+
+    FAZ 20 dar istisna: regex eşleşse bile, gövde parantezle BAŞLAMIYORSA (ne çıplak '(' ne de
+    madde-no önekli '4- 5- (' biçiminde) → bu cümle-içi 'ile ilgili olup' geçen GERÇEK hüküm
+    (ör. VUK 213:93 "Tahakkuk fişinden gayri, vergilendirme ile ilgili olup, hüküm ifade eden..."),
+    redirect notu DEĞİL; korpusta tutulur (False döner). Gerçek redirect notları HEP parantez
+    İÇİNDE (madde-no önekiyle veya çıplak) gelir — bu ayırt edici, uzunluk değil.
+    """
+    g = govde.strip()
+    if not _ISLENMIS_NOTU.match(g):
+        return False
+    baslar_paren = g.startswith("(") or bool(re.match(r"^[\d\s.,-]*\(", g))
+    return baslar_paren
 
 
 _PREFIX_ETIKET = {"gecici": "Geçici", "ek": "Ek", "mukerrer": "Mükerrer"}
