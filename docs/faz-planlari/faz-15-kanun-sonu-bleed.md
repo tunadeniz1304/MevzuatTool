@@ -28,6 +28,22 @@
   64+ blok elle incelendi, 3 kanun (3520, 3234, 4737) mevzuat-mcp kaynağıyla çapraz doğrulandı, 3 FP-şüphesi
   (104702-6, 104777-41, 103220-Gecici5) çürütüldü (ilk ikisi gerçek çöp; üçüncüsü log-görüntüleme artefaktı,
   kod dokunmuyor). 61/413 kesimde atılan tablo `tablolar` metadata'sında zaten korunuyor (tam kayıp değil).
+- **🔧 FOLLOW-UP FIX (commit `bc9e3e7`) — künye-pencere kaçağı:** oran ölçümü 80-kar penceresinde
+  değişiklik künyesi (`(Ek:...)`, `(Mülga:...)` — küçük-harf) içerince oran 0.85 altına düşüp kesimi
+  ATLATIYORDU (102924-239: 16.6k çöp hem `text` hem `fikralar[0].text`'te kalmış — fıkra ağacı aynı
+  `art.body`'den kurulduğu için tek kök). FIX: oranı ölçmeden önce künye-parantezlerini SABİT pencerede
+  çıkar (genişletme YOK — genişletme 102952-23'te regresyon yaratmıştı, yakalandı+düzeltildi). Ayırt edici:
+  künye-anahtar + `:` (meşru `(1)`/`(2018 yılı için)` eşleşmez). **+11 kesim (413→424), 0 yeni-FP**
+  (Opus reviewer: 916 ham HTML FP taraması, 0 regresyon). +3 test (2 kesim RED→GREEN + 1 regresyon-guard).
+  **224 passed.** Fıkra ağacına propagasyon: `enrich.py:220 parse_fikralar` kesilmiş `art.body`'den kurar →
+  tek fix hem text hem fikralar'ı kapsar.
+- **⏸️ ERTELENEN GENİŞ EVREN (~97 kayıt, 0-FP imkansız):** anchor+kuyruk≥30 ama kesilmeyen ~97 madde var.
+  Bunların çoğu Title-Case tablo başlığı ("GELİR İDARESİ BAŞKANLIĞI Başkan..." @0.76, "EK-1 SAYILI EK
+  GÖSTERGE CETVELİ ... UNVANI Derece" @0.77). Kontrol kaydı 103532-12 (@0.746, MEŞRU küçük-harf devamı —
+  kesilmemeli) bu bandda iç içe → güvenli eşik YOK, regex 0-FP veremez. 3'ü (104891-10, 102979-12,
+  104030-5 @~0.84) eşiğin hemen altında gerçek çöp ama bunları yakalamak için eşik indirmek meşru-belirsiz
+  bandı riske atar. Bu EKSİK-TEMİZLİK (kaçırılan TP), yeni FP DEĞİL. Çözüm: HTML-tablo temelli sınır
+  tespiti (`html_table.py` genişletmesi, future) — Z2/SINIF2 gibi "semantik/HTML gerekir" ertelemesi.
 - **SERT KAPILAR:** E-tuzağı 5-kanundan 2'si (FSEK 5846:91, TTK 6102:1535) kesime dahil AMA fıkra-yapısı
   1→1 KORUNDU, meşru içerik ("yürütür") kaybı 0 → yapısal-sadakat ihlali YOK (kullanıcı kararı: E-tuzağı
   sert kapısı = bent/fıkra yapısı, salt text-eşitlik değil). 104458-1B dipnot farkı FAZ 15'ten DEĞİL
