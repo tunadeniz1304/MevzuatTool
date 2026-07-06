@@ -57,16 +57,18 @@ class Article:
 # 'şunlardır:' liste-başı korunur). Gerçek veri: yutulan başlıklar 'Yürütme','Kapsam',
 # 'Tanımlar' gibi gerçek madde başlıkları; liste-başı kelimesi (şöyledir/şunlardır) hiç görülmedi.
 #
-# Liste-başı sözcükleriyle biten cümle (şunlardır:, aşağıdakiler:) gerçek liste açılışıdır → kırpma.
-# FAZ 18a guard genişletme: 'şartlar|unsurlar|nedenler|sebepler|esaslar|haller|kişiler' kökleri
-# eklendi — bunlar da yaygın liste-başı/belirsiz başlık kalıpları ('genel şartları:',
-# 'manevi unsurları:', 'yararlanamayacak kişiler:'). Gerçek veri: 193:46, 2802:36 — 2 belirsiz vaka,
-# TP (gerçek bleed) olsalar bile 0-FP güvenliği için KORUNUR (kesilmez). Master plan: "0-FP
-# veremezsen ertele" — belirsizi kesmemek doğru taraf.
+# Liste-başı = gövdenin kendi liste-açan YÜKLEM cümlesi ('...şunlardır:', 'şöyledir:', 'aşağıdaki
+# gibidir:'). FAZ 18a düzeltme (whole-branch review MUST-FIX): eski geniş kök listesi
+# ('olanlar|hususlar|şartlar|unsurlar|kişiler|sebepler|esaslar|haller' vb.) İSİM-TAMLAMASI
+# köklerini de kapsıyordu — ama bunlar çoğunlukla SONRAKİ MADDENİN BAŞLIĞIdır (isim-tamlaması:
+# 'Harçtan muaf olanlar:', 'Mücbir sebepler:'), liste-başı DEĞİL. Guard bunları yanlışlıkla
+# liste-başı sanıp koruyordu → 56 gerçek maddede başlık gövdeye sızdı (text-bozulması, TP kaybı).
+# Ayrım: gerçek liste-başı '-dir' çekimli YÜKLEM'le biter (şunlardır/şöyledir/gibidir); sonraki
+# maddenin başlığı isim-tamlamasıyla biter (yüklem değil) → guard artık yalnız yüklem-formunu
+# tanır, isim-tamlaması başlıkları _BLEED_BASLIK tarafından kırpılır.
 _LISTE_BASI = re.compile(
-    r"(?i)(?:şunlar|aşağıdaki|şöyle|gibidir|belirtilen|sayılanlar|hususlar|kimseler|kişiler|"
-    r"olanlar|halinde|şartlar|unsurlar|nedenler|sebepler|esaslar|haller)"
-    r"[\wçğıöşüâî ]*:\s*$"
+    r"(?i)(?:şunlardır|şöyledir|gibidir|aşağıdakidir|aşağıdakilerdir|şu\s+şekildedir|"
+    r"aşağıda\s+(?:belirtilmiştir|gösterilmiştir|sayılmıştır))\s*:?\s*$"
 )
 # Gövde-taşma (genişletilmiş): sonraki maddenin BAŞLIĞI ('Müracaat, şikayet ve dava açma:') gövde
 # kuyruğuna sızmış. Virgül + max 10 kelime kapsanır (uzun/virgüllü başlıklar). Liste-başı guard ayrı.
