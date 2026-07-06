@@ -212,15 +212,48 @@ def test_real_content_with_islenmistir_mention_is_kept():
 def test_uzun_parantezsiz_gercek_hukum_ile_ilgili_olup_is_kept():
     # FAZ 20 (213:93 gövde-kaybı) HEDEF testi: gerçek hüküm cümle İÇİNDE 'ile ilgili olup' geçse
     # ve parantez HİÇ olmasa bile (gerçek redirect notlarının aksine), içerik dolu → KALIR.
-    # Gerçek veri: VUK (213) madde 93 "Tebliğ esasları" (342 karakter, hiç ')' yok).
+    # Gerçek veri: VUK (213) madde 93 "Tebliğ esasları" — GERÇEK gövde (342 karakter, cümle-başı,
+    # tarih/'N sayılı'/'MADDE N' ile BAŞLAMAZ). Önceki fix bunu 116 karaktere kısaltmıştı — bu,
+    # >200 şartının yanlışlıkla doğru görünmesine yol açmıştı; burada TAM uzunluk kullanılır.
     body = (
         "Tahakkuk fişinden gayri, vergilendirme ile ilgili olup, hüküm ifade eden bilümum "
-        "vesikalar ve yazılar tebliğ olunur."
+        "vesikalar ve yazılar adresleri bilinen gerçek ve tüzel kişilere posta vasıtasiyle "
+        "ilmühaberli taahhütlü olarak, adresleri bilinmeyenlere ilan yolu ile tebliğ edilir. "
+        "Şu kadar ki, ilgilinin kabul etmesi şartiyle, tebliğin daire veya komisyonda "
+        "yapılması caizdir."
     )
+    assert len(body) > 200                        # istisna şartlarından biri: UZUN
     m = _madde("93", body)
     c = madde_to_chunk(m, kanun_ad="VERGİ USUL KANUNU", kanun_no="213")
     assert c is not None                          # gerçek hüküm elenmemeli
     assert "hüküm ifade eden" in c["text"]
+
+
+def test_redirect_notu_parantezsiz_tarih_basi_filtered():
+    # FAZ 20 60-FP regresyon testi: önceki fix istisnayı SADECE 'baslar_paren=False' yaptı →
+    # >200 şartı kalktı → parantezsiz, tarih/'N sayılı' ile BAŞLAYAN redirect notları (6487:1-11
+    # gibi) yanlışlıkla korundu (60 FP). Gerçek veri: 6487 sayılı kanunun 1-11. maddeleri.
+    # Bu vaka parantezsiz + kısa (82 kar, 200 altı) OLSA DA regex zaten eşleşiyordu; asıl ayırt
+    # edici burada REDIRECT-BAŞLANGICI: tarih ile başlıyor → istisna uygulanmamalı, elenmeli.
+    body = "2/6/1934 tarihli ve 2489 sayılı Kefalet Kanunu ile ilgili olup yerine işlenmiştir."
+    m = _madde("1", body)
+    c = madde_to_chunk(m, kanun_ad="X DEĞİŞİKLİK KANUNU", kanun_no="6487")
+    assert c is None                               # redirect notu → elenmeli
+
+
+def test_7143_gecici_4_uzun_cumle_basi_gercek_hukum_is_kept():
+    # 7143:Geçici 4 tipi — uzun, cümle-başı (tarih/'N sayılı' ile BAŞLAMAYAN), içinde
+    # 'ile ilgili olup' geçen GERÇEK hüküm. Regresyon-koruma: istisna bunu da korumalı.
+    body = (
+        "Bu madde kapsamında yapılan başvurular, ilgili vergi dairesince kayıt altına alınır ve "
+        "inceleme işlemleri ile ilgili olup, sonuçlandırılıncaya kadar başkaca bir işlem tesis "
+        "edilmez; başvuru sahiplerine ayrıca yazılı bildirim yapılır ve süreç izlenir."
+    )
+    assert len(body) > 200
+    m = _madde("Geçici 4", body)
+    c = madde_to_chunk(m, kanun_ad="X KANUNU", kanun_no="7143")
+    assert c is not None
+    assert "kayıt altına alınır" in c["text"]
 
 
 def test_redirect_notu_kapanis_parantezli_kisa_hala_filtered():
