@@ -191,3 +191,20 @@ Final whole-branch review (opus): "Ready with minor follow-ups (defer)", sıfır
   `—` testi yok. Hepsi zararsız.
 - **(scripts/inspect_metadata.py)** Faz B diff'inin parçası DEĞİL — önceden var olan untracked
   scratch. Merge'e yanlışlıkla karışmamalı.
+
+---
+# FAZ 16 (madde-bleed) — final review defer bulguları (2026-07-06)
+
+Opus final whole-branch review "Ready with minor follow-ups". Sıfır must-fix. Deferred:
+
+- **Teorik içerik-kaybı riski (izle):** `_split_yapisik_madde` (chunker.py) gömülü madde bölerken
+  başlık-bölgesini (en-yakın-cümle-sonu .. `MADDE` arası) HER ZAMAN atıyor. Şu an bu bölge 4/4 vakada
+  (6100:132/133/135/165) gerçekten madde başlığı → atılması doğru (başlık node.baslik'ten gelir). AMA desen
+  ileride genişler de "yapışık MADDE öncesi metin gerçek bir hüküm cümlesiyse", o cümle kaybolabilir.
+  Şu an 0-FP kanıtlı (916 kanun, 0/4 kayıp). Yeni yapışık-vaka eklenirse başlık-bölgesinin gerçekten
+  başlık olduğu doğrulanmalı.
+- **Başlık-kaybı ikincil not:** gömülü madde no'su API `tree.by_no`'da yoksa `baslik=None` → başlık
+  tamamen kaybolur (body'ye de konmuyor). Standart maddelerle AYNI risk (yeni kırılganlık değil, BUG 3
+  ile aynı aile: API başlıksızsa parser çıkaramaz).
+- **Kozmetik:** `chunker.py` `_baslik_bas` underscore-prefixed atıl değer (tuple yapısı doğru, gerçek ölü
+  kod değil, konvansiyona uygun).

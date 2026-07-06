@@ -152,6 +152,70 @@ _ISLENEMEYEN_EKI = re.compile(
 )
 
 
+# Yapışık madde-bleed (FAZ 16 / BUG 2): kaynak metinde sonraki maddenin başlığı önceki gövdeye
+# BOŞLUKSUZ yapışık ('...şartlarıMADDE 132- (1)'). Türkçe küçük 'ı'/'i'/'r'/'n' + 'M' arası \b
+# OLUŞMAZ → ana _MADDE deseni yakalayamaz → madde önceki gövdeye gömülür. Post-tespit: gövdede
+# '<sözcük-karakteri>MADDE <no>- (' yapışık imzası aranır. Dar imza (tam-büyük MADDE + tire + '(' fıkra)
+# atıfları ('MADDE 5'e göre', '132 nci maddesi') ELER. Ölçüm: korpus-genelinde desen 4/4 gerçek, 0 FP.
+_YAPISIK_MADDE = re.compile(
+    r"(?<=[\wçğıöşüâîÇĞİÖŞÜ])"                          # ÖNÜNDE sözcük-karakteri (asıl bug: \b yok)
+    rf"MADDE\s+({_NUM})-\s*(?=\()"                      # MADDE <no>- ( → fıkra imzası (0-FP dar)
+)
+
+# GERÇEK cümle-sonu (task-reviewer CRITICAL bulgusu — FAZ 16 fix): [.!?] + boşluk(lar) + BÜYÜK
+# harf VEYA RAKAMLA başlayan yeni birim (ör. gömülü başlık '5. fıkra hükmüne göre...' RAKAMLA
+# başlayabilir — 657:Ek2 gibi vakalar). Sıra-noktası ('5. fıkra') veya kısaltma noktası ('md.',
+# 'T.C.') nokta sonrası KÜÇÜK HARFLE devam eder → bu desenle EŞLEŞMEZ (elenir; eski `rfind` kodu
+# bunu yanlışlıkla cümle-sonu sanıyordu). Rakam sınıfı yalnız boşluktan HEMEN SONRAKİ karakteri
+# kontrol eder — 'duzenlenen 5. fıkra' gibi CÜMLE İÇİ ordinal referanslar bu konumda değil (önlerinde
+# gerçek cümle-sonu yok), dolayısıyla yanlış-pozitif üretmez. _BLEED_BASLIK'teki sezgiyle aynı aile:
+# (?<=[.!?])\s+[A-ZÇĞİÖŞÜ]... match.end() = yeni başlığın başı (ara boşluk atılır).
+_GERCEK_CUMLE_SONU = re.compile(r"[.!?]\s+(?=[A-ZÇĞİÖŞÜ0-9])")
+
+
+def _split_yapisik_madde(no: str, body: str) -> list[Article]:
+    """Gövdede önceki içeriğe yapışık gömülü madde(ler) varsa ayrı Article'lara böl (FAZ 16, 0-FP).
+    Bölme noktası: gömülü 'MADDE'den geriye en yakın GERÇEK cümle-sonu ([.!?] + boşluk + BÜYÜK harf)
+    = gömülü maddenin başlık başı. Sıra-noktası ('5. fıkra') veya kısaltma noktası ('md.') nokta
+    sonrası küçük harfle devam ettiği için gerçek cümle-sonu SAYILMAZ (task-reviewer CRITICAL fix).
+    Gerçek cümle-sonu bulunamazsa (başlık önceki gövdeden ayrılamaz) o gömülü madde bölünmez (0-FP).
+    Yapışık madde yoksa [Article(no, body)] döner (davranış değişmez).
+
+    ÇİFT-BAŞLIK FIX (FAZ 16 sonrası bug): gömülü maddenin body'si BAŞLIKSIZ üretilir — yalnız
+    'MADDE N-' işaretinden SONRAKİ gövde (fıkralar). Başlık metni (kesim..MADDE arası) body'ye
+    PREPEND EDİLMEZ ve atılır: sistem sözleşmesi Article.body'nin başlıksız olmasını gerektirir
+    (bkz. corpus.py) — başlık, API madde-ağacındaki node.baslik alanından ayrıca gelip corpus.py
+    tarafından text'e prepend edilir. Body'ye de eklenirse çift başlık oluşur (M132/M133/M135/M165
+    gerçek regresyon). Konteyner (üst) madde body'si zaten başlıksız kalır (değişmez)."""
+    marks = list(_YAPISIK_MADDE.finditer(body))
+    if not marks:
+        return [Article(no=no, body=body)]
+    # 1) Kesim noktalarını topla: (baslik_bas, MADDE-isareti-sonu, gomulu_no). baslik_bas = gömülü
+    #    'MADDE'den geriye en yakın GERÇEK cümle-sonu eşleşmesinin sonu (büyük harfin başı).
+    #    Gerçek cümle-sonu yoksa o gömülü madde atlanır.
+    kesimler: list[tuple[int, int, str]] = []
+    tarama_bas = 0  # cümle-sonu araması bir önceki gömülü maddenin gövde-başından itibaren
+    for m in marks:
+        kesim = -1
+        for sonu in _GERCEK_CUMLE_SONU.finditer(body, tarama_bas, m.start()):
+            kesim = sonu.end()  # en sağdaki (MADDE'ye en yakın) eşleşmeyi tut
+        if kesim < 0:
+            continue  # gerçek cümle-sonu yok → başlığı ayıramayız → bu gömülü maddeyi bölme (0-FP)
+        kesimler.append((kesim, m.end(), m.group(1)))
+        tarama_bas = m.end()
+    if not kesimler:
+        return [Article(no=no, body=body)]
+    # 2) Ardışık dilimle. Üst madde: body başından ilk başlık-başına kadar (başlık metni atılır —
+    #    kesim..MADDE arası buraya dahil değil, üst maddenin body'sine de sızmaz). Sonra her gömülü
+    #    madde: yalnız gövde (MADDE-sonu.. sonraki başlık-başı VEYA body sonu) — başlıksız.
+    out: list[Article] = [Article(no=no, body=body[:kesimler[0][0]].strip())]
+    for i, (_baslik_bas, madde_sonu, gomulu_no) in enumerate(kesimler):
+        govde_son = kesimler[i + 1][0] if i + 1 < len(kesimler) else len(body)
+        govde = body[madde_sonu:govde_son].strip()
+        out.append(Article(no=gomulu_no, body=govde))
+    return out
+
+
 def split_articles(text: str) -> list[Article]:
     # Kanun-sonu işlenemeyen-madde ekini at (başka kanunlara ait; hayalet chunk kaynağı).
     eki = _ISLENEMEYEN_EKI.search(text)
@@ -174,7 +238,7 @@ def split_articles(text: str) -> list[Article]:
         body = _strip_kanun_sonu_ek(body)
         if not son_madde:  # sonraki maddenin (kolonlu) başlığı gövde kuyruğuna sızmışsa kırp
             body = _BLEED_BASLIK.sub("", body).strip()
-        out.append(Article(no=no, body=body))
+        out.extend(_split_yapisik_madde(no, body))
     return out
 
 
