@@ -521,3 +521,13 @@ def test_bleed_baslik_existing_short_title_still_cut():
     text = "MADDE 40- (1) Kadastro mahkemesine bildirilir. Hatalar ve düzeltme işlemleri: MADDE 41- (1) X."
     arts = split_articles(text)
     assert arts[0].body == "(1) Kadastro mahkemesine bildirilir."
+
+
+def test_bleed_baslik_extended_list_intro_roots_not_cut():
+    # FAZ 18a guard genişletme: 'şartları:/kişiler:/unsurları:' gibi liste-başı/belirsiz başlıklar
+    # kesilmez (0-FP güvenliği — belirsizi kesmemek doğru taraf). Gerçek veri: 193:46, 2802:36.
+    for tail in ["Basit usule tabi olmanın genel şartları:", "Yararlanamayacak kişiler:",
+                 "Suçun manevi unsurları:"]:
+        text = f"MADDE 10- (1) Bir hüküm cümlesi tamamlanır. {tail} MADDE 11- (1) Sonraki."
+        arts = split_articles(text)
+        assert tail.rstrip(':') in arts[0].body or tail in arts[0].body, f"kesilmemeliydi: {tail}"

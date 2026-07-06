@@ -58,8 +58,14 @@ class Article:
 # 'Tanımlar' gibi gerçek madde başlıkları; liste-başı kelimesi (şöyledir/şunlardır) hiç görülmedi.
 #
 # Liste-başı sözcükleriyle biten cümle (şunlardır:, aşağıdakiler:) gerçek liste açılışıdır → kırpma.
+# FAZ 18a guard genişletme: 'şartlar|unsurlar|nedenler|sebepler|esaslar|haller|kişiler' kökleri
+# eklendi — bunlar da yaygın liste-başı/belirsiz başlık kalıpları ('genel şartları:',
+# 'manevi unsurları:', 'yararlanamayacak kişiler:'). Gerçek veri: 193:46, 2802:36 — 2 belirsiz vaka,
+# TP (gerçek bleed) olsalar bile 0-FP güvenliği için KORUNUR (kesilmez). Master plan: "0-FP
+# veremezsen ertele" — belirsizi kesmemek doğru taraf.
 _LISTE_BASI = re.compile(
-    r"(?i)(?:şunlar|aşağıdaki|şöyle|gibidir|belirtilen|sayılanlar|hususlar|kimseler|olanlar|halinde)"
+    r"(?i)(?:şunlar|aşağıdaki|şöyle|gibidir|belirtilen|sayılanlar|hususlar|kimseler|kişiler|"
+    r"olanlar|halinde|şartlar|unsurlar|nedenler|sebepler|esaslar|haller)"
     r"[\wçğıöşüâî ]*:\s*$"
 )
 # Gövde-taşma (genişletilmiş): sonraki maddenin BAŞLIĞI ('Müracaat, şikayet ve dava açma:') gövde
