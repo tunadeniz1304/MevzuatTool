@@ -209,6 +209,28 @@ def test_real_content_with_islenmistir_mention_is_kept():
     assert "tedbirleri alır" in c["text"]
 
 
+def test_uzun_parantezsiz_gercek_hukum_ile_ilgili_olup_is_kept():
+    # FAZ 20 (213:93 gövde-kaybı) HEDEF testi: gerçek hüküm cümle İÇİNDE 'ile ilgili olup' geçse
+    # ve parantez HİÇ olmasa bile (gerçek redirect notlarının aksine), içerik dolu → KALIR.
+    # Gerçek veri: VUK (213) madde 93 "Tebliğ esasları" (342 karakter, hiç ')' yok).
+    body = (
+        "Tahakkuk fişinden gayri, vergilendirme ile ilgili olup, hüküm ifade eden bilümum "
+        "vesikalar ve yazılar tebliğ olunur."
+    )
+    m = _madde("93", body)
+    c = madde_to_chunk(m, kanun_ad="VERGİ USUL KANUNU", kanun_no="213")
+    assert c is not None                          # gerçek hüküm elenmemeli
+    assert "hüküm ifade eden" in c["text"]
+
+
+def test_redirect_notu_kapanis_parantezli_kisa_hala_filtered():
+    # KORUMA: gerçek redirect notu (parantezli, KISA) fix SONRASI da hâlâ elenmeli (regresyon yok).
+    body = "(2/7/1964 tarih ve 492 sayılı Kanunun 76 ncı maddesinin değiştirilmesi ile ilgili olup, yerine işlenmiştir.)"
+    m = _madde("1", body)
+    c = madde_to_chunk(m, kanun_ad="X DEĞİŞİKLİK KANUNU", kanun_no="492")
+    assert c is None
+
+
 def test_maddeler_to_chunks_filters_empty():
     arts = [Article(no="11", body="(1) Dolu madde."), Article(no="12", body="   ")]
     maddeler, _ = enrich(arts, TREE, MID)

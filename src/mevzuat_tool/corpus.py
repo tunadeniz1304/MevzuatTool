@@ -16,8 +16,12 @@ from mevzuat_tool.enrich import Madde
 # '(... ile ilgili olup ... işlenmiştir.)' gibi bir nottan ibaret — gerçek hüküm BAŞKA kanuna
 # işlenmiş, burada yok (değişiklik paketlerinde yaygın; RAG'a girerse boş/yanıltıcı sonuç).
 # Yalnız gövde BAŞTAN SONA bu desense filtreler; içinde 'işlenmiştir' geçen GERÇEK madde dokunulmaz.
+# FAZ 20 fix (213:93 gövde-kaybı): gerçek redirect notları HEP parantez İÇİNDE ve KISA (<200 kar);
+# kapanış ')' ZORUNLU + iç kısım sınırlı tutulur ki uzun/parantezsiz gerçek hüküm cümleleri
+# (ör. VUK M93 "...vergilendirme ile ilgili olup, hüküm ifade eden..." — hiç ')' yok, 342 kar)
+# yanlışlıkla yutulmasın.
 _ISLENMIS_NOTU = re.compile(
-    r"^\(?\s*[^)]*?(?:yerine\s+işlenmiş|ile\s+ilgili\s+olup)[^)]*?\)?\.?\s*$",
+    r"^\(\s*[^)]{0,200}?(?:yerine\s+işlenmiş|ile\s+ilgili\s+olup)[^)]{0,200}?\)\.?\s*$",
     re.IGNORECASE,
 )
 
