@@ -31,8 +31,14 @@ kanun-sonu ek bleed'li.
 şikayet ve dava açma:`). Mevcut `_BLEED_BASLIK` dardı (max 5 kelime, virgülsüz).
 
 **Fix:** `_BLEED_BASLIK` genişletildi (virgül + `{0,9}` kelime) + `_LISTE_BASI` guard (liste-başı cümleleri
-`şunlardır:` korunur). Reviewer bulgusu → guard'a 7 kök eklendi (kişiler/şartlar/unsurlar/nedenler/sebepler/
-esaslar/haller). Belirsiz vaka 2 (193:46, 2802:36) → 0-FP güvenliği için korundu. **~256 madde**, 0-FP.
+`şunlardır:` korunur). **~256 madde**, 0-FP.
+
+**Final review must-fix (commit `6f8760a`):** İlk guard (isim-tamlaması kökleri `olanlar/şartlar/kişiler...`)
+ÇOK GENİŞTİ — sonraki-madde başlıklarını (`Harçtan muaf olanlar:`, `Mücbir sebepler:`) yanlışlıkla liste-başı
+sanıp koruyordu → 38 gerçek maddede başlık gövdeye sızıyordu (text-bozulması). Kök: confusion matrix yalnız
+yeni-kesimlere baktı, guard'ın yeni-KORUDUKLARINA (regresyon yönü) bakmadı. Fix: `_LISTE_BASI` YÜKLEM-formuna
+daraltıldı (`şunlardır|şöyledir|gibidir` = `-dir` çekimli fiil; gerçek liste-başı yüklemle biter, başlık
+isim-tamlamasıdır). 38 başlık-bleed kesildi, gerçek liste-başı korundu.
 
 ## FAZ 18b — Madde-arası bleed, roma başlık (parser) — commit `ad3590b`
 
@@ -74,9 +80,9 @@ yanlışlıkla redirect-notu sanıp maddeyi tamamen eliyordu. Kapsam: sistematik
 ## Toplam Regresyon Kapısı (5-katman)
 
 - **Test:** 246 passed (230 baz + 16 yeni FAZ 17-20).
-- **916-kanun compare** (FAZ 16 sonrası → şimdi): text-değişen **303 madde** (FAZ 17: 6, 18a: ~256, 18b: 41),
-  eklenen **+2/-0** (213:93, 7143:Geçici 4). Status-flip **0**. Fıkra/bent/mülga dağılımı DEĞİŞMEDİ (ort 1.48,
-  sahte-bent 13, mülga %11). Metadata: +mevzuat_id (tüm chunk, FAZ 19).
+- **916-kanun compare** (FAZ 16 sonrası → şimdi, must-fix dahil): text-değişen **287 madde** (FAZ 17: 6,
+  18a: ~240, 18b: 41), eklenen **+2/-0** (213:93, 7143:Geçici 4). Status-flip **0**. Fıkra/bent/mülga dağılımı
+  DEĞİŞMEDİ (ort 1.48, sahte-bent 13, mülga %11). Metadata: +mevzuat_id (tüm chunk, FAZ 19).
 - **Confusion matrix** (FAZ 17+18a): 262 kesim, **0 FP** (heuristik 5 "şüphe" ham-doğrulamada hepsi TP:
   5846:33 FSEK m34 başlığı, 2709:60 Anayasa m61 başlığı).
 - **E-tuzağı** (TMK/TBK/TTK/FSEK/Anayasa): 6 madde text-değişti AMA fıkra dağılımı DEĞİŞMEDİ (yapı korundu,
