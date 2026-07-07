@@ -524,3 +524,47 @@ def test_enrich_etuzak_guard_gercek_kanun_no_ile_calisir():
     # gercek_kanun_no=9999 (E-tuzağı DIŞI): aynı başlık KESİLİR (kolonsuz-başlık bleed):
     m_no, _ = enrich([Article(no="47", body=body)], TREE, "103273", gercek_kanun_no="9999")
     assert m_no[0].body == "Sebepsiz zenginleşmeden doğan haklar saklıdır."
+
+
+# FAZ 21c — kolonsuz-başlık dipnot/case/varyant toleransı (build sonrası bulunan 12 FN)
+def test_kolonsuz_baslik_kesim_oncesi_dipnot_toleransi():
+    # 6491 m26 kalıbı: cümle-sonu ile başlık arasında '[6]' dipnot işareti (enrich'te henüz temiz değil).
+    # '[6]' kesilen başlığa ait işarettir → başlıkla birlikte atılır; gerçek gövde cümle-sonunda biter.
+    body = "Teşvikler Cumhurbaşkanı tarafından belirlenir.[6] Değiştirilen ve yürürlükten kaldırılan hükümler"
+    out = _strip_bleed(body, [], [], kanun_no="6491")
+    assert out == "Teşvikler Cumhurbaşkanı tarafından belirlenir."
+
+
+def test_kolonsuz_baslik_sonu_dipnot_toleransi():
+    # 5216 m27 kalıbı: başlık '[42]' dipnot işaretiyle bitiyor.
+    body = "Bu ödenek amaç dışında kullanılamaz. Diğer hükümler[42]"
+    out = _strip_bleed(body, [], [], kanun_no="5216")
+    assert out == "Bu ödenek amaç dışında kullanılamaz."
+
+
+def test_kolonsuz_baslik_turkce_buyuk_harf():
+    # 3466 m34 kalıbı: 'Yürürlükten Kaldırılan Hükümler' (Title-Case, büyük H).
+    body = "Bu hükümler eski olaylar hakkında da uygulanır. Yürürlükten Kaldırılan Hükümler"
+    out = _strip_bleed(body, [], [], kanun_no="3466")
+    assert out == "Bu hükümler eski olaylar hakkında da uygulanır."
+
+
+def test_kolonsuz_baslik_kaldirilan_ve_degistirilen_varyanti():
+    # 4915 m33 kalıbı: 'Kaldırılan ve değiştirilen hükümler' (sözlükte eksikti).
+    body = "Atıflar ilgili maddelerine yapılmış sayılır. Kaldırılan ve değiştirilen hükümler"
+    out = _strip_bleed(body, [], [], kanun_no="4915")
+    assert out == "Atıflar ilgili maddelerine yapılmış sayılır."
+
+
+def test_kolonsuz_baslik_dipnot_etuzak_yine_korunur():
+    # Dipnot toleransı E-tuzağı guard'ını DELMEZ: 6098 dipnotlu başlık yine korunur.
+    body = "Haklar saklıdır.[3] Saklı hükümler"
+    out = _strip_bleed(body, [], [], kanun_no="6098")
+    assert out == body
+
+
+def test_kolonsuz_baslik_dipnot_govde_sonu_sarti_korunur():
+    # Dipnot toleransı gövde-sonu ($) şartını gevşetmez: başlık cümle-ortasındaysa kesilmez.
+    body = "Diğer hükümler[5] bu maddede ayrıca belirtilmiştir ve uygulanır."
+    out = _strip_bleed(body, [], [], kanun_no="9999")
+    assert out == body
