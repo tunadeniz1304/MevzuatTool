@@ -454,3 +454,61 @@ def test_strip_bleed_kanun_no_parametresi_geriye_uyumlu():
     body = "Bu maddenin uygulanmasına ilişkin hususlar yönetmelikle belirlenir. Yürürlük"
     out = _strip_bleed(body, [], [])
     assert out == "Bu maddenin uygulanmasına ilişkin hususlar yönetmelikle belirlenir."
+
+
+def test_kolonsuz_baslik_birlesik_varyant_kesilir():
+    # 6491 m26 / 7330 m9 kalıbı: birleşik varyant başlık gövde sonuna yapışık.
+    body = ("Bu Kanun hükümleri yayımı tarihinde yürürlüğe girer. "
+            "Değiştirilen ve yürürlükten kaldırılan hükümler")
+    out = _strip_bleed(body, [], [], kanun_no="6491")
+    assert out == "Bu Kanun hükümleri yayımı tarihinde yürürlüğe girer."
+
+
+def test_kolonsuz_baslik_diger_hukumler_kesilir():
+    body = ("Denetim usul ve esasları yönetmelikle belirlenir. Diğer hükümler")
+    out = _strip_bleed(body, [], [], kanun_no="5216")
+    assert out == "Denetim usul ve esasları yönetmelikle belirlenir."
+
+
+def test_kolonsuz_baslik_etuzak_haric_kesilmez():
+    # 6102 TTK / 6098 TBK: 'Saklı hükümler' maddenin KENDİ kenar-başlığı → E-tuzağı, KESME.
+    body = ("Sebepsiz zenginleşmeden doğan haklar saklıdır. Saklı hükümler")
+    out = _strip_bleed(body, [], [], kanun_no="6098")
+    assert out == body  # E-tuzağı: dokunulmaz
+
+
+def test_kolonsuz_baslik_mesru_cumle_sonu_kesilmez():
+    # 'hükümler' geçmeyen meşru cümle sonu → dokunulmaz.
+    body = ("Bu Kanunun uygulanmasına ilişkin usul ve esaslar yönetmelikle düzenlenir.")
+    out = _strip_bleed(body, [], [], kanun_no="9999")
+    assert out == body
+
+
+def test_kolonsuz_baslik_iliskin_gecis_hukumleri_kesilir():
+    # 6362 Geç4 kalıbı: '<özne> ilişkin geçiş hükümleri' önek-değişken.
+    body = ("Nakit ödeme ve hisse senedi teslim yükümlülükleri karşılanır. "
+            "Türkiye Sermaye Piyasaları ile Türkiye Değerleme Uzmanları Birliklerine "
+            "ilişkin geçiş hükümleri")
+    out = _strip_bleed(body, [], [], kanun_no="6362")
+    assert out == "Nakit ödeme ve hisse senedi teslim yükümlülükleri karşılanır."
+
+
+def test_kolonsuz_baslik_ile_ilgili_hukumler_kesilir():
+    # '<özne> ile ilgili hükümler' varyantı (önek serbest).
+    body = ("Bu fıkra kapsamındaki işlemler tamamlanır. "
+            "İkrazatçılar ile ilgili hükümler")
+    out = _strip_bleed(body, [], [], kanun_no="6361")
+    assert out == "Bu fıkra kapsamındaki işlemler tamamlanır."
+
+
+def test_iliskin_desen_etuzak_haric():
+    body = ("Bir hüküm cümlesi burada biter. Şuna ilişkin geçiş hükümleri")
+    out = _strip_bleed(body, [], [], kanun_no="4721")  # TMK = E-tuzağı
+    assert out == body  # kesilmez
+
+
+def test_iliskin_desen_cumle_ortasinda_kesmez():
+    # 'ilişkin geçiş hükümleri' cümle ORTASINDA (gövde sonu değil) → dokunulmaz.
+    body = ("Sözleşmeye ilişkin geçiş hükümleri bu maddede ayrıca düzenlenmiştir ve uygulanır.")
+    out = _strip_bleed(body, [], [], kanun_no="9999")
+    assert out == body

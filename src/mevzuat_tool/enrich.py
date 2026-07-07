@@ -98,6 +98,41 @@ _KAPANIS_BASLIK_RE = re.compile(
     + r")\s*$"
 )
 
+# FAZ 21 — kolonsuz komşu-madde başlığı (mevcut C1'in esik-siz kardeşi). Bu başlıklar kısa maddelerde
+# gövdenin son %15'inden ÖNCE başlar → C1'in esik şartını geçemez; bu yüzden AYRI, esik-siz, gövde-sonu
+# ($) anchor'lı desen. Dar sabit-sözlük (birleşik varyantlar); hepsi ham-doğrulandı = sonraki-madde
+# başlığı, meşru-cümle-sonu değil. E-tuzağı guard'ı çağıran tarafta. Gerçek veri: 7330 m9, 6491 m26,
+# 6428 m10, 5510 m104. Uzun-önce sırala (alternasyonda kısa varyant uzunu maskelemesin).
+_FAZ21_BASLIKLAR = (
+    "Değiştirilen ve yürürlükten kaldırılan hükümler",
+    "Yürürlükten kaldırılan ve değiştirilen hükümler",
+    "Uygulanmayacak ve yürürlükten kaldırılan hükümler",
+    "Kaldırılan ve uygulanmayacak hükümler",
+    "Kaldırılan ve uygulanmayacak olan hükümler",
+    "Diğer kanunların değiştirilen hükümleri",
+    "Diğer kanunlara eklenen hükümler",
+    "Uygulanmayacak kanun hükümleri",
+    "Yürürlükten kaldırılan hükümler",
+    "Diğer geçiş hükümleri", "Diğer kanun hükümleri", "Diğer hükümler",
+    "Kaldırılan hükümler", "Saklı hükümler", "Uygulanmayacak hükümler",
+)
+_FAZ21_KAPANIS_RE = re.compile(
+    r"(?<=[.!?])\s+(?:"
+    + "|".join(re.escape(b) for b in sorted(_FAZ21_BASLIKLAR, key=len, reverse=True))
+    + r")\s*$"
+)
+
+# FAZ 21 — önek-değişken kapanış-başlığı: '<kısa özne> ilişkin geçiş hükümleri' / '<özne> ile ilgili
+# hükümler'. Sabit sözlükle yakalanamaz (önek serbest). DAR: cümle-sonu + BÜYÜK-HARF özne (nokta/
+# virgül/kolon YOK, ≤80 kar) + sabit son-ek + gövde SONU ($). Cümle-ortası eşleşmez. Gerçek veri:
+# 6362 Geç4 + 15 kesim. E-tuzağı çağıran blokta hariç. NOT: rakamla başlayan başlıklar ('506 sayılı
+# Kanunun ... kapsamındaki hükümler', 5510 Geç19) BİLİNÇLİ dışarıda — büyük-harf-başlangıç 0-FP
+# kapısıdır; rakam-başlangıca izin madde-içi atıf FP riski açar. 5510 ertelenenlerde.
+_KAPANIS_ILISKIN_RE = re.compile(
+    r"(?<=[.!?])\s+[A-ZÇĞİÖŞÜ][^.,;:]{3,80}?"
+    r"(?:ilişkin\s+geçiş\s+hükümleri|ile\s+ilgili\s+hükümler(?:i)?)\s*$"
+)
+
 # Z4 (FAZ 8): kenar-numaralı kanunlarda (FSEK 5846, TMK...) madde başlığı kenar-numarayla başlar
 # ('5. İktibas serbestisi'). Sonraki maddenin kenar-numarası ('6.') önceki gövde kuyruğuna TEK
 # BAŞINA sızar (başlık metni split'te yok). Cümle-sonu (. ! ?) + boşluk + tek 'N.' + gövde SONU →
@@ -125,6 +160,15 @@ def _strip_bleed(body, level_markers, madde_markers, kanun_no=None):
     if mk is not None and mk.start() >= esik:
         cut = min(cut, mk.start())
     body = body[:cut].strip()
+    # FAZ 21: kolonsuz komşu-madde başlığı (esik-siz, gövde-sonu). E-tuzağı (kenar-başlıklı kanunlar)
+    # HARİÇ — 6098 'Saklı hükümler' / 2709 '... ile ilgili hükümler' maddenin KENDİ başlığı, bleed değil.
+    if kanun_no not in _ETUZAK:
+        f21 = _FAZ21_KAPANIS_RE.search(body)
+        if f21 is not None:
+            body = body[:f21.start()].strip()
+        f21i = _KAPANIS_ILISKIN_RE.search(body)          # FAZ 21 önek-değişken
+        if f21i is not None:
+            body = body[:f21i.start()].strip()
     # Z4: sarkan kenar-numara/roman kuyruğu — kapanış-başlık kesiminden SONRA uygula. 'III. Ortak
     # hükümler'de önce 'Ortak hükümler' kesilir, geriye '... III.' kalır → sarkan roman da kırpılır
     # (iki-aşama; 103273-272, 104456-13). Kesilen gövde üzerinde arandığı için yeni kuyruk görülür.
