@@ -105,6 +105,7 @@ docs/reviews/
 # ---- Dış/büyük veri + yerel görüntüleyici çıktıları (versiyonlanmaz) ----
 altınset/
 analiz/
+backlog/
 prompted_view.html
 *_view.html
 
