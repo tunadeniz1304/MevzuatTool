@@ -79,6 +79,11 @@ _MADDE_MARKER_SON_ORAN = 0.85   # madde-başlığı marker'ı yalnız gövdenin 
 # Uygulanmayacak hükümler. EKLENMEDİ (belirsiz/E-tuzağı over-truncation): Sorumluluk, Konusu,
 # Süre, Yetki, İzin (meşru cümle sonu olabilir); Genel hükümler / Uygulanacak hükümler (kenar-
 # numaralı bağlamda '1. Genel hükümler' gelir → son-ek kesimi yarım keser); Genel olarak (998-tuzağı).
+# FAZ 21 — E-tuzağı: madde-içi kenar-başlık kullanan kanunlar (TMK/TBK/TTK/FSEK/Anayasa). Bunların
+# 'X ile ilgili hükümler' başlıkları bleed DEĞİL, maddenin kendi başlığıdır → kolonsuz-başlık
+# kesiminden HARİÇ tutulur.
+_ETUZAK = {"4721", "6098", "6102", "5846", "2709"}
+
 _KAPANIS_BASLIK = (
     "Yürürlük", "Yürütme", "Geçiş hükümleri", "Geçici hükümler",
     "Yürürlükten kaldırılan hükümler", "Değiştirilen hükümler",
@@ -104,7 +109,7 @@ _KAPANIS_BASLIK_RE = re.compile(
 _SARKAN_KENAR_NUMARA_RE = re.compile(r"(?<=[.!?])\s+(?:\d+|[IVX]+)\.\s*$")
 
 
-def _strip_bleed(body, level_markers, madde_markers):
+def _strip_bleed(body, level_markers, madde_markers, kanun_no=None):
     cut = len(body)
     for mk in level_markers:                # güçlü: her konumda kes
         idx = body.find(mk)
@@ -208,7 +213,7 @@ def enrich(articles, tree, kanun_no, html_tables=None, html_dipnotlar=None):
             level_mk, madde_mk = [], []
 
         # 2. Sızma kırpma — level marker güçlü (her yerde), madde-başlığı zayıf (yalnız kuyrukta).
-        body = _strip_bleed(body_no_apdx, level_mk, madde_mk)
+        body = _strip_bleed(body_no_apdx, level_mk, madde_mk, kanun_no)
         # 2b. Gövde başına sızmış içeriksiz-aralık yönlendirme notunu ('11- (...işlenmiştir)') kırp.
         body = _strip_leading_islenmis_aralik(body)
 
