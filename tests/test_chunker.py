@@ -556,3 +556,39 @@ def test_bleed_roma_multi_not_cut():
             "III - Güzel sanat eserleri: MADDE 4- (1) Sonraki.")
     arts = split_articles(text)
     assert "III - Güzel sanat eserleri:" in arts[0].body  # çoklu-roma, kırpılmadı
+
+
+# FAZ 21 — CETVEL/LİSTE bleed kesim testleri
+from mevzuat_tool.chunker import _strip_kanun_sonu_ek
+
+
+def test_cetvel_bleed_yurutme_sonrasi_tablo_kesilir():
+    # 488 m33 kalıbı: yürütme maddesi + kanun-sonu (1) SAYILI TABLO (Title-Case, tümü-büyük DEĞİL).
+    body = ("Bu kanunu Bakanlar Kurulu yürütür. (1) SAYILI TABLO Damga Vergisine Tâbi "
+            "Kâğıtlar I. Akitlerle ilgili kâğıtlar A. Belli parayı ihtiva eden kâğıtlar: "
+            "1. Mukavelenameler (Binde 7,5)")
+    out = _strip_kanun_sonu_ek(body)
+    assert out == "Bu kanunu Bakanlar Kurulu yürütür."
+    assert "TABLO" not in out
+
+
+def test_cetvel_bleed_liste_ve_cetvel_varyanti_kesilir():
+    for kelime in ("LİSTE", "CETVEL"):
+        body = (f"Bu Kanunu Cumhurbaşkanı yürütür. (2) SAYILI {kelime} Ekli kadro ve "
+                "pozisyonlar listesi burada devam eder ve uzar gider metin metin metin")
+        out = _strip_kanun_sonu_ek(body)
+        assert out == "Bu Kanunu Cumhurbaşkanı yürütür.", kelime
+
+
+def test_cetvel_fp_madde_ici_sayili_liste_atifi_kesilmez():
+    # Madde-içi meşru atıf: yürütme YOK → dokunulmamalı (1214 vakadan temsilci).
+    body = ("Bu maddenin uygulanmasında 4760 sayılı Özel Tüketim Vergisi Kanununa ekli "
+            "(III) sayılı liste kapsamındaki mallar dikkate alınır.")
+    assert _strip_kanun_sonu_ek(body) == body
+
+
+def test_cetvel_fp_yurutme_var_ama_tablo_yok_mevcut_dal_korunur():
+    # Yürütme var, kuyruk tablo-imzasız küçük-harf düz metin → mevcut >0.85 dalı KESMEZ (davranış korunur).
+    body = ("Bu Kanunu Bakanlar Kurulu yürütür. bu ekli metin küçük harfle devam eden "
+            "meşru olmayan ama tablo imzası taşımayan bir kuyruktur ve kesilmemelidir")
+    assert _strip_kanun_sonu_ek(body) == body

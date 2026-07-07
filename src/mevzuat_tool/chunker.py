@@ -127,6 +127,17 @@ _KANUN_SONU_ANCHOR = re.compile(
     r")\s+yürütür\s*\.?"
 )
 
+# FAZ 21 — CETVEL kesim — kırmızı test + regex + dal
+# CETVEL/LİSTE sızması: yürütme-anchor sonrası kuyruk kanun-sonu ekli TABLO/CETVEL/LİSTE
+# imzasıyla BAŞLIYORSA (Title-Case tablo başlıkları büyük-harf oranını 0.85 eşiğinin altına düşürüp
+# mevcut _buyuk_oran_kunyesiz guard'ını kaçırıyor — 488 m33 = 33K çöp). İmza ((1)/(III) SAYILI TABLO..)
+# yalnız kuyruğun BAŞINDA (.match) aranır → cümle-ortası tablo atfı tetiklemez. Anchor ZORUNLU
+# olduğundan (bu fonksiyona sadece anchor bulununca gelinir) madde-içi meşru '... sayılı liste'
+# atıfları (1214 vaka, yürütmesiz) ETKİLENMEZ.
+_SAYILI_EK_BASI = re.compile(
+    r"(?i)^\(?\s*[IVXLC0-9]+\s*\)?\s*SAYILI\s+(?:TABLO|CETVEL|LİSTE|LISTE)"
+)
+
 # FAZ 15 GAP (657:239 ve benzerleri): tümü-büyük kanun-sonu ek başlığının hemen içine/ardına
 # değişiklik künyesi '(Ek: ...)','(Mülga: ...)','(Değişik: ...)' vb. (KÜÇÜK harf) sızmış olabilir
 # ('I SAYILI CETVEL (Ek: 9/4/1990-KHK-418/3 md.; İptal: ...; Yeniden düzenleme: ...) (Değişik:...)
@@ -163,13 +174,16 @@ def _buyuk_oran_kunyesiz(kuyruk: str, hedef: int = 80) -> float | None:
 def _strip_kanun_sonu_ek(body: str) -> str:
     """Son-madde 'yürütür' anchor'ı sonrası TÜMÜ-BÜYÜK kanun-sonu ek kuyruğunu kırp (0-FP).
     Anchor yoksa VEYA kuyruk (künye parantezleri hariç tutularak ölçülünce) tümü-büyük değilse
-    body değişmez."""
+    body değişmez. FAZ 21: kuyruk SAYILI TABLO/CETVEL/LİSTE imzasıyla başlıyorsa tümü-büyük
+    şartına bakılmaksızın kır (Title-Case başlık büyük-harf oranını 0.85 altına düşürüyor)."""
     a = _KANUN_SONU_ANCHOR.search(body)
     if not a:
         return body
     kuyruk = body[a.end():].lstrip(". \n")
     if len(kuyruk) < 30:            # kuyruk yok/kısa → temiz madde
         return body
+    if _SAYILI_EK_BASI.match(kuyruk):   # FAZ 21: tablo-imzalı ek → tümü-büyük şartına bakma, kes
+        return body[:a.end()].strip()
     buyuk_oran = _buyuk_oran_kunyesiz(kuyruk)
     if buyuk_oran is None or buyuk_oran <= 0.85:  # küçük-harf kuyruk (meşru/düz-metin çöp) → KESME
         return body
