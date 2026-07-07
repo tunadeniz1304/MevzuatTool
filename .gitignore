@@ -104,6 +104,7 @@ docs/reviews/
 
 # ---- Dış/büyük veri + yerel görüntüleyici çıktıları (versiyonlanmaz) ----
 altınset/
+analiz/
 prompted_view.html
 *_view.html
 
