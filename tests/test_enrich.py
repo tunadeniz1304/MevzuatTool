@@ -512,3 +512,15 @@ def test_iliskin_desen_cumle_ortasinda_kesmez():
     body = ("Sözleşmeye ilişkin geçiş hükümleri bu maddede ayrıca düzenlenmiştir ve uygulanır.")
     out = _strip_bleed(body, [], [], kanun_no="9999")
     assert out == body
+
+
+def test_enrich_etuzak_guard_gercek_kanun_no_ile_calisir():
+    # ÜRETİM SÖZLEŞMESİ: build_corpus enrich'e kanun_no=MID geçer, gercek_kanun_no=gerçek no AYRI.
+    # E-tuzağı (6098 TBK) gercek_kanun_no ile korunur — mid (103273) ile DEĞİL.
+    body = "Sebepsiz zenginleşmeden doğan haklar saklıdır. Saklı hükümler"
+    # gercek_kanun_no=6098 (E-tuzağı): 'Saklı hükümler' KESİLMEZ (madde kendi kenar-başlığı):
+    m_et, _ = enrich([Article(no="47", body=body)], TREE, "103273", gercek_kanun_no="6098")
+    assert m_et[0].body == body
+    # gercek_kanun_no=9999 (E-tuzağı DIŞI): aynı başlık KESİLİR (kolonsuz-başlık bleed):
+    m_no, _ = enrich([Article(no="47", body=body)], TREE, "103273", gercek_kanun_no="9999")
+    assert m_no[0].body == "Sebepsiz zenginleşmeden doğan haklar saklıdır."

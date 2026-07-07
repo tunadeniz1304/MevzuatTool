@@ -227,7 +227,11 @@ def _madde_tipi(no: str) -> str:
     return "asil"
 
 
-def enrich(articles, tree, kanun_no, html_tables=None, html_dipnotlar=None):
+# `kanun_no` parametresi TARİHSEL olarak mid (mevzuatId) taşır (assign_ids + id üretimi mid-tabanlı,
+# globalde benzersiz — 6551 gibi aynı kanun_no'ya sahip iki kanun ayrışabilsin diye). `gercek_kanun_no`
+# = korpus metadata'sındaki gerçek kanun numarası; YALNIZ E-tuzağı guard'ı (FAZ 21, _ETUZAK) için
+# kullanılır. Verilmezse (None) guard hiçbir kanunu E-tuzağı saymaz (geriye uyumlu, daha kısıtlayıcı).
+def enrich(articles, tree, kanun_no, html_tables=None, html_dipnotlar=None, gercek_kanun_no=None):
     maddeler: list[Madde] = []
     global_dipnotlar: list[Dipnot] = []
     cur_kitap = (None, None)
@@ -257,7 +261,7 @@ def enrich(articles, tree, kanun_no, html_tables=None, html_dipnotlar=None):
             level_mk, madde_mk = [], []
 
         # 2. Sızma kırpma — level marker güçlü (her yerde), madde-başlığı zayıf (yalnız kuyrukta).
-        body = _strip_bleed(body_no_apdx, level_mk, madde_mk, kanun_no)
+        body = _strip_bleed(body_no_apdx, level_mk, madde_mk, gercek_kanun_no)
         # 2b. Gövde başına sızmış içeriksiz-aralık yönlendirme notunu ('11- (...işlenmiştir)') kırp.
         body = _strip_leading_islenmis_aralik(body)
 
