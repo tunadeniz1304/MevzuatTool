@@ -441,3 +441,86 @@ def test_enrich_html_dipnot_overrides_regex():
     maddeler, _ = enrich(arts, TREE, "193", html_dipnotlar=html_dipnotlar)
     m = maddeler[0]
     assert [d.text for d in m.dipnotlar] == ["ANCHOR-tanımı"]   # anchor asıl
+
+
+from mevzuat_tool.enrich import _strip_bleed
+
+
+def test_strip_bleed_kanun_no_parametresi_geriye_uyumlu():
+    # kanun_no verilmezse (default None) mevcut _KAPANIS_BASLIK 'Yürürlük' kesimi aynen çalışmalı.
+    # NOT: gövde C1'in esik (son %15) şartını geçecek uzunlukta olmalı (kısa "Bu madde uygulanır."
+    # gövdesinde eşik geçilmiyor — brief'teki kısa örnek yerine mevcut testlerdeki (satır ~198)
+    # uzunlukta bir gövde kullanıldı; davranış/iddia aynı, yalnız eşik payı düzeltildi).
+    body = "Bu maddenin uygulanmasına ilişkin hususlar yönetmelikle belirlenir. Yürürlük"
+    out = _strip_bleed(body, [], [])
+    assert out == "Bu maddenin uygulanmasına ilişkin hususlar yönetmelikle belirlenir."
+
+
+def test_kolonsuz_baslik_birlesik_varyant_kesilir():
+    # 6491 m26 / 7330 m9 kalıbı: birleşik varyant başlık gövde sonuna yapışık.
+    body = ("Bu Kanun hükümleri yayımı tarihinde yürürlüğe girer. "
+            "Değiştirilen ve yürürlükten kaldırılan hükümler")
+    out = _strip_bleed(body, [], [], kanun_no="6491")
+    assert out == "Bu Kanun hükümleri yayımı tarihinde yürürlüğe girer."
+
+
+def test_kolonsuz_baslik_diger_hukumler_kesilir():
+    body = ("Denetim usul ve esasları yönetmelikle belirlenir. Diğer hükümler")
+    out = _strip_bleed(body, [], [], kanun_no="5216")
+    assert out == "Denetim usul ve esasları yönetmelikle belirlenir."
+
+
+def test_kolonsuz_baslik_etuzak_haric_kesilmez():
+    # 6102 TTK / 6098 TBK: 'Saklı hükümler' maddenin KENDİ kenar-başlığı → E-tuzağı, KESME.
+    body = ("Sebepsiz zenginleşmeden doğan haklar saklıdır. Saklı hükümler")
+    out = _strip_bleed(body, [], [], kanun_no="6098")
+    assert out == body  # E-tuzağı: dokunulmaz
+
+
+def test_kolonsuz_baslik_mesru_cumle_sonu_kesilmez():
+    # 'hükümler' geçmeyen meşru cümle sonu → dokunulmaz.
+    body = ("Bu Kanunun uygulanmasına ilişkin usul ve esaslar yönetmelikle düzenlenir.")
+    out = _strip_bleed(body, [], [], kanun_no="9999")
+    assert out == body
+
+
+def test_kolonsuz_baslik_iliskin_gecis_hukumleri_kesilir():
+    # 6362 Geç4 kalıbı: '<özne> ilişkin geçiş hükümleri' önek-değişken.
+    body = ("Nakit ödeme ve hisse senedi teslim yükümlülükleri karşılanır. "
+            "Türkiye Sermaye Piyasaları ile Türkiye Değerleme Uzmanları Birliklerine "
+            "ilişkin geçiş hükümleri")
+    out = _strip_bleed(body, [], [], kanun_no="6362")
+    assert out == "Nakit ödeme ve hisse senedi teslim yükümlülükleri karşılanır."
+
+
+def test_kolonsuz_baslik_ile_ilgili_hukumler_kesilir():
+    # '<özne> ile ilgili hükümler' varyantı (önek serbest).
+    body = ("Bu fıkra kapsamındaki işlemler tamamlanır. "
+            "İkrazatçılar ile ilgili hükümler")
+    out = _strip_bleed(body, [], [], kanun_no="6361")
+    assert out == "Bu fıkra kapsamındaki işlemler tamamlanır."
+
+
+def test_iliskin_desen_etuzak_haric():
+    body = ("Bir hüküm cümlesi burada biter. Şuna ilişkin geçiş hükümleri")
+    out = _strip_bleed(body, [], [], kanun_no="4721")  # TMK = E-tuzağı
+    assert out == body  # kesilmez
+
+
+def test_iliskin_desen_cumle_ortasinda_kesmez():
+    # 'ilişkin geçiş hükümleri' cümle ORTASINDA (gövde sonu değil) → dokunulmaz.
+    body = ("Sözleşmeye ilişkin geçiş hükümleri bu maddede ayrıca düzenlenmiştir ve uygulanır.")
+    out = _strip_bleed(body, [], [], kanun_no="9999")
+    assert out == body
+
+
+def test_enrich_etuzak_guard_gercek_kanun_no_ile_calisir():
+    # ÜRETİM SÖZLEŞMESİ: build_corpus enrich'e kanun_no=MID geçer, gercek_kanun_no=gerçek no AYRI.
+    # E-tuzağı (6098 TBK) gercek_kanun_no ile korunur — mid (103273) ile DEĞİL.
+    body = "Sebepsiz zenginleşmeden doğan haklar saklıdır. Saklı hükümler"
+    # gercek_kanun_no=6098 (E-tuzağı): 'Saklı hükümler' KESİLMEZ (madde kendi kenar-başlığı):
+    m_et, _ = enrich([Article(no="47", body=body)], TREE, "103273", gercek_kanun_no="6098")
+    assert m_et[0].body == body
+    # gercek_kanun_no=9999 (E-tuzağı DIŞI): aynı başlık KESİLİR (kolonsuz-başlık bleed):
+    m_no, _ = enrich([Article(no="47", body=body)], TREE, "103273", gercek_kanun_no="9999")
+    assert m_no[0].body == "Sebepsiz zenginleşmeden doğan haklar saklıdır."
