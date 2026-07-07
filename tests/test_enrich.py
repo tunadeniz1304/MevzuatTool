@@ -441,3 +441,16 @@ def test_enrich_html_dipnot_overrides_regex():
     maddeler, _ = enrich(arts, TREE, "193", html_dipnotlar=html_dipnotlar)
     m = maddeler[0]
     assert [d.text for d in m.dipnotlar] == ["ANCHOR-tanımı"]   # anchor asıl
+
+
+from mevzuat_tool.enrich import _strip_bleed
+
+
+def test_strip_bleed_kanun_no_parametresi_geriye_uyumlu():
+    # kanun_no verilmezse (default None) mevcut _KAPANIS_BASLIK 'Yürürlük' kesimi aynen çalışmalı.
+    # NOT: gövde C1'in esik (son %15) şartını geçecek uzunlukta olmalı (kısa "Bu madde uygulanır."
+    # gövdesinde eşik geçilmiyor — brief'teki kısa örnek yerine mevcut testlerdeki (satır ~198)
+    # uzunlukta bir gövde kullanıldı; davranış/iddia aynı, yalnız eşik payı düzeltildi).
+    body = "Bu maddenin uygulanmasına ilişkin hususlar yönetmelikle belirlenir. Yürürlük"
+    out = _strip_bleed(body, [], [])
+    assert out == "Bu maddenin uygulanmasına ilişkin hususlar yönetmelikle belirlenir."
