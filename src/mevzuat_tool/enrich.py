@@ -111,15 +111,20 @@ _FAZ21_BASLIKLAR = (
     "Kaldırılan ve uygulanmayacak olan hükümler",
     "Diğer kanunların değiştirilen hükümleri",
     "Diğer kanunlara eklenen hükümler",
+    "Kaldırılan ve değiştirilen hükümler",
     "Uygulanmayacak kanun hükümleri",
     "Yürürlükten kaldırılan hükümler",
     "Diğer geçiş hükümleri", "Diğer kanun hükümleri", "Diğer hükümler",
     "Kaldırılan hükümler", "Saklı hükümler", "Uygulanmayacak hükümler",
 )
+# FAZ 21c: (?i) case-insensitive (Title-Case 'Yürürlükten Kaldırılan Hükümler' de yakalanır) +
+# dipnot '[n]' toleransı iki konumda: cümle-sonu ile başlık arası ('belirlenir.[6] Değiştirilen...')
+# VE başlık sonunda ('Diğer hükümler[42]'). enrich, corpus.py'nin dipnot-temizliğinden ÖNCE çalışır
+# → body'de ham '[n]' vardır. '(?:\s*\[\d+\])?' opsiyonel; gövde-sonu ($) şartı korunur (0-FP).
 _FAZ21_KAPANIS_RE = re.compile(
-    r"(?<=[.!?])\s+(?:"
+    r"(?i)(?<=[.!?])(?:\s*\[\d+\])?\s+(?:"
     + "|".join(re.escape(b) for b in sorted(_FAZ21_BASLIKLAR, key=len, reverse=True))
-    + r")\s*$"
+    + r")(?:\s*\[\d+\])?\s*$"
 )
 
 # FAZ 21 — önek-değişken kapanış-başlığı: '<kısa özne> ilişkin geçiş hükümleri' / '<özne> ile ilgili
@@ -129,8 +134,8 @@ _FAZ21_KAPANIS_RE = re.compile(
 # Kanunun ... kapsamındaki hükümler', 5510 Geç19) BİLİNÇLİ dışarıda — büyük-harf-başlangıç 0-FP
 # kapısıdır; rakam-başlangıca izin madde-içi atıf FP riski açar. 5510 ertelenenlerde.
 _KAPANIS_ILISKIN_RE = re.compile(
-    r"(?<=[.!?])\s+[A-ZÇĞİÖŞÜ][^.,;:]{3,80}?"
-    r"(?:ilişkin\s+geçiş\s+hükümleri|ile\s+ilgili\s+hükümler(?:i)?)\s*$"
+    r"(?<=[.!?])(?:\s*\[\d+\])?\s+[A-ZÇĞİÖŞÜ][^.,;:]{3,80}?"
+    r"(?:ilişkin\s+geçiş\s+hükümleri|ile\s+ilgili\s+hükümler(?:i)?)(?:\s*\[\d+\])?\s*$"
 )
 
 # Z4 (FAZ 8): kenar-numaralı kanunlarda (FSEK 5846, TMK...) madde başlığı kenar-numarayla başlar
