@@ -534,3 +534,90 @@ def test_numarasiz_fikra_no_bentleri_bozmaz():
     assert len(fs) == 1
     assert fs[0].no is None                          # tek fıkra → no yok
     assert [b.isaret for b in fs[0].bentler] == ["a)", "b)"]
+
+
+# ── FAZ 22b: rakamlı-bent regresyon koruması (k193 m7 deseni) ──
+# FAZ 22'nin \x1f fıkra-bölmesi, rakamlı bent (1.2.3.) listesini + aralarındaki devam
+# paragraflarını sahte fıkralara parçalıyordu → bentler kayboluyordu (122 madde, 567 bent).
+# Kural: bir fıkra bent-listesi BAŞLAMIŞSA (1./a) görüldüyse), takip eden rakamsız DEVAM
+# paragrafı da o fıkranın parçasıdır (yeni fıkra değil) → \x1f-öncesi tek-blok davranışı korunur.
+
+
+def test_rakamli_bent_listesi_devam_paragrafiyla_tek_fikra():
+    # k193 m7 deseni: giriş + '1.' bent + (rakamsız devam) + '2.'..'7.' bentler → TEK fıkra, 7 bent.
+    body = ("Aşağıdaki şartlara göre tayin olunur:" + FS +
+            "1. Ticari kazançlarda: işyeri olması," + FS +
+            "Türkiye'de satmaktan maksat, alıcının burada olmasıdır." + FS +   # rakamsız DEVAM
+            "2. Zirai kazançlarda: faaliyetin icrası," + FS +
+            "3. Ücretlerde: hizmetin ifası," + FS +
+            "4. Serbest meslek kazançlarında icra.")
+    fs = parse_fikralar(body)
+    assert len(fs) == 1                                          # tek fıkra (bölünmemeli)
+    assert [b.isaret for b in fs[0].bentler] == ["1.", "2.", "3.", "4."]
+
+
+def test_rakamli_bent_altinda_harf_altbent_korunur():
+    # k193 m7: '3. Ücretlerde:' altında 'a) b)' ALT-BENT. Rakam üst, harf alt (B3 hiyerarşi).
+    body = ("Şartlar:" + FS +
+            "1. Ticari kazanç," + FS +
+            "2. Ücretler:" + FS +
+            "a) hizmetin ifası," + FS +
+            "b) müessese üyeliği," + FS +
+            "3. Diğer kazançlar.")
+    fs = parse_fikralar(body)
+    assert len(fs) == 1
+    isaretler = [b.isaret for b in fs[0].bentler]
+    assert isaretler == ["1.", "2.", "3."]                      # 3 rakamlı bent (harf değil!)
+    # 2. bendin altında a) b) alt-bent
+    bent2 = fs[0].bentler[1]
+    assert [a.isaret for a in bent2.alt_bentler] == ["a)", "b)"]
+
+
+def test_gercek_numarasiz_cok_fikra_hala_bolunur():
+    # REGRESYON-KARŞITI: bentsiz gerçek çok-fıkralı madde HÂLÂ bölünür (FAZ 22 kazancı korunur).
+    # Devam-paragrafı kuralı yalnız bent-listesi olan fıkrayı korur; düz fıkralar bölünür.
+    body = ("Birinci fıkra düz metin." + FS +
+            "İkinci fıkra düz metin." + FS +
+            "Üçüncü fıkra düz metin.")
+    fs = parse_fikralar(body)
+    assert [f.no for f in fs] == ["(1)", "(2)", "(3)"]           # 3 ayrı fıkra
+
+
+def test_buyuk_harf_bent_grubu_devam_paragrafiyla_tek_fikra():
+    # Geçici-36 deseni: 'A) ... a) b)... olarak uygulanır. B) ... a) b)...' — BÜYÜK harf üst-grup,
+    # altında küçük harf alt-bent, aralarda rakamsız devam ('olarak uygulanır.'). Hepsi TEK fıkra.
+    body = ("Sicil notu ortalaması olanlar için:" + FS +
+            "A) Şu durumda:" + FS +
+            "a) beş yıllık ortalama doksan olanlar için altı yıl," + FS +
+            "b) dört yıllık ortalama olanlar için," + FS +
+            "olarak uygulanır." + FS +                          # rakamsız DEVAM
+            "B) Diğer durumda:" + FS +
+            "a) üç yıllık ortalama olanlar için.")
+    fs = parse_fikralar(body)
+    assert len(fs) == 1                                          # tek fıkra — dağılmamalı
+    # bentler KORUNMALI (dağılıp kaybolmamalı): en az 2 bent yakalanır (a)/b) veya A)/B)).
+    assert len(fs[0].bentler) >= 2
+
+
+def test_buyuk_harf_bent_gercek_cok_fikrayi_bozmaz():
+    # REGRESYON-KARŞITI: BÜYÜK harfle BAŞLAYAN normal cümleli çok-fıkralı madde bölünmeye devam.
+    # 'A)' bent işareti için ')' ŞART — düz büyük-harf cümle ('Ancak ...') fıkra sınırını bozmaz.
+    body = ("Ancak bu durum istisnadır." + FS +
+            "Bakan gerekli tedbirleri alır." + FS +
+            "Yönetmelikle düzenlenir.")
+    fs = parse_fikralar(body)
+    assert [f.no for f in fs] == ["(1)", "(2)", "(3)"]           # 3 ayrı fıkra (bozulmadı)
+
+
+def test_bent_listesi_sonrasi_geri_atifli_fikra_ayri_kalir():
+    # DENGE (FAZ 22b): bent listesinden SONRA gelen geri-atıflı kapanış fıkrası ('Bu maddenin 1,2
+    # nci bentlerinde...') AYRI fıkradır (fıkra kazancı) — AMA bent-metni ortası (küçük harf devam)
+    # önceki fıkraya bağlı kalır (bent zinciri korunur). _YENI_FIKRA_SINYALI ikisini ayırır.
+    body = ("Şartlar şunlardır:" + FS +
+            "1. Ticari kazançlarda işyeri olması," + FS +
+            "2. Zirai kazançlarda faaliyetin icrası," + FS +
+            "Bu maddenin 1 inci ve 2 nci bentlerinde sözü edilen değerlendirmeden maksat ödemedir.")
+    fs = parse_fikralar(body)
+    assert len(fs) == 2                                          # bent-fıkrası + geri-atıflı son fıkra
+    assert [b.isaret for b in fs[0].bentler] == ["1.", "2."]     # bentler ilk fıkrada (kayıp yok)
+    assert fs[1].text.startswith("Bu maddenin")                  # son fıkra ayrı (fıkra kazancı)
