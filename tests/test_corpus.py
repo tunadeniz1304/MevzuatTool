@@ -321,3 +321,33 @@ def test_madde_to_chunk_has_mevzuat_id():
     c = madde_to_chunk(m, kanun_ad="EMNİYET TEŞKİLAT KANUNU", kanun_no="3201")
     assert c["metadata"]["mevzuat_id"] == "104383"     # id ilk parçası (MID)
     assert c["metadata"]["kanun_no"] == "3201"          # kanun_no aynen korunur
+
+
+
+
+# ── FAZ 22f: yönlendirme chunk üretici (build_corpus'ta atıf-alan işlenmiş-maddeler için) ──
+from mevzuat_tool.corpus import yonlendirme_chunk
+
+
+def test_yonlendirme_chunk_uretir():
+    # İçeriksiz "3065 sayılı ... yerine işlenmiştir" → yönlendirme chunk (madde bulunur, gövde boş).
+    m = _madde("21", "(25/10/1984 tarihli ve 3065 sayılı Katma Değer Vergisi Kanunu ile ilgili olup yerine işlenmiştir.)")
+    c = yonlendirme_chunk(m, kanun_ad="X", kanun_no="4842")
+    assert c is not None
+    assert c["metadata"]["madde_tipi"] == "islenmistir_yonlendirme"
+    assert c["metadata"]["yerine_islenmistir"] is True
+    assert c["metadata"]["tasindigi_kanun"] == "3065"
+    assert c["metadata"]["madde_no"] == "21"
+    assert c["text"] == ""
+
+
+def test_yonlendirme_chunk_normal_madde_none():
+    # Normal içerikli madde → yönlendirme DEĞİL (None). yonlendirme_chunk yalnız işlenmiştir-notu için.
+    m = _madde("11", "Bu madde yürürlüktedir ve hüküm ifade eder.")
+    assert yonlendirme_chunk(m, kanun_ad="X", kanun_no="6698") is None
+
+
+def test_yonlendirme_chunk_hedefsiz_none():
+    # Hedef kanunu ('NNNN sayılı') çıkarılamayan not → None (yönlendirilecek hedef yok).
+    m = _madde("5", "(Mülga: 1/1/2020)")
+    assert yonlendirme_chunk(m, kanun_ad="X", kanun_no="4842") is None
