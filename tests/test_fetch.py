@@ -136,3 +136,26 @@ def test_fetch_tree_empty_not_cached(tmp_path):
     nodes = _run(f.fetch_tree("888"))
     assert nodes == []
     assert not (tmp_path / "treejson_888.json").exists()
+
+
+# ── FAZ 22: strip_html paragraf sınırını \x1f ile korur ──
+from mevzuat_tool.fetch import strip_html
+
+
+def test_strip_html_p_sinirina_unit_separator_koyar():
+    # Ham HTML'de her fıkra ayrı <p>. strip_html bu sınıra \x1f koyar → fıkra bölme için sinyal.
+    html = "<p>Birinci fıkra metni.</p><p>İkinci fıkra metni.</p>"
+    out = strip_html(html)
+    assert "\x1f" in out
+    # iki fıkra sınırla ayrık, içerik korunur
+    parcalar = [p for p in out.split("\x1f") if p.strip()]
+    assert len(parcalar) == 2
+    assert "Birinci fıkra" in parcalar[0]
+    assert "İkinci fıkra" in parcalar[1]
+
+
+def test_strip_html_br_hala_satir_kirigi():
+    # <br> davranışı DEĞİŞMEZ (paragraf değil, satır-içi kırık) — normalize onu boşluk yapar.
+    html = "Satır bir<br>Satır iki"
+    out = strip_html(html)
+    assert "\x1f" not in out          # <br> paragraf sınırı değil

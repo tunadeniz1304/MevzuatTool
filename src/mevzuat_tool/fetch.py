@@ -57,12 +57,25 @@ def _decode_base64(raw: str) -> str:
 
 
 def strip_html(html_text: str) -> str:
-    """Ham HTML → düz metin (etiket sök + entity çöz)."""
+    """Ham HTML → düz metin (etiket sök + entity çöz).
+
+    FAZ 22: paragraf/blok sınırlarını ('<p>', '<div>', '<li>' kapanış/açılışı) '\x1f' (Unit
+    Separator — metinde asla geçmez) ile işaretle. Türk mevzuatında her fıkra/bent ayrı <p>;
+    bu sınır fıkra bölme için tek sinyal (numarasız fıkra). normalize_text '\x1f'i korur,
+    fikra.py numarasız fıkraları buradan böler. '<br>' satır-içi kırıktır (fıkra sınırı DEĞİL) →
+    '\n' kalır, normalize onu boşluğa indirir. Ardışık sınırlar tek '\x1f'e sadeleşir."""
     text = re.sub(r"<br\s*/?>", "\n", html_text, flags=re.IGNORECASE)
+    text = re.sub(r"</?(?:p|div|li)\b[^>]*>", "\x1f", text, flags=re.IGNORECASE)
     text = re.sub(r"<[^>]+>", "", text)
     text = _htmllib.unescape(text)
-    lines = [ln.strip() for ln in text.split("\n")]
-    return "\n".join(ln for ln in lines if ln)
+    # Sınır-ayrık bloklar: her '\x1f' parçasını kendi içinde satır-temizle, boş parçaları at.
+    bloklar = []
+    for blok in text.split("\x1f"):
+        satirlar = [ln.strip() for ln in blok.split("\n")]
+        icerik = "\n".join(ln for ln in satirlar if ln)
+        if icerik:
+            bloklar.append(icerik)
+    return "\x1f".join(bloklar)
 
 
 # --- Ağaç düğümü (BedMaddeNode yerine hafif, pydantic'siz) ---
