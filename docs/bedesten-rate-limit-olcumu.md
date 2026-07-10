@@ -3,9 +3,13 @@
 **Tarih:** 2026-07-10 · **Yöntem:** canlı `bedesten.adalet.gov.tr/mevzuat` üzerinde kontrollü deney
 **Neden:** 4990 tebliğ × 2 istek çekilecek; kör backoff yerine ölçülmüş bir hız modeli gerekiyordu.
 
-> **Özet:** Sunucu **sabit pencere** uyguluyor: **~10 istek / ~29-30 sn, IP başına.**
-> İstek-arası gecikme **önemsiz**; pencere başına **sayı** önemli. En verimli sürdürülebilir
-> strateji: **9 istek hızlıca at → 31 sn bekle** = **0.303 istek/sn**, sıfır 429.
+> **Özet:** Sunucu **sabit pencere** uyguluyor: **~10 istek / ~29-30 sn.** İstek-arası gecikme
+> **önemsiz**; pencere başına **sayı** önemli. Tek bağlantıda en verimli strateji: **9 istek
+> hızlıca at → 31 sn bekle** = 0.303 istek/sn, sıfır 429.
+>
+> Kota **tam IP-başına değil**: ayrı bağlantı havuzları kısmen ayrı kotaya sahip.
+> **3 paralel işçi = 2.0× kazanç** (tepe). 4-5 işçide 429 cezaları kazancı yer — 5 işçi tek
+> işçi kadar yavaş. Uygulanan: `_ISCI = 3`.
 
 ---
 
@@ -109,7 +113,36 @@ yerden sürer.
 
 ---
 
-## 7. Kanun tarafına etkisi
+## 7. Paralellik — kota tam IP-başına DEĞİL
+
+İlk ölçümde (§1) "kova global (IP)" sonucuna varmıştık: `mevzuatMaddeTree` kotası dolunca
+`getDocumentContent` de 429 veriyordu. Ama bu **aynı httpx client** (tek bağlantı havuzu)
+içindeydi. **Ayrı client'lar** ayrı davranır mı?
+
+Test: K adet bağımsız `httpx.AsyncClient`, her biri `9 istek + 31 sn` ritmiyle 3 tur.
+
+| İşçi (K) | Toplam başarı | 429 | Efektif hız | Kazanç |
+|---|---|---|---|---|
+| 1 | 27 | 0 | 0.303 i/s | 1.00× |
+| **3** | **77** | **4** | **0.599 i/s** | **2.00×** ← tepe |
+| 4 | 90 | 18 | 0.413 i/s | 1.36× |
+| 5 | 99 | 36 | 0.295 i/s | 0.97× |
+
+**Sonuç:** Ayrı bağlantı havuzları **kısmen ayrı kotaya** sahip — ama sınırsız değil.
+3 işçide tepe (2.0×). 4-5 işçide 429 cezaları (her biri ~27-30 sn) kazancı yiyor;
+**5 işçi tek işçi kadar yavaş.**
+
+> Uygulama: `_ISCI = 3`. Round-robin dağıtım (`eksik[i::isci]`), her işçinin kendi
+> `TebligFetcher` + `_HizSinirlayici`'si var. Cache paylaşımlı (aynı dizin), çakışma yok
+> çünkü her işçi ayrı mid kümesi işliyor.
+
+**Gerçek çekimde ölçülen kazanç 1.25×** (0.38 i/s), test ortamındaki 2.0×'ten düşük. Fark:
+test hafif `mevzuatMaddeTree` çağırıyordu; gerçek çekim `getDocumentContent` ile ~62 KB/belge
+indiriyor → indirme süresi rate-limit beklemesine ekleniyor.
+
+---
+
+## 8. Kanun tarafına etkisi
 
 `src/kanun/fetch.py` **değiştirilmedi** (ADR-0014: türler arası sıfır kod paylaşımı). 916
 kanunu sıfır kayıpla çekmişti; dokunmak regresyon riski. Bu ölçüm yalnız `src/teblig/fetch.py`'ye
