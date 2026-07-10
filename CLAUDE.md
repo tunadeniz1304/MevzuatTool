@@ -31,8 +31,8 @@ mevzuat.gov.tr **kanunlarını** (yalnız `KANUN` türü) `mevzuat-mcp` ile çek
 - Branch adı: **`phase-N/feature-adi`** (ör. `phase-2/structural-chunking`).
 - **Atomik commit** — tek mantıksal değişiklik; `type(scope): özet` formatı.
 
-## Teknoloji (planlanan)
-Python · mevzuat-mcp · embedding (aday: BGE-M3) · vektör store **açık karar: Qdrant↔pgvector** · hybrid arama (dense + BM25) · docker-compose.
+## Teknoloji (uygulanan)
+Python 3.10+ · bedesten API (saf `httpx` — ADR-0012 sapması, bkz. `docs/arch.md` §6) · **BGE-M3** embedding (ADR-0007) · **Qdrant** vektör store (ADR-0008) · 3-bacak hybrid arama: dense + BGE-sparse + klasik BM25, WSUM füzyon (ADR-0010) · docker-compose *(henüz yok)*.
 
 ## Doküman haritası
 | Soru | Dosya |
@@ -46,6 +46,24 @@ Python · mevzuat-mcp · embedding (aday: BGE-M3) · vektör store **açık kara
 | Commit/branch nasıl? | `docs/commit_discipline.md` |
 | Metadata nasıl çıkarılıyor? | `docs/metadata-cikarim-raporu.md` |
 | Yapısal-sadakat düzeltme fazları? | `docs/yapisal-sadakat-master-plan.md` |
+| Retrieval ne kadar iyi (ölçüm)? | `docs/retrieval-metrikleri.md` |
 
-## Bugünkü durum (2026-06-18)
-Faz 0 (kurulum/yönetişim). Repo'da yalnız LICENSE + yönetişim dokümanları var; **kod henüz yok.** Sıradaki: Python iskeleti + Faz 1 (mevzuat-mcp entegrasyonu).
+## Bugünkü durum (2026-07-10)
+**Faz 1-6 çalışıyor** (script seviyesinde). Ayrıntı → [`docs/status.md`](docs/status.md).
+
+- **Korpus:** `data/corpus/korpus.jsonl` — 31.419 chunk / 916 kanun. `python scripts/build_corpus.py` ile cache'ten (`data/raw/`) ~75 sn'de **deterministik** üretilir. (89.745 fıkra, 29.428 bent, 1.718 mülga.)
+- **Retrieval:** BGE-M3 + Qdrant, 3-bacak hybrid. **R@10 = 0.700**; +reranker 0.706 (ölçüldü, entegre değil).
+- **Testler:** 285 test geçiyor (`pytest -q`).
+- **Eksik:** atıf modu (metadata hazır, kod yok) · servis/API katmanı · docker-compose (Faz 7) · reranker entegrasyonu.
+
+### Build zincirine dokunacaksan — kritik invariant'lar
+Bunlar bozulursa korpus **sessizce** bozulur (mevcut testler yakalamayabilir):
+1. **`\x1f` paragraf sınırı:** `fetch.py strip_html` üretir → `normalize.py` korur → `fikra.py` numarasız fıkraları ondan böler. Zincirin bir halkası koparsa fıkra 89.745 → ~46.643'e çöker.
+2. **Bent-listeli fıkra devam-koruması** (`fikra.py`): bozulursa rakamlı bent listeleri parçalanır (k193 m7: 7 → 0 bent).
+3. **`'Ancak'` yeni-fıkra sinyali DEĞİLDİR** (bilinçli): bent-içi istisna cümlesi de "Ancak" ile başlar.
+4. **Mülga maddeler korpusta KALIR** (işaretli), elenmez — tarihsel sorgu için.
+5. **Chunk id `mevzuatId` tabanlıdır**, `kanun_no` değil (6551 gibi çakışan kanun no'ları var).
+
+**Doğrulama refleksi:** `python scripts/build_corpus.py` → 916 kanun / 31.419 chunk; `k193 m7` = 2 fıkra, 7 bent.
+
+⚠️ **`build_corpus.py` çıktıyı SESSİZCE EZER** (`"w"` modu). `CORPUS_MID=...` ile tek kanun çalıştırırsan diskteki tam korpus 1 kanuna iner. Cache duruyorsa geri üretilebilir (deterministik).
