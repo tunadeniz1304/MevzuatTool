@@ -257,16 +257,98 @@ def _fikra_yurutluk(text, bentler):
     return extract_status(text)
 
 
+# FAZ 22: paragraf sınır işareti. Ham HTML'de her fıkra/bent ayrı <p>; strip_html bu sınıra
+# '\x1f' (Unit Separator — metinde asla geçmez) koyar, normalize korur. Türk mevzuatı fıkraları
+# NUMARALAMAZ (paragraf sırasıyla belli) → numaralı '(n)' fıkra YOKKEN sınır işareti tek fıkra-
+# bölme sinyalidir. AMA bent işaretiyle (a) 1.) başlayan paragraf yeni fıkra DEĞİL, önceki
+# fıkranın bendidir → bent-başı parçalar önceki fıkraya yapıştırılır (fıkra≠bent zehir koruması).
+_PARA_SINIR = "\x1f"
+# Paragraf bent işaretiyle mi başlıyor? (a) / A) / 1. / 1) — bunlar fıkra-başı DEĞİL, önceki
+# fıkranın alt-yapısı. Numarasız fıkra bölmede bu paragraflar önceki fıkraya bağlanır.
+# BÜYÜK-harf bent 'A) B) C)' (Geçici-36 deseni: büyük-harf üst-grup, altında 'a) b)' alt-bent) de
+# bent-başıdır. ')' ŞART → düz büyük-harf cümle ('Ancak ...') bent sanılmaz (yanlış-pozitif elenir).
+_BENT_BASI = re.compile(r"^\s*(?:[a-zçğıöşüA-ZÇĞİÖŞÜ]\)|\d+[.)])\s")
+
+
+# FAZ 22b: bir paragraf grubu bir kez BENT-listesi içine girince (ilk paragrafı '1.'/'a)' ile
+# başlayan bir fıkra), takip eden RAKAMSIZ DEVAM paragrafları da o fıkranın parçasıdır — yeni
+# fıkra DEĞİL (k193 m7: '1. Ticari...' → 'Türkiye'de satmaktan maksat...' devam → '2. Zirai...').
+# FAZ 22 \x1f-bölmesi bu devam paragrafını yeni fıkra sanıp bent zincirini kırıyor, 122 maddede
+# 567 bent kayboluyordu. Devam-yapıştırma YALNIZ önceki fıkra bent-listeliyse (ilk satırı bent
+# işaretli) yapılır → bentsiz gerçek çok-fıkralı madde (FAZ 22 kazancı) bölünmeye devam eder.
+# Bir fıkra bent-listesi AÇMIŞ mı? (içinde en az bir bent işareti '1.'/'a)' var). Koşu şartı YOK
+# (tek '1.' bile listenin başlangıcı olabilir — devam paragrafları bağlanınca koşu tamamlanır).
+# Cümle-ortası '103.' atfını elemek için: bent işareti ya metin başında ya da ':' sonrası (liste-açan)
+# ya da paragraf başında olmalı — _BENT_NUM_ISARET/_BENT_HARF_ISARET zaten '\s' sınırlı.
+_FIKRA_BENT_ACIK = re.compile(r"(?:(?<=[:\s])|^)(?:[a-zçğıöşüA-ZÇĞİÖŞÜ]\)|\d+[.)])\s")
+
+
+def _bent_listeli_fikra(text: str) -> bool:
+    """Fıkra bir bent listesi AÇMIŞ mı? (giriş cümlesi + '1.'/'a)' bent işareti içeriyor).
+    Öyleyse takip eden rakamsız DEVAM paragrafı bu fıkraya aittir (bent listesi henüz açık),
+    yeni fıkra değildir. k193 m7: 'Aşağıdaki şartlara göre...: 1. Ticari...' → bent-listeli."""
+    return bool(_FIKRA_BENT_ACIK.search(text))
+
+
+# FAZ 22b: bent listesinden SONRA gelen geri-atıflı kapanış hükmü ('Bu maddenin 3,4,5 nci
+# bentlerinde...', 'Yukarıda yazılı...', 'Ancak ...') AYRI fıkradır — bent-devamı sanılıp
+# yutulmamalı (k193 m7 son fıkrası). Bu paragraf geri-atıflı bir yeni hükümdür → bent-listeli
+# fıkraya bağlanmaz, yeni fıkra olur → fıkra kazancı korunur. Bent-metni ortası (küçük harf/yarım
+# cümle bent devamı) bu desene uymaz → bağlanmaya devam eder (bent zinciri korunur).
+# NOT: 'Ancak' bilinçli DIŞARIDA — bir bendin İÇİNDEKİ istisna cümlesi de 'Ancak...' ile başlar
+# (102965 m9: '3.' bendinin devamı '(Ancak belgesiz...)' → yeni-fıkra sanılırsa bent kopar).
+# Ampirik: 'Ancak' sinyali 10 madde ekstra bent-regresyonu üretiyor, karşılığı ~166 fıkra (ihmal).
+_YENI_FIKRA_SINYALI = re.compile(
+    r"^(?:Bu [Kk]anun(?:da|un)|Bu madde(?:nin|de)?\s|Yukarıda|Bunlar|Bu fıkra(?:da)?\s|"
+    r"Şu kadar ki|Söz konusu|Bu bent(?:te|lerde)?\s)")
+
+
+def _numarasiz_fikra_bol(body: str) -> list[str]:
+    """Numarasız hüküm gövdesini paragraf sınırından (\x1f) fıkralara böl. Bent-işaretiyle
+    başlayan paragraf önceki fıkraya yapıştırılır (bent, fıkra değil). Ayrıca önceki fıkra bir
+    bent-listesiyse (FAZ 22b), rakamsız DEVAM paragrafı da ona bağlanır (bent zinciri korunur) —
+    AMA devam paragrafı geri-atıflı yeni hükümse (_YENI_FIKRA_SINYALI) ayrı fıkra kalır (denge:
+    hem bent korunur hem gerçek son-fıkra kazancı korunur). '\x1f' yoksa tek parça döner."""
+    if _PARA_SINIR not in body:
+        return [body]
+    paragraflar = [p.strip() for p in body.split(_PARA_SINIR) if p.strip()]
+    fikralar: list[str] = []
+    for p in paragraflar:
+        onceki_bent_listeli = fikralar and _bent_listeli_fikra(fikralar[-1])
+        yeni_fikra_hukmu = _YENI_FIKRA_SINYALI.match(p)
+        # (a) paragraf bent işaretli → önceki fıkraya bağla;
+        # (b) paragraf rakamsız + önceki fıkra bent-listeli + geri-atıflı yeni hüküm DEĞİL → devam.
+        if fikralar and (_BENT_BASI.match(p) or (onceki_bent_listeli and not yeni_fikra_hukmu)):
+            fikralar[-1] = fikralar[-1] + " " + p
+        else:
+            fikralar.append(p)                         # yeni fıkra
+    return fikralar or [body.replace(_PARA_SINIR, " ").strip()]
+
+
+def _fikra_dugumu(text: str) -> Fikra:
+    """Tek numarasız fıkra metninden (sınır işareti temizlenmiş) Fikra düğümü kur."""
+    bentler = _kapanis_ayir(_bentler(text), text)
+    return Fikra(no=None, text=text, bentler=bentler, yurutluk=_fikra_yurutluk(text, bentler))
+
+
 def _parse_hukum(body: str) -> list:
     """Cetvelsiz hüküm gövdesini fıkra ağacına böl (asıl mantık)."""
-    parcalar = [p.strip() for p in _FIKRA_BOL.split(body) if p.strip()]
-    # Numaralı fıkra HİÇ yoksa tek numarasız fıkra. İlk parça '(1)' OLMASA bile (lider künye/başlık
-    # '(Başlığı ile Değişik:...) (1) ...'), parçalarda numaralı fıkra varsa bölmeyi koru — lider
-    # künye preamble olarak no=None ilk fıkra kalır (Bug 2: ÇEK 5941 M6). Numaralı fıkra yoksa collapse.
+    # Numaralı fıkra tespiti sınır işaretinden bağımsız (regex '\x1f' görmemeli) → boşluğa indir.
+    body_ns = body.replace(_PARA_SINIR, " ")
+    parcalar = [p.strip() for p in _FIKRA_BOL.split(body_ns) if p.strip()]
+    # Numaralı fıkra HİÇ yoksa: paragraf sınırından numarasız fıkralara böl (FAZ 22). İlk parça
+    # '(1)' OLMASA bile (lider künye/başlık '(Başlığı ile Değişik:...) (1) ...'), parçalarda
+    # numaralı fıkra varsa mevcut bölme kazanır — lider künye no=None ilk fıkra (Bug 2: ÇEK 5941 M6).
     if not parcalar or not any(_FIKRA_NO.match(p) for p in parcalar):
-        bentler = _kapanis_ayir(_bentler(body), body)
-        return [Fikra(no=None, text=body, bentler=bentler,
-                      yurutluk=_fikra_yurutluk(body, bentler))]
+        fikra_metinleri = _numarasiz_fikra_bol(body)
+        dugumler = [_fikra_dugumu(t) for t in fikra_metinleri]
+        # FAZ 22: 2+ paragrafa bölünen numarasız fıkralara SIRA no'su ata ((1)(2)...). Türk
+        # mevzuatında fıkra no'su = paragraf sırası → atıf 'madde X fıkra N' eşleşebilir. TEK
+        # fıkrada no=None kalır (gerçekten tek fıkra; mevcut sözleşme: tek numarasız fıkra).
+        if len(dugumler) >= 2:
+            for i, d in enumerate(dugumler, 1):
+                d.no = f"({i})"
+        return dugumler
     out = []
     for p in parcalar:
         mno = _FIKRA_NO.match(p)
@@ -300,6 +382,8 @@ def parse_fikralar(body: str) -> list:
     mc = _CETVEL_BAS.search(body)
     if mc and mc.start() > 0:
         hukum, cetvel = body[:mc.start()].strip(), body[mc.start():].strip()
+        # Cetvel bölünmez; içindeki paragraf sınırları (\x1f) düz metne indirilir (sızıntı önlenir).
+        cetvel = cetvel.replace(_PARA_SINIR, " ")
         fikralar = _parse_hukum(hukum)
         if fikralar and cetvel:
             son = fikralar[-1]

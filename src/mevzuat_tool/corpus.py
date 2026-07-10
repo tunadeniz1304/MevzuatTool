@@ -59,6 +59,16 @@ def _sadece_islenmis_notu(govde: str) -> bool:
 
 _PREFIX_ETIKET = {"gecici": "Geçici", "ek": "Ek", "mukerrer": "Mükerrer"}
 
+# FAZ 22f: yönlendirme notunda hedef kanun ('NNNN sayılı ... Kanunu'). Gerçek hüküm bu kanuna
+# taşınmış; madde no'suna atıf yapan bulabilsin diye çıkarılır (metadata.tasindigi_kanun).
+_HEDEF_KANUN = re.compile(r"(\d{3,5})\s+say[ıi]l[ıi]", re.IGNORECASE)
+
+
+def _yonlendirme_hedefi(govde: str) -> str | None:
+    """İçeriksiz 'yerine işlenmiştir' notundan hedef kanun_no'yu çıkar (ilk 'NNNN sayılı')."""
+    m = _HEDEF_KANUN.search(govde)
+    return m.group(1) if m else None
+
 
 def _hiyerarsi_yolu(m: Madde) -> str | None:
     """hiyerarsi_yolu'nun sonundaki donor 'Madde N' parçasını chunk'ın GERÇEK etiketiyle düzelt.
@@ -142,6 +152,45 @@ def _text(m: Madde) -> str:
     if m.madde_baslik:
         return f"{_strip_dipnot_isaret(m.madde_baslik)}\n{govde}".strip()
     return govde
+
+
+def yonlendirme_chunk(m: Madde, kanun_ad: str, kanun_no: str) -> dict | None:
+    """FAZ 22f: içeriksiz 'yerine işlenmiştir' maddesini YÖNLENDİRME chunk'ına çevir (madde_to_chunk
+    bunu eler; bu fonksiyon build_corpus'ta atıf-alan işlenmiş-maddeler için AYRICA çağrılır).
+
+    Gerçek hüküm başka kanuna taşınmış → madde no korunur (atıf o maddeyi bulur), gövde boş,
+    hedef kanun 'tasindigi_kanun' etiketiyle. Normal içerik-chunk'ı DEĞİL (madde_tipi ayrı);
+    CLAUDE.md 'boş-gövde girmez' prensibi normal-içerik için — bu bilinçli, dar istisna (yön kaydı).
+    Yalnız gövde SADECE işlenmiştir-notuysa ve hedef kanun çıkarılabiliyorsa chunk döner; yoksa None."""
+    govde = (m.body_temiz or m.body or "").strip()
+    if not govde or not _sadece_islenmis_notu(govde):
+        return None
+    hedef = _yonlendirme_hedefi(govde)
+    if hedef is None:
+        return None
+    mevzuat_id = m.id.split("-")[0] if m.id else None
+    return {
+        "id": m.id,
+        "text": "",
+        "metadata": {
+            "mevzuat_id": mevzuat_id,
+            "kanun_no": kanun_no,
+            "kanun_ad": kanun_ad,
+            "madde_no": m.no,
+            "madde_baslik": None,
+            "madde_tipi": "islenmistir_yonlendirme",
+            "yurutluk": m.yurutluk,
+            "yerine_islenmistir": True,
+            "tasindigi_kanun": hedef,
+            "maddeId": m.maddeId,
+            "kitap_no": m.kitap_no, "kitap_baslik": m.kitap_baslik,
+            "kisim_no": m.kisim_no, "kisim_baslik": m.kisim_baslik,
+            "bolum_no": m.bolum_no, "bolum_baslik": m.bolum_baslik,
+            "ayirim_no": m.ayirim_no, "ayirim_baslik": m.ayirim_baslik,
+            "hiyerarsi_yolu": _hiyerarsi_yolu(m),
+            "fikralar": [], "degisiklik_gecmisi": [], "dipnotlar": [], "tablolar": [],
+        },
+    }
 
 
 def madde_to_chunk(m: Madde, kanun_ad: str, kanun_no: str) -> dict | None:
