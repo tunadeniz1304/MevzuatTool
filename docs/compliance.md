@@ -13,41 +13,46 @@ Bu dosya, yapılan her işin [`mevzuat-mvp-kapsam.md`](mevzuat-mvp-kapsam.md) il
 
 ## A. Kapsam İçi — sadakat kontrolü (YAPILMALI)
 
+> Son kontrol: 2026-07-10. Ayrıntılı durum: [`status.md`](status.md).
+
 ### 1. Veri Çekme
-- [ ] Kaynak yalnızca `mevzuat-mcp` araçları (`search_mevzuat` / `get_mevzuat_madde_tree` / `get_mevzuat_content`), MCP client üzerinden
-- [ ] Yalnızca **`KANUN`** türü çekiliyor (`mevzuat_tur=KANUN`); KHK/tüzük/yönetmelik/tebliğ ALINMIYOR
-- [ ] Kendi web scraper'ımız **yok** (repo API'leri kullanılıyor)
-- [ ] Yalnızca HTML/Markdown içerik alınıyor; PDF'ler atlanıyor
-- [ ] Başlangıçta dar korpus (tüm mevzuat değil)
+- [x] Kaynak yalnızca `mevzuat-mcp` **API sözleşmesi** (bedesten `searchDocuments` / `mevzuatMaddeTree` / `getDocumentContent`) — ⚠️ transport MCP client değil, saf `httpx` (ADR-0012 sapması; gerekçe: mevzuat-mcp client 429/`Retry-After`'ı yutuyordu — bkz. `arch.md` §6)
+- [x] Yalnızca **`KANUN`** türü çekiliyor (`mevzuatTurList: ["KANUN"]`, `fetch.py`); KHK/tüzük/yönetmelik/tebliğ ALINMIYOR
+- [x] Kendi web scraper'ımız **yok** (resmî API endpoint'leri kullanılıyor, HTML kazıma yok)
+- [x] Yalnızca HTML içerik alınıyor; PDF'ler işlenmiyor
+- [x] Başlangıçta dar korpus (3-5 kanun) → sonra 916 kanuna ölçeklendi (ADR-0011 sırası korundu)
 
 ### 2. Yapısal Chunking
-- [ ] Atomik birim = madde
-- [ ] Uzun maddeler fıkra bazında bölünüyor
-- [ ] `kanun → (kitap/kısım/bölüm) → madde → fıkra → bent` hiyerarşisi korunuyor
-- [ ] Naive sabit-boy token chunking **yapılmıyor**
+- [x] Atomik birim = madde (`chunker.py split_articles`)
+- [x] Uzun maddeler fıkra bazında bölünüyor (`fikra.py parse_fikralar` — 89.745 fıkra)
+- [x] `kanun → (kitap/kısım/bölüm/ayırım) → madde → fıkra → bent → alt-bent` hiyerarşisi korunuyor
+- [x] Naive sabit-boy token chunking **yapılmıyor**
 
 ### 3. Metadata
-- [ ] Zorunlu alanlar: mevzuat adı, no, tür, madde no, madde başlığı, fıkra, hiyerarşi path, kaynak, R.G. tarihi
-- [ ] **Yürürlük durumu (yürürlükte / mülga)** her chunk'ta var
-- [ ] Mülga hükümler işaretlenmiş/ayrılmış
+- [x] Alanlar: `kanun_ad`, `kanun_no`, `mevzuat_id`, `madde_no`, `madde_baslik`, `madde_tipi`, fıkra/bent ağacı, hiyerarşi path, `maddeId`
+- [ ] ❗ **R.G. tarihi chunk metadata'sında YOK** (bedesten liste yanıtında mevcut, korpusa taşınmadı) — açık eksik
+- [ ] ❗ `mevzuat_tur` alanı chunk'ta yok (korpus tek-tür olduğu için örtük; tebliğ vb. eklenirse gerekir)
+- [x] **Yürürlük durumu (yürürlükte / mülga)** her chunk'ta (`yurutluk`) + fıkra/bent seviyesinde ayrı
+- [x] Mülga hükümler işaretli ve **korpusta tutuluyor** (elenmiyor — tarihsel sorgu; 1.718 chunk)
 
 ### 4. Temiz Korpus Artifact
-- [ ] Çıktı JSONL: `{id, text, metadata}`
-- [ ] Bağımsız teslim edilebilir (modüler sınır korunuyor)
-- [ ] Şema dokümante edilmiş
+- [x] Çıktı JSONL: `{id, text, metadata}` — 31.419 chunk (`corpus.py`)
+- [x] Bağımsız teslim edilebilir (modüler sınır korunuyor) — `handoff/` klasörü ana repodan bağımsız çalıştırılıp birebir aynı korpus üretildi
+- [x] Şema dokümante edilmiş (`handoff/HANDOFF.md` §1)
 
 ### 5. Embedding + Indexleme
-- [ ] Türkçe'ye uygun embedding modeli
-- [ ] Vektör store kuruldu (Qdrant veya pgvector)
-- [ ] Hybrid arama: dense + BM25/sparse
+- [x] Türkçe'ye uygun embedding modeli: **BGE-M3** (ADR-0007), dense=CLS pooling
+- [x] Vektör store kuruldu: **Qdrant** (ADR-0008), dense + sparse + payload filtre
+- [x] Hybrid arama: 3-bacak (dense + BGE-sparse + klasik BM25), WSUM füzyon (ADR-0010)
 
 ### 6. Sorgu + Retrieval
-- [ ] Atıf modu (metadata filtresiyle kesin getirme) çalışıyor
-- [ ] Doğal dil modu (hybrid semantik) çalışıyor
-- [ ] Çıktı: sıralı ilgili maddeler + metadata/atıf bilgisi
+- [ ] ❗ **Atıf modu (metadata filtresiyle kesin getirme) — KOD YOK.** Metadata hazır (kanun_no + madde_no + fıkra/bent ağacı) ama yazılmadı.
+- [x] Doğal dil modu (hybrid semantik) çalışıyor — `scripts/search_qdrant.py`, R@10 = 0.700
+- [x] Çıktı: sıralı ilgili maddeler + metadata (yürürlük filtreli)
+- [ ] Servis/API katmanı yok (script seviyesinde)
 
 ### 7. Dockerize
-- [ ] `docker-compose` ile vektör DB + ingestion + retrieval/API
+- [ ] `docker-compose` ile vektör DB + ingestion + retrieval/API — **başlamadı**
 - [ ] Uçtan uca reproducible
 
 ---
@@ -69,11 +74,16 @@ Aşağıdakilerden **herhangi biri** projede iş olarak yapılıyorsa, kapsam ih
 ---
 
 ## C. Modüler Sınır Kontrolü
-- [ ] Veri-hazırlama aşaması bağımsız bir **korpus artifact** üretiyor (söküp verilebilir)
-- [ ] Retrieval pipeline bu artifact'i tüketiyor
-- [ ] LLM/generation kararı build'den **bağımsız** (config'le swap'lanabilir endpoint)
+- [x] Veri-hazırlama aşaması bağımsız bir **korpus artifact** üretiyor (söküp verilebilir)
+      → *kanıt:* `handoff/` klasörü izole dizinde çalıştırıldı, ana repoya bağımsız aynı korpusu üretti
+- [x] Retrieval pipeline bu artifact'i tüketiyor (`ingest_qdrant.py` yalnız `korpus.jsonl` okur)
+- [x] LLM/generation kararı build'den **bağımsız** (generation kodu hiç yok)
+- [x] `corpus.py` atıf listesini bilmez — atıf-farkındalık yalnız build katmanında (`build_corpus.py`)
 
 ## D. Definition of Done
-- [ ] Atıf veya doğal dil sorgusu → **yürürlükteki ilgili mevzuat maddeleri** dönüyor
-- [ ] Altında temiz, chunk'lanmış + indexlenmiş korpus var
-- [ ] Tamamı dockerize, reproducible
+- [x] Doğal dil sorgusu → **yürürlükteki ilgili mevzuat maddeleri** dönüyor (R@10 = 0.700)
+- [ ] ❗ **Atıf sorgusu** → kesin madde getirme (atıf modu kodu yok)
+- [x] Altında temiz, chunk'lanmış + indexlenmiş korpus var (31.419 chunk, Qdrant'ta)
+- [ ] Tamamı dockerize, reproducible — **Faz 7 başlamadı**
+
+> **MVP tamamlanma durumu: 2/4.** Kalan: atıf modu + dockerize.
