@@ -47,7 +47,7 @@ Bu dosya, yapılan her işin [`mevzuat-mvp-kapsam.md`](mevzuat-mvp-kapsam.md) il
 
 ### 6. Sorgu + Retrieval
 - [ ] ❗ **Atıf modu (metadata filtresiyle kesin getirme) — KOD YOK.** Metadata hazır (kanun_no + madde_no + fıkra/bent ağacı) ama yazılmadı.
-- [x] Doğal dil modu (hybrid semantik) çalışıyor — `scripts/search_qdrant.py`, R@10 = 0.700
+- [x] Doğal dil modu (hybrid semantik) çalışıyor — `scripts/kanun/retrieval/search_qdrant.py`, R@10 = 0.700
 - [x] Çıktı: sıralı ilgili maddeler + metadata (yürürlük filtreli)
 - [ ] Servis/API katmanı yok (script seviyesinde)
 

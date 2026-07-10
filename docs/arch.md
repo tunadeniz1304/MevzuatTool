@@ -10,42 +10,46 @@ Kararların **gerekçesi/tarihçesi**: [`decisions.md`](decisions.md). Kapsam: [
 
 ## 1. Gerçekleşen Mimari (uçtan uca, bugün)
 
+> **Tür izolasyonu:** Aşağıdaki zincir `src/kanun/` içindir. Tebliğ/yönetmelik eklenirse
+> **kendi kopyalarını** alır (`src/teblig/`, `src/yonetmelik/`) — kod paylaşımı YOK. §7'ye bak.
+
 ```
-┌──────────────────────── INGESTION (offline, çalışıyor) ─────────────────────────┐
-│                                                                                 │
-│  bedesten API ──► fetch.py ──────► data/raw/ cache (916 HTML + 912 tree)         │
-│  (httpx, 429/Retry-After)          html_<mid>.html · treejson_<mid>.json         │
-│                                          │                                       │
-│                     strip_html (\x1f paragraf sınırı)                            │
-│                                          ▼                                       │
-│  normalize.py ─► chunker.py ─► tree.py ─► enrich.py ─► corpus.py                 │
-│  (satır/tire)    (madde böl,   (hiyerarşi  (birleştir:  ({id,text,metadata})     │
-│                   bleed-kırp)   index)      dipnot·künye·fıkra·id)               │
-│                                          │                                       │
-│                                          ▼                                       │
-│                          data/corpus/korpus.jsonl  (31.419 chunk)               │
-└─────────────────────────────────────────┬───────────────────────────────────────┘
-                                          │  ◄── MODÜLER SINIR (bağımsız teslim)
-┌─────────────────────── INDEXING (offline, çalışıyor) ──────────┼─────────────────┐
-│  colab/bge_m3_embed.ipynb ──► dense + BGE-sparse vektörler     │                 │
-│  scripts/ingest_qdrant.py ──► Qdrant (dense + sparse + payload)                  │
-└─────────────────────────────────────────┬───────────────────────────────────────┘
-                                          │
-┌─────────────────────── RETRIEVAL (online, script) ─────────────┼─────────────────┐
-│  sorgu ─► retrieval/embed.py (BGE-M3) ─┬─► dense       (Qdrant)                  │
-│                                        ├─► BGE-sparse  (Qdrant)                  │
-│                                        └─► klasik BM25 (rank_bm25, korpus text)  │
-│                            └─► 3-bacak WSUM füzyon + yürürlük filtresi           │
-│                                        ─► sıralı maddeler                        │
-│                            (reranker: ölçüldü ✓, entegre ✗)                      │
-└─────────────────────────────────────────────────────────────────────────────────┘
-                                          │
-                        ⋯⋯ KAPSAM DIŞI: LLM / generation ⋯⋯
-                        (en sonda config'le takılan swap'lanabilir endpoint)
+┌────────────────────── INGESTION (offline, çalışıyor) ───────────────────────┐
+│                                                                             │
+│  bedesten API ──► fetch.py ──────► data/kanun/raw/ (916 HTML + 912 tree)     │
+│  (httpx, 429/Retry-After)          html_<mid>.html · treejson_<mid>.json     │
+│                                     │                                        │
+│                strip_html (\x1f paragraf sınırı)                             │
+│                                     ▼                                        │
+│  normalize.py ─► chunker.py ─► tree.py ─► enrich.py ─► corpus.py             │
+│  (satır/tire)    (madde böl,   (hiyerarşi  (birleştir:  ({id,text,metadata}) │
+│                   bleed-kırp)   index)      dipnot·künye·fıkra·id)           │
+│                                     │                                        │
+│                                     ▼                                        │
+│                    data/kanun/korpus.jsonl  (31.419 chunk)                  │
+└─────────────────────────────────────┬───────────────────────────────────────┘
+                                      │  ◄── MODÜLER SINIR (bağımsız teslim)
+┌───────────────────── INDEXING (offline, çalışıyor) ──┼──────────────────────┐
+│  colab/bge_m3_embed.ipynb ──► dense + BGE-sparse vektörler                   │
+│  ingest_qdrant.py ──► Qdrant (dense + sparse + payload)                      │
+└─────────────────────────────────────┬───────────────────────────────────────┘
+                                      │
+┌───────────────────── RETRIEVAL (online, script) ─────┼──────────────────────┐
+│  sorgu ─► retrieval/embed.py ─┬─► dense       (Qdrant)                       │
+│           (BGE-M3)            ├─► BGE-sparse  (Qdrant)                       │
+│                               └─► klasik BM25 (rank_bm25, korpus text)       │
+│                    └─► 3-bacak WSUM füzyon + yürürlük filtresi               │
+│                               ─► sıralı maddeler                             │
+│                    (reranker: ölçüldü ✓, entegre ✗)                          │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                      │
+                     ⋯⋯ KAPSAM DIŞI: LLM / generation ⋯⋯
+                     (en sonda config'le takılan swap'lanabilir endpoint)
 ```
 
 **Eksik oklar:** `atıf modu` (kanun/madde/fıkra/bent → metadata filtresiyle kesin getirme) ve
-`servis/API` katmanı henüz yok — retrieval script seviyesinde (`scripts/search_qdrant.py`).
+`servis/API` katmanı henüz yok — retrieval script seviyesinde
+(`scripts/kanun/retrieval/search_qdrant.py`).
 
 ---
 
@@ -116,7 +120,7 @@ Bunlar bozulursa korpus sessizce bozulur — değişiklik sonrası mutlaka doğr
 | Mülga maddeyi eleme | `corpus.py` | Tarihsel sorgu için gerekli maddeler kaybolur |
 | Chunk id = `mid` tabanlı (kanun_no değil) | `ids.py`, `build_corpus.py` | Aynı kanun_no'lu iki kanun çakışır (ör. 6551) |
 
-**Doğrulama refleksi:** `python scripts/build_corpus.py` → 916 kanun / 31.419 chunk; `k193 m7` = 2 fıkra, 7 bent.
+**Doğrulama refleksi:** `python scripts/kanun/build_corpus.py` → 916 kanun / 31.419 chunk; `k193 m7` = 2 fıkra, 7 bent.
 
 ---
 
@@ -138,3 +142,42 @@ pydantic/ABI kırılganlığından muaf. (Kaynak: `fetch.py` modül docstring'i.
    gold "6111" derken sistem "7326" getirince haksız 0 alır.
 6. **Fıkra↔bent terminoloji toleransı** yalnız ölçüm script'inde vardı; canlı retrieval'a taşınmadı
    (bkz. `status.md` dürüstlük notu).
+
+---
+
+## 7. Tür izolasyonu — mevzuat türleri arasında SIFIR kod paylaşımı
+
+**Karar (2026-07-10):** Her mevzuat türü kendi paketinde, **sıfırdan** yazılır. Ortak modül,
+ortak soyutlama, `if tur == "KANUN"` dalı **yoktur.**
+
+```
+src/kanun/       ✅ 15 modül + retrieval/     scripts/kanun/ + kanun/retrieval/   tests/kanun/
+src/teblig/      ⬜ iskelet                   scripts/teblig/                     tests/teblig/
+src/yonetmelik/  ⬜ iskelet                   scripts/yonetmelik/                 tests/yonetmelik/
+
+data/kanun/{raw/, korpus.jsonl}   data/teblig/{...}   data/yonetmelik/{...}
+data/gold/                        altınset gold set (tür-bağımsız ölçüm verisi)
+```
+
+**Neden ortak soyutlama değil?** Türler yapısal olarak farklı ve bu fark parser'ın *özünde*:
+- Tebliğlerin `mevzuatMaddeTree`'si çoğu zaman **boş** döner; kanun parser'ı ağaca dayanıyor
+  (hiyerarşi, madde başlıkları, bleed-marker'ları).
+- Kanunun bleed-kırpma kuralları (`"...yürütür"` anchor'ı, kanun-sonu cetvel eki, E-tuzağı
+  guard'ı) tebliğde **anlamsız — hatta zararlı.**
+- Ortak bir `chunker` bu farkları `if/else` ile taşısaydı, bir türde yapılan düzeltme diğerini
+  sessizce bozardı. Bu parser'da sessiz bozulma = korpus zehri (bkz. §5 invariant tablosu).
+
+**Bedeli kabul edildi:** bir bug 3 yerde düzeltilir. Karşılığında: bir türe dokunmak diğerini
+**asla** bozamaz; her tür kendi test setiyle bağımsız doğrulanır.
+
+**Yeni tür eklerken:**
+1. **Önce ölç, sonra yaz.** Birkaç örnek çek (`mevzuatTurList: ["TEBLIGLER"]`), yapısını incele:
+   madde ağacı geliyor mu? Madde işareti nasıl? Fıkra/bent var mı?
+2. `src/kanun/` modüllerini **oku ve KOPYALA** — `import` etme. Kopyayı türe özgü hale getir.
+3. Çıktı şeması `{id, text, metadata}` **aynı kalsın** — tek "sözleşme" budur; ileride üç korpus
+   tek Qdrant'ta birleşebilir. `metadata.mevzuat_tur` ekle (kanun korpusunda bu alan yok, tek-tür
+   olduğu için örtük).
+4. Veri yolun **kendi tür klasörün** olsun. `build_corpus.py` çıktıyı `"w"` modunda ezer —
+   tür-kapsamlı yol sayesinde tebliğ build'i kanun korpusunu asla ezemez.
+
+Ayrıntı: `src/teblig/__init__.py`, `src/yonetmelik/__init__.py` (iskelet docstring'leri).

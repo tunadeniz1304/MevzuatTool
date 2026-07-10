@@ -152,7 +152,40 @@ Güncel mimari görünümü: [`arch.md`](arch.md). Kapsam: [`mevzuat-mvp-kapsam.
 - **Sonuç:** `search_qdrant.py` başlangıçta korpus `text`'ten BM25 index kurar (27954 yürürlükte madde, ~3sn),
   her sorguda 3 bacağı normalize + eşit ağırlıkla toplar. GPU/fine-tune YOK. rank_bm25 saf-Python bağımlılık.
   BGE-sparse atılamaz (ölçümle kanıtlı). Reranker (ADR-0009) hâlâ üstüne eklenebilir (ayrık kazanç).
-- **Araçlar:** `scripts/metrik_bm25.py` (ÖLÇÜM 4), `scripts/metrik_bm25_agirlik.py` (ÖLÇÜM 5).
+- **Araçlar:** `scripts/kanun/retrieval/metrik_bm25.py` (ÖLÇÜM 4), `.../metrik_bm25_agirlik.py` (ÖLÇÜM 5).
+
+---
+
+## Yapı Kararları
+
+## ADR-0014 — Mevzuat türleri arasında sıfır kod paylaşımı (tür izolasyonu)
+- **Durum:** Kabul edildi (2026-07-10)
+- **Bağlam:** MVP yalnız KANUN'u kapsıyor (ADR-0013) ama ileride tebliğ ve yönetmelik de
+  işlenecek. Klasik yaklaşım: ortak bir `chunker`/`fetch` yazıp tür farkını `if tur == "KANUN"`
+  dallarıyla taşımak. Ancak türler parser'ın **özünde** farklı:
+  - Tebliğlerin `mevzuatMaddeTree`'si çoğu zaman **boş** döner; kanun parser'ı ağaca dayanıyor
+    (hiyerarşi, madde başlıkları, bleed-marker'ları buradan geliyor).
+  - Kanunun bleed-kırpma kuralları (`"...yürütür"` anchor'ı, kanun-sonu cetvel eki, E-tuzağı
+    guard'ı) tebliğde anlamsız — hatta zararlı.
+  - Bu parser'da hatalar **sessizdir**: yanlış bir kırpma testleri geçer ama korpusu zehirler
+    (bkz. `arch.md` §5 invariant tablosu). Ortak koda dokunmak diğer türü sessizce bozabilir.
+- **Karar:** Her mevzuat türü **kendi paketinde, sıfırdan** yazılır. Ortak modül, ortak
+  soyutlama, tür dalı **yoktur**. Yeni tür eklerken `src/kanun/` modülleri **kopyalanır**,
+  import edilmez.
+  ```
+  src/kanun/  src/teblig/  src/yonetmelik/          ← paketler
+  scripts/<tur>/   tests/<tur>/   data/<tur>/       ← simetrik
+  ```
+  **Tek sözleşme:** çıktı şeması `{id, text, metadata}` aynı kalır (+ `metadata.mevzuat_tur`),
+  böylece üç korpus ileride tek Qdrant'ta birleşebilir. Kod değil, **veri formatı** paylaşılır.
+- **Sonuç:**
+  - ✅ Bir türe dokunmak diğerini **asla** bozamaz; her tür kendi test setiyle doğrulanır.
+  - ✅ Tür-kapsamlı veri yolları (`data/<tur>/`) sayesinde `build_corpus.py`'nin "sessizce ezme"
+    davranışı tür içinde kalır — tebliğ build'i kanun korpusunu ezemez.
+  - ❌ **Bedel:** ortak bir bug 3 yerde düzeltilir. Kod tekrarı bilinçli olarak kabul edildi;
+    gerekçe: bu alanda *yanlış birleştirmenin* maliyeti, tekrarın maliyetinden yüksek.
+  - Reddedilen alternatifler: (a) ortak `chunker` + tür dalları, (b) ortak saf-metin yardımcıları
+    (`normalize`, `ids`) — ikincisi cazipti ama "sıfır ortak" sınırını bulanıklaştırırdı.
 
 ---
 

@@ -13,7 +13,7 @@ mevzuat.gov.tr **kanunlarını** (yalnız `KANUN` türü) `mevzuat-mcp` ile çek
 ## En kritik sınır — UNUTMA
 - **Pipeline retrieval'da BİTER.** LLM / cevap üretme (generation) **KAPSAM DIŞI.** Generation, en sonda config'le takılan, OpenAI-uyumlu, swap'lanabilir bir endpoint olarak bırakılır — build buna bağımlı değildir.
 - **Yaklaşım = vanilla RAG.** Graph/agentic/advanced RAG **YAPMA** (future work). Bu MVP, vanilla RAG'ın retrieval yarısı. Doğru vanilla = madde-seviyesi yapısal chunking + hybrid (dense+BM25); bunlar "advanced" değil.
-- **Yalnız `KANUN` türü.** KHK/tüzük/yönetmelik/tebliğ **YAPMA** — kapsam dışı (ADR-0013). `mevzuat_tur=KANUN`.
+- **MVP kapsamı yalnız `KANUN` türü** (ADR-0013). Tebliğ/yönetmelik MVP'ye dahil **değil** — ama repo yapısı bunlara hazır (`src/teblig/`, `src/yonetmelik/` iskeletleri). Yeni tür eklemek MVP'yi genişletmektir; önce `decisions.md`'ye kapsam kararı yaz.
 - Yeni bir özellik eklemeden önce **mutlaka** [`compliance.md`](docs/compliance.md) "Kapsam Dışı" listesine bak. Listeye takılıyorsa **yapma**.
 
 ## Değişmez mimari ilkeler
@@ -48,10 +48,35 @@ Python 3.10+ · bedesten API (saf `httpx` — ADR-0012 sapması, bkz. `docs/arch
 | Yapısal-sadakat düzeltme fazları? | `docs/yapisal-sadakat-master-plan.md` |
 | Retrieval ne kadar iyi (ölçüm)? | `docs/retrieval-metrikleri.md` |
 
-## Bugünkü durum (2026-07-10)
-**Faz 1-6 çalışıyor** (script seviyesinde). Ayrıntı → [`docs/status.md`](docs/status.md).
+## Klasör yapısı — tür başına TAM İZOLASYON (2026-07-10)
 
-- **Korpus:** `data/corpus/korpus.jsonl` — 31.419 chunk / 916 kanun. `python scripts/build_corpus.py` ile cache'ten (`data/raw/`) ~75 sn'de **deterministik** üretilir. (89.745 fıkra, 29.428 bent, 1.718 mülga.)
+Her mevzuat türü **kendi paketinde, sıfırdan** yazılır. **Ortak kod YOK, soyutlama YOK.**
+Kanun tarafında bir kural değiştirmek başka türü **asla** bozamaz.
+
+```
+src/kanun/        ← ÇALIŞIYOR (15 modül + retrieval/)
+src/teblig/       ← iskelet (boş; sıfırdan yazılacak)
+src/yonetmelik/   ← iskelet (boş; sıfırdan yazılacak)
+
+scripts/kanun/            build_corpus.py · eval_*.py · fetch_*.py
+scripts/kanun/retrieval/  ingest_qdrant · search_qdrant · metrik_* · rerank_*
+scripts/teblig/           (boş) · scripts/yonetmelik/ (boş)
+
+tests/kanun/      17 dosya, 285 test    tests/teblig/ · tests/yonetmelik/ (boş)
+
+data/kanun/       raw/ (cache) · korpus.jsonl · unique_atiflar.json
+data/teblig/ · data/yonetmelik/   (boş)
+data/gold/        altınset gold set (tür-bağımsız, retrieval ölçümü)
+```
+
+**Yeni tür eklerken:** `src/kanun/` modüllerini **oku ve KOPYALA** — `import` etme.
+Çıktı şeması `{id, text, metadata}` kalsın (ileride tek Qdrant'ta birleşebilsin),
+`metadata.mevzuat_tur` ekle. Ayrıntı: `src/teblig/__init__.py`.
+
+## Bugünkü durum (2026-07-10)
+**Faz 1-6 çalışıyor** (script seviyesinde, yalnız KANUN türü). Ayrıntı → [`docs/status.md`](docs/status.md).
+
+- **Korpus:** `data/kanun/korpus.jsonl` — 31.419 chunk / 916 kanun. `python scripts/kanun/build_corpus.py` ile cache'ten (`data/kanun/raw/`) ~75 sn'de **deterministik** üretilir. (89.745 fıkra, 29.428 bent, 1.718 mülga.)
 - **Retrieval:** BGE-M3 + Qdrant, 3-bacak hybrid. **R@10 = 0.700**; +reranker 0.706 (ölçüldü, entegre değil).
 - **Testler:** 285 test geçiyor (`pytest -q`).
 - **Eksik:** atıf modu (metadata hazır, kod yok) · servis/API katmanı · docker-compose (Faz 7) · reranker entegrasyonu.
@@ -64,6 +89,6 @@ Bunlar bozulursa korpus **sessizce** bozulur (mevcut testler yakalamayabilir):
 4. **Mülga maddeler korpusta KALIR** (işaretli), elenmez — tarihsel sorgu için.
 5. **Chunk id `mevzuatId` tabanlıdır**, `kanun_no` değil (6551 gibi çakışan kanun no'ları var).
 
-**Doğrulama refleksi:** `python scripts/build_corpus.py` → 916 kanun / 31.419 chunk; `k193 m7` = 2 fıkra, 7 bent.
+**Doğrulama refleksi:** `python scripts/kanun/build_corpus.py` → 916 kanun / 31.419 chunk; `k193 m7` = 2 fıkra, 7 bent.
 
-⚠️ **`build_corpus.py` çıktıyı SESSİZCE EZER** (`"w"` modu). `CORPUS_MID=...` ile tek kanun çalıştırırsan diskteki tam korpus 1 kanuna iner. Cache duruyorsa geri üretilebilir (deterministik).
+⚠️ **`build_corpus.py` çıktıyı SESSİZCE EZER** (`"w"` modu). `CORPUS_MID=...` ile tek kanun çalıştırırsan diskteki tam korpus 1 kanuna iner. Cache duruyorsa geri üretilebilir (deterministik). Tür-kapsamlı veri yolu sayesinde tebliğ/yönetmelik build'i kanun korpusunu **asla** ezemez.

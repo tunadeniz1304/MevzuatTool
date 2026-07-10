@@ -132,7 +132,7 @@ kanun içinde **madde ayrımı**. (Sıradaki: reranker entegrasyonu / fine-tune.
 - Her chunk: `{id, text, metadata}` — bağımsız teslim edilebilir JSONL
 - Metadata: kanun_no/ad, madde_no/başlık, **yürürlük (yürürlükte/mülga)**, hiyerarşi yolu, fıkra/bent ağacı, değişiklik geçmişi, dipnotlar, tablolar
 - Atomik birim = **madde** (uzun maddeler fıkra bazında); naive sabit-boy token chunking **yok**
-- `python scripts/build_corpus.py` ile cache'ten ~75 sn'de **deterministik** üretilir
+- `python scripts/kanun/build_corpus.py` ile cache'ten ~75 sn'de **deterministik** üretilir
 
 ---
 
@@ -153,7 +153,7 @@ pip install -r requirements.txt
 docker run -p 6333:6333 -v qdrant_storage:/qdrant/storage qdrant/qdrant
 
 # 4. Korpus vektörlerini Qdrant'a yükle
-python scripts/ingest_qdrant.py
+python scripts/kanun/retrieval/ingest_qdrant.py
 ```
 
 > **Not:** BGE-M3 korpus embed'i ağır (GPU) — Colab'da üretilir (`colab/bge_m3_embed.ipynb`),
@@ -165,10 +165,10 @@ python scripts/ingest_qdrant.py
 
 ```bash
 # Tek sorgu
-python scripts/search_qdrant.py "kira artışı nasıl belirlenir"
+python scripts/kanun/retrieval/search_qdrant.py "kira artışı nasıl belirlenir"
 
 # İnteraktif mod
-python scripts/search_qdrant.py
+python scripts/kanun/retrieval/search_qdrant.py
 ```
 
 Çıktı: yürürlükteki en ilgili top-10 madde, füzyon skoru + kanun/madde bilgisiyle sıralı.
@@ -177,18 +177,37 @@ python scripts/search_qdrant.py
 
 ## 📂 Proje yapısı
 
+Her mevzuat türü **kendi paketinde, tam izole.** Ortak kod yok — kanun tarafındaki bir
+değişiklik başka türü asla bozamaz. Yeni tür eklerken `src/kanun/` modülleri **kopyalanır**,
+import edilmez.
+
 ```
 MevzuatTool/
-├── src/mevzuat_tool/
-│   └── retrieval/embed.py        # BGE-M3 sorgu embed (dense + sparse)
+├── src/
+│   ├── kanun/                    # ✅ ÇALIŞIYOR — 15 modül
+│   │   ├── fetch.py              #   bedesten çekici (429/Retry-After uyumlu, cache'li)
+│   │   ├── chunker.py fikra.py   #   madde bölme · fıkra/bent ağacı
+│   │   ├── enrich.py corpus.py   #   metadata birleştirme · chunk üretimi
+│   │   └── retrieval/embed.py    #   BGE-M3 sorgu embed (dense + sparse)
+│   ├── teblig/                   # ⬜ iskelet (sıfırdan yazılacak)
+│   └── yonetmelik/               # ⬜ iskelet
 ├── scripts/
-│   ├── ingest_qdrant.py          # Korpus vektörlerini Qdrant'a yükle
-│   ├── search_qdrant.py          # 3-bacak hybrid arama (ana giriş)
-│   └── metrik_*.py               # Retrieval değerlendirme ölçümleri
+│   ├── kanun/
+│   │   ├── build_corpus.py       # Korpus üretici (ana giriş)
+│   │   ├── eval_*.py             # Parser doğruluk ölçümleri
+│   │   └── retrieval/
+│   │       ├── ingest_qdrant.py  #   Korpus vektörlerini Qdrant'a yükle
+│   │       ├── search_qdrant.py  #   3-bacak hybrid arama (ana giriş)
+│   │       └── metrik_*.py       #   Retrieval değerlendirme ölçümleri
+│   ├── teblig/ · yonetmelik/     # ⬜ boş
+├── tests/kanun/                  # 17 dosya, 285 test
 ├── colab/
 │   ├── bge_m3_embed.ipynb        # Korpus embed (GPU)
 │   └── rerank_olc.ipynb          # Reranker ölçümü (T4)
-├── data/corpus/                  # Temiz korpus JSONL
+├── data/
+│   ├── kanun/                    # raw/ (HTML cache) · korpus.jsonl
+│   ├── teblig/ · yonetmelik/     # ⬜ boş
+│   └── gold/                     # altınset gold set (tür-bağımsız)
 ├── docs/                         # Tüm proje dokümanları
 ├── CLAUDE.md                     # AI ajan / katkı sağlayıcı hafızası
 └── README.md
