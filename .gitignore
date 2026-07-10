@@ -87,6 +87,16 @@ docker-compose.override.yml
 .DS_Store
 Thumbs.db
 
+# ---- handoff ----
+handoff/
+handoff.zip
+
+# ---- comparisons----
+comparison_results/
+
+# ---- embedder_results----
+embedder_results/
+
 # ---- Yerel kişisel öğrenme/işleyiş dosyaları (versiyonlanmaz) ----
 progress.md
 UserProgress.md
