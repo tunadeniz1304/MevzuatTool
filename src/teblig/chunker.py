@@ -23,20 +23,32 @@ Kanun parser'ı hiç değiştirilmeden tebliğe uygulandığında:
      · roma  : `I- AMAÇ, KAPSAM`  → altında  `1- Alacağın Türü`      (120107, 539K)
      · ondalık: `2. Verginin Konusu` → `2.1.` → `2.1.1.` → `2.2.4.1.` (350474, 613K)
 
-3. EN-DERİN SEVİYE = ATOMİK BİRİM (chunk boyutu ölçümüyle karar verildi)
-   Üst seviyeyi chunk yapmak içeriği kesiyor (BGE-M3 tavanı ~25K karakter):
+3. YAPRAK DÜĞÜM = ATOMİK BİRİM (maksimum granülerite; `_ondalik_bolumler`)
+   Tek bir derinlik seçilemez — dallar farklı derinliklere iner. 350474'te aynı belgede
+   `1.` (alt-numarasız) ile `4.1.7.1.1` (5 seviye) yan yana. Sabit seviye seçmek iki şeyi
+   birden bozuyordu: seçili derinlikte numarası olmayan bölümlerin metni kayboluyor,
+   daha derin dallar ise kesiliyordu.
 
-     belge    seviye        chunk  medyan krk   >25K   kanun-maddesi boyutunda
-     350474   1  (N.)          16     28.252      8    0
-     350474   2  (N.N.)        38      9.581      7    5
-     350474   3  (N.N.N.)     134      2.638      1   75   ← seçildi
-     120107   ROMA (I-)         9     40.739      6    0
-     120107   N-              107      2.434      3   55   ← seçildi
-     120106   ROMA (I-)         4      2.871      0    3   ← seçildi (N- yok)
+   → Çocuğu olmayan her düğüm birimdir. Çocuğu OLAN düğümün giriş metni de
+     (`_MIN_GIRIS` üstündeyse) ayrı birimdir — kanundaki 'madde giriş fıkrası + bentler'
+     yapısının karşılığı. Üst zincir `Birim.ust`'te taşınır.
 
-   Sabit seviye seçilemez: `120106`'da doğru birim ROMA, `120107`'de `N-`.
-   → `split_bolumler` **mevcut en derin seviyeyi** birim yapar, üst seviyeleri hiyerarşi
-   metadata'sı olarak taşır (kanunun `tree.py` + `chunker.py` iş bölümünün karşılığı).
+     belge    kural     birim  medyan   max     >25K  kapsama
+     350474   seviye     134    2.637   56.525    1    77.3%   ← 139K krk aranamıyordu
+     350474   YAPRAK     303    1.324   20.664    0   100.0%
+     328127   seviye      27    2.449   22.455    0    95.9%
+     328127   YAPRAK      68      989   11.134    0    99.3%
+
+   Roma ailesinde (120106, 120107) aynı kural `_roma_yapraklari` ile uygulanır: alt-başlığı
+   olmayan roma bölümü kendisi yapraktır (105921'de 6 bölümün 5'i böyle — eski kural
+   içeriklerini yok ediyordu, alt kapsama yalnız %5.8).
+
+4. CHUNKER'IN SINIRI — kalan dev chunk'lar `fikra.py`'nin işi
+   Yaprak kuralından sonra tavanı (25K krk) aşan 7 birim kalıyor; hepsi İÇİNDE `(n)` fıkra
+   ve `a)`/`aa)` bent taşıyor. Kanun tarafında korpus chunk'ı madde değil FIKRA'dır.
+   Ölçüm (kanun `fikra.py` referans olarak uygulandığında): 7 dev chunk → 1.
+   Kalan tek belge 328127 (91.097 krk) tablo ağırlıklı; tablolar `metadata.tablolar`'a
+   taşınınca erir. Yani bölüm deseni tarafında yapılacak iş bitmiştir.
 """
 import re
 from dataclasses import dataclass, field
@@ -117,24 +129,76 @@ def _strip_teblig_sonu_ek(metin: str) -> str:
 
 
 # ── 2. BÖLÜM HİYERARŞİSİ (MADDE yoksa) ──────────────────────────────────────
-# Paragraf başında (satır başı veya \x1f sonrası) numara + ayraç + BÜYÜK harf.
-# Seviyeler tek desende: '2', '2.1', '2.1.1', '2.2.4.1' — nokta sayısı = derinlik.
+# Numara + nokta + BÜYÜK harf. İki konum kabul edilir:
+#   (a) paragraf başı  (satır başı veya \x1f sonrası)         → `\x1f2.1. Verginin konusu`
+#   (b) KELİME sonrası (aynı paragrafta sıkışmış alt-başlık)  → `2.1. Verginin konusu 2.1.1. Konsolide…`
+#
+# (b) NEDEN GEREKLİ (ölçüm, 350474): `2.1.1.` metinde 11 kez geçiyor, paragraf başında yalnız 1
+# kez — HTML başlık ile alt-başlığı aynı <p> içine koymuş. Yalnız (a) ile 18 gerçek başlık
+# kaybediliyordu (`4.1.1. IIR kapsamında…`, `6.1.1.1.1. Gelir ve kurumlar vergisi…`).
+# (b) NEDEN GÜVENLİ: lookbehind KELİME karakteri arar, cümle-sonu (`.`/`:`) DEĞİL. Cümle-içi atıf
+# (`… 2.1. maddesinde`) küçük harfle devam ettiği için BÜYÜK-harf lookahead'i eler.
+# Ölçüm: 350474 +18 işaret (12/12 gözle doğrulandı, hepsi gerçek başlık); 328127 +0 (gürültü yok).
 _ONDALIK = re.compile(
-    rf"(?:^|{_PARA})[ \t]*(\d{{1,2}}(?:\.\d{{1,2}})*)\.[ \t]+(?=[A-ZÇĞİÖŞÜ])"
+    rf"(?:(?:^|{_PARA})[ \t]*|(?<=[\wçğıöşüÇĞİÖŞÜ]) )"
+    rf"(\d{{1,2}}(?:\.\d{{1,2}})*)\.[ \t]+(?=[A-ZÇĞİÖŞÜ])"
 )
 # Roma: 'I-', 'II-', 'VIII-' + BÜYÜK harf (üst bölüm; 120107, 120106)
 _ROMA = re.compile(rf"(?:^|{_PARA})[ \t]*([IVX]{{1,5}})[ \t]*[-–][ \t]*(?=[A-ZÇĞİÖŞÜ])")
-# Roma altındaki rakam-tire alt-başlık: '1- Alacağın Türü' (Title-Case)
+# Roma altındaki rakam alt-başlığı. İki ayraç varyantı, KULLANIM BAĞLAMI FARKLI:
+#
+#   _N_TIRE      '1- Alacağın Türü'         → roma VAR ya da YOK, her iki kolda kullanılır
+#   _N_ROMA_ALTI '1- …' VEYA '1. Verginin Konusu'  → YALNIZ roma bağlamında
+#
+# Nokta varyantı neden bağlama bağlı (ölçüm): 107458'de roma altı NOKTA kullanıyor; tire-only
+# desen bunu göremeyip 36.191 krk'lık tek chunk üretiyordu (tavanı 1.45× aşar) → 18 birim,
+# max 10.370. AMA `1.` deseni `_ONDALIK` ağacının KÖKÜ ile birebir çakışır: nokta varyantını
+# roma-dışı kolda da kullansaydık, 350474'ün `1. Bir / 2. Iki` kökleri N- ailesine kaçar,
+# `1.1`, `2.1` alt dalları hiç görülmez, ondalık ağacı çökerdi (regresyon testle yakalandı).
+# Roma varsa hiyerarşi zaten iki seviyeli ve sabittir → çakışma yok.
 _N_TIRE = re.compile(rf"(?:^|{_PARA})[ \t]*(\d{{1,3}})[ \t]*[-–][ \t]*(?=[A-ZÇĞİÖŞÜ])")
+_N_ROMA_ALTI = re.compile(rf"(?:^|{_PARA})[ \t]*(\d{{1,3}})[ \t]*(?:[-–][ \t]*|\.[ \t]+)(?=[A-ZÇĞİÖŞÜ])")
 
 _MIN_BOLUM = 2          # en az 2 başlık olmalı (tek eşleşme desen değil, rastlantı)
 _BASLIK_MAX = 120       # başlık satırı bu kadardan uzunsa cümledir, başlık değil
-_MIN_GOVDE = 200        # bir seviyenin medyan gövdesi bundan küçükse: başlık listesi/cetvel, bölüm değil
+_MIN_GOVDE = 200        # birimlerin MEDYAN gövdesi bundan küçükse: cetvel/liste, bölüm değil
+_MIN_GIRIS = 200        # ara düğümün giriş metni bundan kısaysa salt başlıktır, birim değil
 _HEDEF_MAX = 25000      # BGE-M3 pratik tavanı (~8192 token); bunu aşan chunk kesilir
+_MIN_KOSU_ORANI = 0.5   # N- kolunda işaretlerin en az yarısı ardışık olmalı (107811: 0.25 → elenir)
 
 
 def _derinlik(no: str) -> int:
     return no.count(".") + 1
+
+
+def _azalan_kardesleri_ele(isaretler: list) -> list:
+    """Aynı önek altında numarası GERİLEYEN (veya tekrar eden) işaretleri at.
+
+    NEDEN (ölçüm, 350474): metin sonundaki tablo `1. Yıl`, `2. Yıl`, `3. Yıl` başlıkları
+    kök bölüm numaralarıyla ÇAKIŞIYOR — no benzersiz değil, konum benzersiz. Yaprak ağacı
+    bu sahte düğümlerle bozuluyordu (`2` bir yerde 699 krk giriş, başka yerde 7 krk hücre).
+
+    KURAL: gerçek bölüm numaraları bir önek altında ARTAR (`6.1` → `6.2` → `6.3`). Tablo satırı
+    `1`'e geri döner. Önek DEĞİŞİRSE gerileme sayılmaz (`2.3` → `3.1` meşrudur; yeni üst-bölüm).
+    Kanun `fikra.py::_bentler` koşu şartının kardeş-grubuna uyarlanmış hali.
+
+    ÖLÇÜM: 350474'te 4/4 sahte elendi, 0 gerçek başlık kurban edildi. 328127/106345'te 0 eleme.
+    """
+    out = []
+    son: dict[str, int] = {}          # önek -> o önek altında görülen son numara
+    for m in isaretler:
+        onek, _, sonp = m.group(1).rpartition(".")
+        try:
+            v = int(sonp)
+        except ValueError:
+            out.append(m)
+            continue
+        onceki = son.get(onek)
+        if onceki is not None and v <= onceki:
+            continue                  # gerileme/tekrar → tablo satırı, bölüm değil
+        son[onek] = v
+        out.append(m)
+    return out
 
 
 def _sirali_kosu(nolar: list[str]) -> int:
@@ -194,12 +258,45 @@ def _dilimle(metin: str, isaretler: list) -> list:
     return out
 
 
-def split_bolumler(metin: str) -> list[Birim]:
-    """`MADDE` işareti yokken: numaralı bölüm hiyerarşisini çöz, EN DERİN seviyeyi birim yap.
+def _roma_yapraklari(metin: str, roma: list, alt: list) -> list[Birim]:
+    """Roma bölümlerini ve alt-başlıklarını yaprak kuralıyla birleştir.
 
-    Neden en derin (ölçüm, modül docstring'i): üst seviyeler 28K-40K karakter medyanlı chunk
-    üretir → BGE-M3 tavanını (~25K) aşar, içerik kesilir. En derin seviye 2.4K-2.6K medyan
-    verir — kanun maddesi boyutuna (medyan ~404 krk, p90 1741) yakın, aranabilir.
+    NEDEN (ölçüm, 105921): 6 roma bölümünün yalnız 1'inde alt-başlık vardı. Yalnız alt-başlıkları
+    birim yapmak diğer 5 bölümün içeriğini yok ediyordu — `I- VERGİNİN KONUSU` (10.321 krk),
+    `V- MATRAH, ORAN VE YETKİ` (7.137 krk) … alt kapsama yalnız %5.8. 107458/106785/120107'de
+    de her birinde 1 roma bölümü (`II-`, `VII-`) kayboluyordu.
+
+    Kural (`_ondalik_bolumler` yaprak kuralının roma karşılığı):
+      · alt-başlığı OLMAYAN roma bölümü      → kendisi birim (yaprak)
+      · alt-başlığı OLAN roma bölümünün girişi:
+            ≥ `_MIN_GIRIS` → ayrı birim (giriş metni; kanunun 'madde giriş fıkrası' karşılığı)
+            <  `_MIN_GIRIS` → salt başlık; `ust` metadata'sında yaşar
+      · her alt-başlık → birim, `ust` = kapsayan roma
+    """
+    rd = _dilimle(metin, roma)
+    out = []
+    for rno, rbas, rb, rs in rd:
+        icerdeki = [m for m in alt if rb <= m.start() < rs]
+        if not icerdeki:
+            out.append(Birim(no=rno, body=metin[rb:rs].strip(), tip="bolum", baslik=rbas))
+            continue
+        giris_son = icerdeki[0].start()
+        if giris_son - rb >= _MIN_GIRIS:
+            out.append(Birim(no=rno, body=metin[rb:giris_son].strip(), tip="bolum", baslik=rbas))
+        for i, m in enumerate(icerdeki):
+            son = icerdeki[i + 1].start() if i + 1 < len(icerdeki) else rs
+            out.append(Birim(no=m.group(1), body=metin[m.start():son].strip(), tip="bolum",
+                             baslik=_baslik_al(metin, m.end()), ust=[(rno, rbas)]))
+    return out
+
+
+def split_bolumler(metin: str) -> list[Birim]:
+    """`MADDE` işareti yokken: numaralı bölüm hiyerarşisini çöz, atomik birimleri döndür.
+
+    İki aile var, yapıları farklı:
+      · ROMA + N- (120106, 120107): hiyerarşi iki seviyeli ve SABİT. `N-` alt-başlıkları
+        sıralı ve gövdesi makulse atomik birim; değilse `I-` roma bölümleri birim olur.
+      · ONDALIK (350474, 328127): derinlik dala göre değişir → `_ondalik_bolumler`, yaprak kuralı.
 
     Üst seviyeler kaybolmaz: her birimin `ust` alanında [(no, başlık)] olarak taşınır
     (kanunun kitap/kısım/bölüm hiyerarşi-yolu karşılığı).
@@ -211,29 +308,32 @@ def split_bolumler(metin: str) -> list[Birim]:
 
     # ROMA + N- ailesi (120107: I- üst, 1- alt) — roma varsa bu aile kazanır.
     if len(roma) >= _MIN_BOLUM:
-        ust_dilim = _dilimle(metin, roma)
-        # Alt seviye (N-) yalnız SIRALI ve gövdesi makul ise atomik birim olur; yoksa roma kalır.
-        if len(ntire) >= _MIN_BOLUM:
-            n, medyan, _asan = _seviye_puanla(metin, ntire)
-            sirali = _sirali_kosu([m.group(1) for m in ntire]) >= _MIN_BOLUM
-            if sirali and _MIN_GOVDE <= medyan <= _HEDEF_MAX:
-                out = []
-                for no, bas, b, s in _dilimle(metin, ntire):
-                    ustler = [(rno, rbas) for rno, rbas, rb, rs in ust_dilim if rb <= b < rs]
-                    out.append(Birim(no=no, body=metin[b:s].strip(), tip="bolum",
-                                     baslik=bas, ust=ustler))
-                return out
-        # yalnız roma (120106) — ya da N- güvenilmez (cetvel/liste). Roma gövdesi de makul olmalı.
+        # Roma bağlamında alt-başlık ayracı NOKTA da olabilir (107458). Çakışma yok: roma varsa
+        # ondalık ağaç kökü aranmaz. Alt seviye yalnız SIRALI + gövdesi makulse atomik birim.
+        alt = list(_N_ROMA_ALTI.finditer(metin))
+        if len(alt) >= _MIN_BOLUM:
+            _n, medyan, _asan = _seviye_puanla(metin, alt)
+            # NOT: azalan-kardeş kapısı burada UYGULANMAZ — roma altında numara her bölümde
+            # meşru olarak 1'e döner (106785: I- altında 1..6, II- altında 1..24). Önek
+            # numarada değil KONUMDA. `_sirali_kosu` 1'e dönüşü zaten koşu-başı sayar.
+            if (_sirali_kosu([m.group(1) for m in alt]) >= _MIN_BOLUM
+                    and _MIN_GOVDE <= medyan <= _HEDEF_MAX):
+                return _roma_yapraklari(metin, roma, alt)
+        # yalnız roma (120106) — ya da alt güvenilmez (cetvel/liste). Roma gövdesi de makul olmalı.
         _n, r_medyan, _a = _seviye_puanla(metin, roma)
         if r_medyan > _HEDEF_MAX:
             return []                          # tek-parça roma → tek-chunk'tan farksız
         return [Birim(no=no, body=metin[b:s].strip(), tip="bolum", baslik=bas)
-                for no, bas, b, s in ust_dilim]
+                for no, bas, b, s in _dilimle(metin, roma)]
 
     # ROMA yok ama N- var: sıralı + gövdesi makul ise bölüm say (aksi halde fıkra/cetvel → boş).
     if len(ntire) >= _MIN_BOLUM:
         n, medyan, _asan = _seviye_puanla(metin, ntire)
-        if (_sirali_kosu([m.group(1) for m in ntire]) >= _MIN_BOLUM
+        # KOŞU ORANI (ölçüm, 107811): `_sirali_kosu >= 2` tek başına çok zayıf — 8 işaretin
+        # 2'si ardışık olsa geçiyordu. 107811'in no'ları ['3','4','1','2','6','10','2','3']
+        # (koşu/n = 0.25); bunlar bölüm değil madde-içi bent numaraları, içlerinde `a) b) c)`
+        # var ve 74.512 krk'lık dev chunk üretiyorlardı. Gerçek bölüm listesi çoğunlukla ardışıktır.
+        if (_sirali_kosu([m.group(1) for m in ntire]) >= max(_MIN_BOLUM, int(n * _MIN_KOSU_ORANI))
                 and _MIN_GOVDE <= medyan <= _HEDEF_MAX):
             return [Birim(no=no, body=metin[b:s].strip(), tip="bolum", baslik=bas)
                     for no, bas, b, s in _dilimle(metin, ntire)]
@@ -254,55 +354,74 @@ def _seviye_puanla(metin: str, isaretler: list) -> tuple[int, int, int]:
 
 
 def _ondalik_bolumler(metin: str, ondalik: list) -> list[Birim]:
-    """Ondalık hiyerarşide ATOMİK SEVİYEYİ seç, üstlerini metadata yap.
+    """Ondalık hiyerarşide YAPRAK düğümleri atomik birim yap; üst zinciri metadata'ya taşı.
 
-    NEDEN "en derin" DEĞİL (ölçümde çıkan üç hata):
-      · 350474 (613K): en derin `5.2.1.1.5` yalnız birkaç yerde var → 28 birim, `2.`/`3.`
-        bölümlerinin içeriği hiç birim olmadı (KAYIP) ve üst-zincir karıştı.
-      · 328127 (101K): en derin `4.2.3.1.3` → 3 birim, biri 65K (tavanı 2.6× aşıyor).
-      · 106345 ( 27K): `1. Form…  2. Form…` cetvel listesi → 51 birim, medyan 91 krk (çöp).
+    ═══ NEDEN "TEK SEVİYE SEÇ" DEĞİL (ölçümle terk edildi) ═══
+    Eski kural tek bir derinlik seçip (`adaylar[0]`) yalnız o derinliğin işaretleriyle
+    dilimliyordu. İki kusuru vardı:
+      · İÇERİK KAYBI: seçilen derinlikte numarası olmayan bölümlerin metni hiçbir birime
+        girmiyordu. 350474'te kapsama %77.3 — 139.021 karakter (%22.7) aranamaz haldeydi.
+      · GRANÜLERİTE KAYBI: `2.1.1.1.1` gibi daha derin dallar seçilen seviyede kesiliyordu.
 
-    DOĞRU SEÇİM: geçerli seviyeler arasından **en az tavan-aşan** olanı seç.
-    Ön eleme: (a) en az `_MIN_BOLUM` işaret, (b) sıralı-koşu şartı (kanun `_bentler` koşu
-    mantığı — tablo satırı `1. Yıl / 2. Yıl` sıçrar), (c) `_MIN_GOVDE` ≤ medyan gövde ≤
-    `_HEDEF_MAX`: alt sınır başlık listesi/cetveli eler (106345: medyan 91 krk), üst sınır
-    "tek parça" seviyeleri eler (106785 seviye-1: 2 birim, medyan 414K → tek-chunk'tan farksız).
-    Sonra puan: önce tavanı aşan birim sayısı (az iyi), eşitse medyanı büyük (dolgun) seviye.
-    350474'te bu seviye 3'tür (134 birim, medyan 2638, 1 aşan); "en derin" kuralı seviye 5'i
-    seçip 28 birim + 195K'lık dev chunk üretiyordu.
+    ═══ YAPRAK KURALI (uygulanan) ═══
+    Her işaret bir düğüm. Bir sonraki işaret `<no>.` öneki taşıyorsa bu düğümün ÇOCUĞU vardır.
+      · çocuksuz düğüm → gövde = bir sonraki işarete kadar          → BİRİM (yaprak)
+      · çocuklu düğüm  → gövde = ilk çocuğuna kadar (giriş metni)
+            giriş ≥ `_MIN_GIRIS` → BİRİM (kanunun 'madde giriş fıkrası'nın karşılığı)
+            giriş <  `_MIN_GIRIS` → salt başlık; birim değil, `ust` metadata'sında yaşar
+    Derinlik dala göre değişir — 350474'te 1..5 arası, en derin yaprak `4.1.7.1.1`.
+
+    ═══ ÖLÇÜM (yaprak vs seviye) ═══
+      belge    kural     birim  medyan   max    >25K  kapsama
+      350474   seviye     134    2637   56.525    1    77.3%
+      350474   YAPRAK     303    1324   20.664    0   100.0%   ← dev chunk 0, kayıp 0
+      328127   seviye      27    2449   22.455    0    95.9%
+      328127   YAPRAK      68     989   11.134    0    99.3%
+
+    Ön koşullar (0-yanlış-pozitif kapıları):
+      (a) `_azalan_kardesleri_ele` — tablo satırı `1. Yıl / 2. Yıl` kök no'larla çakışır.
+      (b) `_sirali_kosu ≥ _MIN_BOLUM` — numaralar gerçekten ardışık mı?
+      (c) medyan gövde ≥ `_MIN_GOVDE` — 106345 cetveli (medyan 92 krk) bölüm değil, çöp.
     Hiçbiri geçmezse bölüm yok sayılır (çağıran tek-chunk'a düşer)."""
-    seviyeler = sorted({_derinlik(m.group(1)) for m in ondalik})
-    adaylar = []
-    for d in seviyeler:
-        ms = [m for m in ondalik if _derinlik(m.group(1)) == d]
-        n, medyan, asan = _seviye_puanla(metin, ms)
-        if n < _MIN_BOLUM:
-            continue
-        if _sirali_kosu([m.group(1) for m in ms]) < _MIN_BOLUM:
-            continue                          # sıralı değil → tablo/cümle rakamı
-        if not (_MIN_GOVDE <= medyan <= _HEDEF_MAX):
-            continue                          # cetvel (çok küçük) ya da tek-parça (çok büyük)
-        adaylar.append((asan, -medyan, d, ms))
-    if not adaylar:
+    ondalik = _azalan_kardesleri_ele(ondalik)
+    if len(ondalik) < _MIN_BOLUM:
+        return []
+    nolar = [m.group(1) for m in ondalik]
+    if _sirali_kosu(nolar) < _MIN_BOLUM:
+        return []                             # sıralı değil → tablo/cümle rakamı
+
+    n = len(ondalik)
+    secili = []                               # (indeks, no, bas, son)
+    for i, m in enumerate(ondalik):
+        no = nolar[i]
+        sonraki = ondalik[i + 1].start() if i + 1 < n else len(metin)
+        cocuklu = i + 1 < n and nolar[i + 1].startswith(no + ".")
+        if cocuklu and sonraki - m.start() < _MIN_GIRIS:
+            continue                          # salt başlık → `ust` zincirinde yaşar
+        secili.append((i, no, m.start(), sonraki))
+    if len(secili) < _MIN_BOLUM:
         return []
 
-    adaylar.sort()                            # en az aşan; eşitse medyanı büyük (dolgun) olan
-    _asan, _negmed, derinlik, yaprak = adaylar[0]
-    ust_dilimler = {
-        d: _dilimle(metin, [m for m in ondalik if _derinlik(m.group(1)) == d])
-        for d in seviyeler if d < derinlik
-    }
+    # ÇÖP KAPISI (106345): birimlerin medyan gövdesi çok küçükse bu bir cetvel/liste.
+    boy = sorted(s - b for _i, _no, b, s in secili)
+    if boy[len(boy) // 2] < _MIN_GOVDE:
+        return []
+
+    # Üst zincir: her düğümün önek-atalarını başlıklarıyla topla (`2.1.1` → `2`, `2.1`).
+    baslik = {}
+    for i, m in enumerate(ondalik):
+        baslik.setdefault(nolar[i], _baslik_al(metin, m.end()))
+
     out = []
-    for no, bas, b, s in _dilimle(metin, yaprak):
+    for _i, no, b, s in secili:
         ustler = []
-        for d in sorted(ust_dilimler):
-            # kapsayan üst dilim (no önek uyumu da aranır: '2.1' → üstü '2')
-            for uno, ubas, ub, us in ust_dilimler[d]:
-                if ub <= b < us and no.startswith(uno + "."):
-                    ustler.append((uno, ubas))
-                    break
+        parcalar = no.split(".")
+        for k in range(1, len(parcalar)):
+            uno = ".".join(parcalar[:k])
+            if uno in baslik:
+                ustler.append((uno, baslik[uno]))
         out.append(Birim(no=no, body=metin[b:s].strip(), tip="bolum",
-                         baslik=bas, ust=ustler))
+                         baslik=baslik[no], ust=ustler))
     return out
 
 
@@ -313,7 +432,7 @@ def split_birimler(metin: str) -> list[Birim]:
     Sıra (ölçümle belirlendi):
       1. Tebliğ-sonu ek kuyruğunu kırp (sahte madde kaynağı).
       2. `MADDE N` varsa madde birimi (924 tebliğin %96.2'si).
-      3. Yoksa numaralı bölüm hiyerarşisi (en derin seviye).
+      3. Yoksa numaralı bölüm hiyerarşisi (yaprak düğümler + dolgun ara-düğüm girişleri).
       4. O da yoksa boş liste → çağıran (corpus) tek-chunk'a düşer (düz metin tebliği).
     """
     metin = _strip_teblig_sonu_ek(metin)
