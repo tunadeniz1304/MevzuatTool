@@ -193,6 +193,28 @@ def test_tree_cache_agsiz_okunur(tmp_path):
     assert len(nodes) == 1 and nodes[0].madde_no == "5"
 
 
+# ── Paralellik: ölçülen optimum 3 işçi ──────────────────────────
+
+def test_isci_sayisi_olculen_optimum():
+    """Kota tam IP-başına değil; ayrı bağlantı havuzları kısmen ayrı kotaya sahip.
+    Ölçüm (9 istek + 31 sn, 3 tur): 1 işçi 0.303 i/s · 3 işçi 0.599 (TEPE) · 5 işçi 0.295.
+    5+ işçide 429 cezaları kazancı yer. Bu sabit kazara büyütülmesin."""
+    from teblig.fetch import _ISCI
+    assert _ISCI == 3
+
+
+def test_round_robin_paylar_ortusmez_ve_tam_kapsar():
+    """İşçiler mid kümelerini bölüşür: çakışma yok (aynı dosyayı iki kez çekmez),
+    kayıp yok (her mid tam bir işçiye düşer). `eksik[i::isci]` dilimlemesinin sözleşmesi."""
+    eksik = [f"m{i}" for i in range(10)]
+    isci = 3
+    paylar = [eksik[i::isci] for i in range(isci)]
+    hepsi = [m for p in paylar for m in p]
+    assert sorted(hepsi) == sorted(eksik)      # kayıp yok
+    assert len(hepsi) == len(set(hepsi))       # çakışma yok
+    assert all(len(p) >= 3 for p in paylar)    # dengeli dağılım (10/3)
+
+
 # ── strip_html: kanun ile AYNI sözleşme (\x1f paragraf sınırı) ────
 
 def test_strip_html_paragraf_sinirina_unit_separator():

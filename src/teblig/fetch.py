@@ -62,6 +62,13 @@ _DEFAULT_COOLDOWN = 30.0 # Retry-After header'ı yoksa varsayılan
 # searchDocuments sayfa boyutu TAVANI 20'dir. Aşılırsa sunucu HTTP 200 + metadata.FMTY="ERROR"
 # ("Kayıt sayısı 20'den fazla olamaz") döner ve liste boş gelir → sessiz 0-sonuç tuzağı.
 _PAGE_SIZE = 20
+# Paralel çekici sayısı. Kota tam IP-başına DEĞİL: ayrı bağlantı havuzları kısmen ayrı kotaya
+# sahip. Ölçülen eğri (9 istek + 31 sn ritmiyle, 3 tur):
+#     1 işçi → 0.303 i/s ( 0 kez 429)
+#     3 işçi → 0.599 i/s ( 4 kez 429)   ← TEPE, 2.0x
+#     4 işçi → 0.413 i/s (18 kez 429)
+#     5 işçi → 0.295 i/s (36 kez 429)   ← aşırı: 429 cezaları kazancı yer, tek işçiye düşer
+_ISCI = 3
 
 
 # --- Gömülü saf-fonksiyonlar ---
@@ -292,16 +299,46 @@ class TebligFetcher:
         return strip_html(html) if html else ""
 
 
+async def _worker(no: int, paylar: list, sadece_html: bool, parti: int, pencere: float,
+                  sayac: dict, cache_dir: str):
+    """Bir paralel çekici: kendi httpx client'ı + kendi hız sınırlayıcısı ile `paylar` işler.
+
+    PARALELLİK NEDEN ÇALIŞIYOR (ölçüm, bkz. docs/bedesten-rate-limit-olcumu.md §8):
+    Kota tam IP-başına DEĞİL; ayrı bağlantı havuzları kısmen ayrı kotalara sahip. Ölçülen eğri:
+      1 client → 0.303 i/s (0 kez 429)
+      3 client → 0.599 i/s (4 kez 429)   ← TEPE (2.0x)
+      4 client → 0.413 i/s (18 kez 429)
+      5 client → 0.295 i/s (36 kez 429)  ← aşırı; 429 cezaları kazancı yiyor
+    Bu yüzden varsayılan `_ISCI = 3`. Daha fazlası ters teper.
+    """
+    async with TebligFetcher(cache_dir=cache_dir) as f:
+        f._hiz.parti, f._hiz.pencere = parti, pencere
+        for mid in paylar:
+            try:
+                if await f.fetch_html(mid):
+                    sayac["html"] += 1
+                if not sadece_html:
+                    if await f.fetch_tree(mid):
+                        sayac["agacli"] += 1
+                    else:
+                        sayac["agacsiz"] += 1
+            except Exception as e:
+                sayac["hata"] += 1
+                print(f"  [HATA] w{no} {mid}: {type(e).__name__} {str(e)[:50]}", flush=True)
+            sayac["islenen"] += 1
+
+
 async def _main():
     """python -m teblig.fetch — id listesi + tebliğlerin HTML + ağaç cache'i.
 
     Devam-güvenli: cache'li olanlar atlanır (istek bile atılmaz), kesintiden sonra kaldığı
-    yerden sürer. Ölçülen verim ≈0.30 istek/sn → 4990 tebliğ × 2 istek ≈ 9 saat.
+    yerden sürer. 3 paralel işçi ile ölçülen verim ≈0.60 istek/sn.
 
     Ortam değişkenleri:
-      FETCH_LIMIT=N   ilk N tebliğ (pilot için; 0=hepsi)
-      FETCH_PARTI=9   pencere başına istek (ölçülen kota 10, 1 pay)
-      FETCH_PENCERE=31  parti sonrası bekleme sn
+      FETCH_LIMIT=N        ilk N tebliğ (pilot için; 0=hepsi)
+      FETCH_ISCI=3         paralel çekici sayısı (ölçülen optimum 3; >3 ters teper)
+      FETCH_PARTI=9        işçi başına pencere kotası
+      FETCH_PENCERE=31     parti sonrası bekleme sn
       FETCH_SADECE_HTML=1  ağaç isteme (istek sayısını yarıya indirir)
     """
     import os
@@ -309,42 +346,62 @@ async def _main():
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     limit = int(os.environ.get("FETCH_LIMIT", "0")) or None
+    isci = int(os.environ.get("FETCH_ISCI", str(_ISCI)))
     parti = int(os.environ.get("FETCH_PARTI", str(_PARTI)))
     pencere = float(os.environ.get("FETCH_PENCERE", str(_PENCERE)))
     sadece_html = os.environ.get("FETCH_SADECE_HTML", "") == "1"
     t0 = time.monotonic()
+
+    # id listesi TEK client ile (sayfa sırası önemli, paralelleştirilemez).
     async with TebligFetcher() as f:
         f._hiz.parti, f._hiz.pencere = parti, pencere
-        verim = parti / (parti * _PARTI_ICI + pencere)
-        print(f"[hiz] {parti} istek / {pencere} sn  (~{verim:.2f} istek/sn)"
-              f"{'  [sadece HTML]' if sadece_html else ''}", flush=True)
         ids = await f.fetch_teblig_ids()
-        print(f"[OK] {len(ids)} teblig id -> {f.cache/'_teblig_ids.txt'}", flush=True)
-        if limit:
-            ids = ids[:limit]
-            print(f"[pilot] ilk {limit} teblig islenecek", flush=True)
-        n_html = n_tree = n_agacsiz = n_hata = 0
-        for i, (no, mid, ad) in enumerate(ids, 1):
-            try:
-                if await f.fetch_html(mid):
-                    n_html += 1
-                if not sadece_html:
-                    if await f.fetch_tree(mid):
-                        n_tree += 1
-                    else:
-                        n_agacsiz += 1
-            except Exception as e:
-                n_hata += 1
-                print(f"  [HATA] {mid}: {type(e).__name__} {str(e)[:60]}", flush=True)
-            if i % 10 == 0 or i == len(ids):
-                gecen = time.monotonic() - t0
-                kalan = (len(ids) - i) * (gecen / i)
-                print(f"  {i}/{len(ids)}  html={n_html} agacli={n_tree} agacsiz={n_agacsiz}"
-                      f"{f' hata={n_hata}' if n_hata else ''}  "
-                      f"({gecen/60:.0f} dk gecti, ~{kalan/60:.0f} dk kaldi)", flush=True)
-        print(f"\nTAMAM: {len(ids)} teblig - html={n_html}, agacli={n_tree}, "
-              f"agacsiz={n_agacsiz}, hata={n_hata} ({(time.monotonic()-t0)/60:.0f} dk) "
-              f"-> {f.cache}", flush=True)
+        cache_dir = str(f.cache)
+    print(f"[OK] {len(ids)} teblig id", flush=True)
+    if limit:
+        ids = ids[:limit]
+        print(f"[pilot] ilk {limit} teblig islenecek", flush=True)
+
+    # Cache'te olanları baştan ele (istek atılmayacak; ilerleme yüzdesi dürüst olsun).
+    cache = pathlib.Path(cache_dir)
+    eksik = [mid for _no, mid, _ad in ids if not (cache / f"html_{mid}.html").exists()]
+    print(f"[cache] {len(ids)-len(eksik)} zaten var, {len(eksik)} cekilecek", flush=True)
+    if not eksik:
+        print("Hepsi cache'te.", flush=True)
+        return
+
+    verim = isci * parti / (parti * _PARTI_ICI + pencere)
+    print(f"[hiz] {isci} isci x ({parti} istek / {pencere} sn)  (~{verim:.2f} istek/sn)"
+          f"{'  [sadece HTML]' if sadece_html else ''}", flush=True)
+    carpan = 1 if sadece_html else 2
+    print(f"[tahmin] ~{len(eksik)*carpan/verim/60:.0f} dk", flush=True)
+
+    # Round-robin dağıt (tebliğ boyutları düzensiz; ardışık blok yerine serpiştir).
+    paylar = [eksik[i::isci] for i in range(isci)]
+    sayac = {"html": 0, "agacli": 0, "agacsiz": 0, "hata": 0, "islenen": 0}
+
+    async def _rapor():
+        while sayac["islenen"] < len(eksik):
+            await asyncio.sleep(30)
+            i = sayac["islenen"]
+            if i == 0:
+                continue
+            gecen = time.monotonic() - t0
+            kalan = (len(eksik) - i) * (gecen / i)
+            hata = f" hata={sayac['hata']}" if sayac["hata"] else ""
+            print(f"  {i}/{len(eksik)}  html={sayac['html']} agacli={sayac['agacli']} "
+                  f"agacsiz={sayac['agacsiz']}{hata}"
+                  f"  ({gecen/60:.0f} dk gecti, ~{kalan/60:.0f} dk kaldi)", flush=True)
+
+    rapor = asyncio.ensure_future(_rapor())
+    await asyncio.gather(*[
+        _worker(i, paylar[i], sadece_html, parti, pencere, sayac, cache_dir)
+        for i in range(isci)
+    ])
+    rapor.cancel()
+    print(f"\nTAMAM: {sayac['islenen']} teblig - html={sayac['html']}, "
+          f"agacli={sayac['agacli']}, agacsiz={sayac['agacsiz']}, hata={sayac['hata']} "
+          f"({(time.monotonic()-t0)/60:.0f} dk) -> {cache_dir}", flush=True)
 
 
 if __name__ == "__main__":
