@@ -11,7 +11,7 @@ mevzuat.gov.tr kanunlarını madde-seviyesinde chunk'lar, zengin metadata çıka
 [![Kapsam](https://img.shields.io/badge/kapsam-yalnız%20KANUN-blue)](docs/mevzuat-mvp-kapsam.md)
 [![Yaklaşım](https://img.shields.io/badge/yaklaşım-vanilla%20RAG-orange)](CLAUDE.md)
 [![Korpus](https://img.shields.io/badge/korpus-31.4k%20madde-informational)](#-korpus)
-[![R@10](https://img.shields.io/badge/R%4010-0.716-success)](#-metrikler)
+[![R@10](https://img.shields.io/badge/R%4010-0.700-success)](#-metrikler)
 [![Lisans](https://img.shields.io/badge/lisans-LICENSE-lightgrey)](LICENSE)
 
 </div>
@@ -111,22 +111,27 @@ Detay: [`docs/retrieval-metrikleri.md`](docs/retrieval-metrikleri.md).
 | Yöntem | R@1 | R@10 | MRR | nDCG@10 |
 |---|---|---|---|---|
 | RRF hybrid (baseline) | 0.436 | 0.667 | 0.507 | 0.545 |
-| WSUM_050 (2-bacak) | 0.460 | 0.685 | 0.539 | 0.570 |
-| **3-bacak + klasik BM25** | **0.490** | **0.716** | **0.571** | **0.603** |
+| WSUM_050 (2-bacak) | 0.447 | 0.669 | 0.520 | 0.556 |
+| **3-bacak EŞİT + klasik BM25 ← uygulanan** | **0.491** | **0.700** | **0.562** | **0.596** |
+| + reranker (`bge-reranker-v2-m3`, ölçüldü) | – | 0.706 | – | – |
 
-Fine-tune / GPU olmadan, yalnızca **füzyon + klasik BM25** ile baseline'dan **R@1 +%12, R@10 +0.05.**
+Fine-tune / GPU olmadan, yalnızca **füzyon + klasik BM25** ile baseline'dan **R@1 +0.055, R@10 +0.033.**
+Reranker ölçüldü ama henüz kalıcı entegre değil.
 
-**Erişim vs ayrım (darboğaz teşhisi):** sistem doğru **kanunu** R@10=**%91**, doğru **maddeyi** %72 buluyor
-→ darboğaz erişimde değil, aynı kanun içinde madde-ayrımında. (Sıradaki: reranker / fine-tune.)
+**Erişim vs ayrım (darboğaz teşhisi):** R@100 = 0.809 >> R@10 = 0.700 → doğru madde **getiriliyor**, ama
+sıralanamıyor. Aynı-**kanun** toleransıyla R@10 = **0.889** → sistem doğru kanunu buluyor; darboğaz aynı
+kanun içinde **madde ayrımı**. (Sıradaki: reranker entegrasyonu / fine-tune.)
 
 ---
 
 ## 📚 Korpus
 
-- **31.416 madde** (yapısal çeşitlilik içeren kanun-only set)
+- **31.419 chunk / 916 kanun** (yalnız `KANUN` türü — ADR-0013)
+- İç yapı: **89.745 fıkra**, **29.428 bent**; 1.718 mülga chunk (elenmez, işaretlenir — tarihsel sorgu)
 - Her chunk: `{id, text, metadata}` — bağımsız teslim edilebilir JSONL
-- Metadata: kanun_no/ad, madde_no/başlık, **yürürlük (yürürlükte/mülga)**, hiyerarşi yolu, fıkralar, değişiklik geçmişi, dipnotlar
+- Metadata: kanun_no/ad, madde_no/başlık, **yürürlük (yürürlükte/mülga)**, hiyerarşi yolu, fıkra/bent ağacı, değişiklik geçmişi, dipnotlar, tablolar
 - Atomik birim = **madde** (uzun maddeler fıkra bazında); naive sabit-boy token chunking **yok**
+- `python scripts/kanun/build_corpus.py` ile cache'ten ~75 sn'de **deterministik** üretilir
 
 ---
 
@@ -147,7 +152,7 @@ pip install -r requirements.txt
 docker run -p 6333:6333 -v qdrant_storage:/qdrant/storage qdrant/qdrant
 
 # 4. Korpus vektörlerini Qdrant'a yükle
-python scripts/ingest_qdrant.py
+python scripts/kanun/retrieval/ingest_qdrant.py
 ```
 
 > **Not:** BGE-M3 korpus embed'i ağır (GPU) — Colab'da üretilir (`colab/bge_m3_embed.ipynb`),
@@ -159,10 +164,10 @@ python scripts/ingest_qdrant.py
 
 ```bash
 # Tek sorgu
-python scripts/search_qdrant.py "kira artışı nasıl belirlenir"
+python scripts/kanun/retrieval/search_qdrant.py "kira artışı nasıl belirlenir"
 
 # İnteraktif mod
-python scripts/search_qdrant.py
+python scripts/kanun/retrieval/search_qdrant.py
 ```
 
 Çıktı: yürürlükteki en ilgili top-10 madde, füzyon skoru + kanun/madde bilgisiyle sıralı.
@@ -171,18 +176,37 @@ python scripts/search_qdrant.py
 
 ## 📂 Proje yapısı
 
+Her mevzuat türü **kendi paketinde, tam izole.** Ortak kod yok — kanun tarafındaki bir
+değişiklik başka türü asla bozamaz. Yeni tür eklerken `src/kanun/` modülleri **kopyalanır**,
+import edilmez.
+
 ```
 MevzuatTool/
-├── src/mevzuat_tool/
-│   └── retrieval/embed.py        # BGE-M3 sorgu embed (dense + sparse)
+├── src/
+│   ├── kanun/                    # ✅ ÇALIŞIYOR — 15 modül
+│   │   ├── fetch.py              #   bedesten çekici (429/Retry-After uyumlu, cache'li)
+│   │   ├── chunker.py fikra.py   #   madde bölme · fıkra/bent ağacı
+│   │   ├── enrich.py corpus.py   #   metadata birleştirme · chunk üretimi
+│   │   └── retrieval/embed.py    #   BGE-M3 sorgu embed (dense + sparse)
+│   ├── teblig/                   # ⬜ iskelet (sıfırdan yazılacak)
+│   └── yonetmelik/               # ⬜ iskelet
 ├── scripts/
-│   ├── ingest_qdrant.py          # Korpus vektörlerini Qdrant'a yükle
-│   ├── search_qdrant.py          # 3-bacak hybrid arama (ana giriş)
-│   └── metrik_*.py               # Retrieval değerlendirme ölçümleri
+│   ├── kanun/
+│   │   ├── build_corpus.py       # Korpus üretici (ana giriş)
+│   │   ├── eval_*.py             # Parser doğruluk ölçümleri
+│   │   └── retrieval/
+│   │       ├── ingest_qdrant.py  #   Korpus vektörlerini Qdrant'a yükle
+│   │       ├── search_qdrant.py  #   3-bacak hybrid arama (ana giriş)
+│   │       └── metrik_*.py       #   Retrieval değerlendirme ölçümleri
+│   ├── teblig/ · yonetmelik/     # ⬜ boş
+├── tests/kanun/                  # 17 dosya, 285 test
 ├── colab/
 │   ├── bge_m3_embed.ipynb        # Korpus embed (GPU)
 │   └── rerank_olc.ipynb          # Reranker ölçümü (T4)
-├── data/corpus/                  # Temiz korpus JSONL
+├── data/
+│   ├── kanun/                    # raw/ (HTML cache) · korpus.jsonl
+│   ├── teblig/ · yonetmelik/     # ⬜ boş
+│   └── gold/                     # altınset gold set (tür-bağımsız)
 ├── docs/                         # Tüm proje dokümanları
 ├── CLAUDE.md                     # AI ajan / katkı sağlayıcı hafızası
 └── README.md

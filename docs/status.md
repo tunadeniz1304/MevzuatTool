@@ -1,9 +1,10 @@
 # Proje Durumu (Status)
 
 Fazlar: [`roadmap.md`](roadmap.md) · Kapsam uygunluğu: [`compliance.md`](compliance.md) · Mimari: [`arch.md`](arch.md)
+Yapısal düzeltme fazları: [`yapisal-sadakat-master-plan.md`](yapisal-sadakat-master-plan.md) · Retrieval ölçümleri: [`retrieval-metrikleri.md`](retrieval-metrikleri.md)
 
-**Son güncelleme:** 2026-06-19
-**Genel durum:** 🟡 Faz 1 (veri çekme) başladı — Python iskeleti kuruldu, mevzuat-mcp MCP client smoke test çalışıyor.
+**Son güncelleme:** 2026-07-10
+**Genel durum:** 🟢 Faz 1-6 çalışır durumda. Korpus üretiliyor (31.419 chunk / 916 kanun), embed+index kurulu (BGE-M3 + Qdrant), hybrid retrieval ölçülmüş (R@10 = 0.700; +reranker 0.706). Kalan: Faz 7 (dockerize) + reranker'ın kalıcı entegrasyonu.
 
 İşaretler: ✅ tamam · 🟡 devam ediyor · ⬜ başlamadı · ⛔ engelli
 
@@ -11,111 +12,138 @@ Fazlar: [`roadmap.md`](roadmap.md) · Kapsam uygunluğu: [`compliance.md`](compl
 
 ## Faz İlerlemesi (üst düzey)
 
-| Faz | Ad | Durum |
-|---|---|---|
-| 0 | Kurulum & Yönetişim | 🟡 |
-| 1 | Veri Çekme (data acquisition) | 🟡 |
-| 2 | Yapısal Chunking | 🟡 |
-| 3 | Metadata | ⬜ |
-| 4 | Temiz Korpus Artifact | ⬜ |
-| 5 | Embedding + Indexleme | ⬜ |
-| 6 | Sorgu + Retrieval | ⬜ |
-| 7 | Dockerize | ⬜ |
+| Faz | Ad | Durum | Kanıt |
+|---|---|---|---|
+| 0 | Kurulum & Yönetişim | ✅ | Yönetişim dokümanları + branch disiplini |
+| 1 | Veri Çekme | ✅ | `fetch.py` — 916 kanun HTML+tree cache'li |
+| 2 | Yapısal Chunking | ✅ | `chunker.py` + `fikra.py` — madde/fıkra/bent ağacı |
+| 3 | Metadata | ✅ | `enrich.py` — hiyerarşi, yürürlük, künye, dipnot, tablo |
+| 4 | Temiz Korpus Artifact | ✅ | `korpus.jsonl` — 31.419 chunk `{id,text,metadata}` |
+| 5 | Embedding + Indexleme | ✅ | BGE-M3 (Colab) → Qdrant (dense+sparse) |
+| 6 | Sorgu + Retrieval | 🟡 | 3-bacak hybrid çalışıyor; reranker ölçüldü, entegre değil |
+| 7 | Dockerize | ⬜ | `docker-compose` yok |
+
+**Test durumu:** 285 test, hepsi geçiyor (`pytest -q`).
 
 ---
 
-## Faz 0 — Kurulum & Yönetişim 🟡
+## Korpus — üretilen artifact (doğrulanmış)
 
-- [x] Repo'ya bağlanıldı (`origin/main` takip ediliyor)
-- [x] `mevzuat-mvp-kapsam.md` (kapsam) mevcut
-- [x] `commit_discipline.md` — commit/branch kuralları
-- [x] `roadmap.md` — faz planı
-- [x] `status.md` — bu dosya
-- [x] `compliance.md` — kapsam uygunluk checklist'i
-- [x] `arch.md` — mimari durum
-- [x] `decisions.md` — karar kaydı
-- [x] `README.md` — proje tanıtımı
-- [x] `.gitignore` — Python/RAG
-- [x] `CLAUDE.md` — proje hafızası
+`data/kanun/korpus.jsonl` — `python scripts/kanun/build_corpus.py` ile cache'ten ~75 sn'de deterministik üretilir.
+
+| Ölçü | Değer |
+|---|---|
+| Toplam chunk | **31.419** |
+| Benzersiz kanun | 916 |
+| `madde_tipi` | asil 25.564 · gecici 4.059 · ek 1.691 · mukerrer 57 · islenmistir_yonlendirme 48 |
+| `yurutluk` | yürürlükte 29.701 · mülga 1.718 |
+| Fıkra (metadata ağacı) | 89.745 |
+| Bent | 29.428 |
+
+> Yönlendirme chunk'ları (48) yalnız `unique_atiflar.json` varsa üretilir; dosya yoksa korpus 31.371 chunk olur ve başka hiçbir şey değişmez.
+
+---
+
+## Faz 0 — Kurulum & Yönetişim ✅
+- [x] Yönetişim dokümanları: kapsam, roadmap, status, compliance, arch, decisions, commit_discipline
+- [x] `README.md`, `.gitignore`, `CLAUDE.md`
+- [x] Python iskeleti — venv + `src/kanun/` + `requirements.txt` + `pytest.ini`
+- [x] Tür-izolasyonlu klasör yapısı (`src/{kanun,teblig,yonetmelik}/`) — 2026-07-10
 - [ ] GitHub `main` branch protection ayarı (UI'dan — bkz. commit_discipline.md §5.2)
-- [x] Python proje iskeleti — venv + `src/mevzuat_tool/` + `requirements.txt`
 
-## Faz 1 — Veri Çekme 🟡
-- [x] `mevzuat-mcp` entegrasyonu: yerel server + MCP client (ADR-0012) — smoke test ✓
-- [x] Yapısal eksenler listelendi + kapsama (coverage) işaret tablosu oluşturuldu ↓
-- [x] Başlangıç korpusu seçildi: **kanun-only** set (TCK/VUK/KVKK; tebliğ+yönetmelik kapsam dışı — ADR-0013) (bkz. decisions.md ADR-0011)
-- [x] `search_mevzuat` ✓ → `get_mevzuat_madde_tree` ✓ → `get_mevzuat_content` ✓ — tam zincir MCP client ile çalışıyor
+## Faz 1 — Veri Çekme ✅
+- [x] `fetch.py` — bedesten API'sinden 429/Retry-After uyumlu, cache'li, devam-edilebilir çekim
+- [x] 916 KANUN listesi + HTML + madde-ağacı cache'li (`data/kanun/raw/`)
+- [x] Yalnız `KANUN` türü (ADR-0013); KHK/tüzük/yönetmelik/tebliğ kapsam dışı
+- [x] Yalnız HTML içerik; PDF yok
+- [x] Kendi scraper'ı yok — `saidsurucu/mevzuat-mcp` API sözleşmesi kullanılıyor
 
-### Başlangıç korpusu — kanun-only set + kapsama tablosu (2026-06-19, ADR-0013)
-| Kanun | mevzuatId | Yapı / kapsanan eksen | Düğüm |
+> **Not (ADR-0012 sapması, bilinçli):** MCP client yerine `fetch.py` saf `httpx` ile bedesten API'sine gidiyor. Sebep: mevzuat-mcp'nin bedesten client'ı HTTP 429'u ve `Retry-After` header'ını yutuyordu → throttle görünmez oluyordu. Aynı API, aynı sözleşme; yalnız transport katmanı bağımsız (bkz. `fetch.py` modül docstring'i).
+
+## Faz 2 — Yapısal Chunking ✅
+- [x] `normalize_text` — satır kırığı birleştir + tire tek tip (`\x1f` paragraf sınırı korunur)
+- [x] `split_articles` — esnek madde regex + bleed-kırpma (0 yanlış-pozitif hedefi)
+- [x] `parse_fikralar` — fıkra `(N)` / numarasız paragraf; bent `a)`/`1.`; alt-bent `1)`
+- [x] `extract_status` — mülga/iptal tespiti (konum-duyarlı: madde vs fıkra seviyesi)
+- [x] Hiyerarşi-path (Kitap/Kısım/Bölüm/Ayırım) — `tree.py` + `enrich.py`
+- [x] Naive sabit-boy token chunking **yapılmadı**
+
+## Faz 3 — Metadata ✅
+- [x] Alanlar: `mevzuat_id`, `kanun_no`, `kanun_ad`, `madde_no`, `madde_baslik`, `madde_tipi`, hiyerarşi (kitap/kısım/bölüm/ayırım + `hiyerarsi_yolu`), `maddeId`
+- [x] **Yürürlük durumu** her chunk'ta (`yurutluk`); mülga chunk'lar korpusta KALIR ve işaretlidir (tarihsel sorgu)
+- [x] Fıkra/bent/alt-bent ağacı (`fikralar[]`) — her seviyenin kendi yürürlüğü
+- [x] Değişiklik künyeleri yapısal (`degisiklik_gecmisi[]`), dipnotlar (`dipnotlar[]`), tablolar (`tablolar[]`)
+- [ ] R.G. tarihi — chunk metadata'sında **yok** (bedesten liste yanıtında var, korpusa taşınmadı)
+
+## Faz 4 — Temiz Korpus Artifact ✅
+- [x] JSONL şeması `{id, text, metadata}` — `corpus.py`
+- [x] `scripts/kanun/build_corpus.py` çıktıyı yazıyor (deterministik, cache'ten 75 sn)
+- [x] Modüler sınır: `corpus.py` atıf listesini bilmez; atıf-farkındalık yalnız build katmanında
+- [x] Şema dokümante: [`handoff/HANDOFF.md`](../handoff/HANDOFF.md) §1 (klasör ignore'lu, yerel)
+- [x] Boş-gövde / işlenmiştir-notu / saf-artefakt maddeler eleniyor
+
+## Faz 5 — Embedding + Indexleme ✅
+- [x] Embedding: **BGE-M3** (ADR-0007), dense=CLS pooling; korpus embed'i Colab'da (`colab/bge_m3_embed.ipynb`)
+- [x] Vektör store: **Qdrant** (ADR-0008) — dense + BGE-sparse + payload
+- [x] Hybrid: dense + BGE-sparse + klasik BM25 (`rank_bm25`) — 3-bacak WSUM füzyon (ADR-0010)
+- [x] `scripts/kanun/retrieval/ingest_qdrant.py` — vektörleri yükle
+
+## Faz 6 — Sorgu + Retrieval 🟡
+- [x] Doğal dil modu: 3-bacak hybrid + yürürlük filtresi (`scripts/kanun/retrieval/search_qdrant.py`)
+- [x] Ölçüm altyapısı: altınset gold (21.737 sızıntısız sorgu), R@k/MRR/nDCG (`scripts/kanun/retrieval/metrik_*.py`)
+- [x] Reranker (`bge-reranker-v2-m3`) **ölçüldü** — R@10 0.667→0.706 (ADR-0009)
+- [ ] **Reranker kalıcı entegre değil** (GPU/servis çözümü bekliyor)
+- [ ] **Atıf modu** (kanun/madde/fıkra/bent → metadata filtresiyle kesin getirme) — kod olarak YOK
+- [ ] Servis/API katmanı yok (script seviyesinde)
+
+### Ölçülmüş retrieval performansı (2000 sorgu, altınset)
+| Konfigürasyon | R@1 | R@10 | MRR |
 |---|---|---|---|
-| Türk Ceza Kanunu 5237 | 103228 | Derin hiyerarşi (Kitap/Kısım/Bölüm) | 397 |
-| Vergi Usul Kanunu 213 | 103006 | Karışık + dev + çok-değişiklikli (serbest madde + Kitap) | 691 |
-| KVKK 6698 | 104383 | Düz kanun (sadece Bölüm) | 41 |
-| _(aday)_ Gelir Vergisi Kanunu 193 | 103111 | Kısım/Bölüm; `(1)`-siz eski fıkra stili (`1.`) | 187 |
+| Hybrid (dense+sparse, RRF) | 0.436 | 0.667 | 0.507 |
+| 3-bacak WSUM (eşit ağırlık) | 0.491 | **0.700** | — |
+| + Reranker (top-50 aday) | — | **0.706** | — |
 
-> **Kapsam dışı (geçmiş kayıt, ADR-0013):** İlk keşifte alınan İthalatta Gözetim Tebliği (350781) ve Kültür Bak. Yayın Yönetmeliği (352791) artık **kapsam dışı** (kanun değil); eval/bulgulardaki 'KKY' satırı tarihsel.
-> **Doğrulandı (2026-06-19, content):** mülga/değişik/ek/mükerrer/geçici işaretleri content'te; VUK çok yoğun (mükerrer 290, değişik 272, mülga 91, ek 76, geçici 73), KVKK görece temiz.
->
-> **Adım 12 chunking bulguları (Faz 2 girdisi):** content metni "kirli" — cümle ortası satır kırıkları (`Madde\n1`); madde işareti belgeden belgeye değişir (`Madde 1-` / `MADDE 1-` / `MADDE 1 –`, tire↔en-dash); fıkra = `(N)`; madde başlığı maddeden ÖNCEki satırda; değişiklik/mülga şerhi (`(Değişik: …)`/`(Mülga: …)`) madde no'sundan hemen sonra; tablolar düz metne yayılmış. → chunker **normalize + esnek madde-regex** gerektirir; ağaç olan/olmayan için iki yol denenecek.
-- [ ] PDF içerik atlama mantığı
-- [ ] Ham çıktı kaydı
-
-## Faz 2 — Yapısal Chunking 🟡 (chunker parçaları kuruldu; birleştirme → Faz 4)
-Plan: `docs/superpowers/plans/2026-06-19-structural-chunking.md` · branch `phase-2/structural-chunking` (lokal) · TDD, 5 task, 5/5 test ✓.
-- [x] `normalize_text` — satır kırığı birleştir + tire tek tip
-- [x] `split_articles` — esnek `Madde/MADDE N-` regex (madde bazlı chunk)
-- [x] `split_fikralar` — `(N)` fıkra bölme
-- [x] `extract_status` — `(Mülga: …)` → yürürlük durumu (ADR-0005)
-- [x] `count_tree_articles` + `scripts/eval_chunker.py` — ağaca karşı ground-truth eval
-- [ ] **Birleştirme (assembly):** `split_articles`→fıkra→status'u tek `{id,text,metadata}` chunk'ta toplama → **Faz 4** (parçalar henüz birbirini çağırmıyor)
-- [ ] Hiyerarşi-path (Kitap/Kısım/Bölüm) — MVP'de yok (YAGNI)
-
-### Eval sonucu (Task 6 fix sonrası — chunker vs ağaç ground-truth)
-| Belge | chunker | unique | tree | dup |
-|---|---|---|---|---|
-| TCK | 348 | 347 | 345 | 1 |
-| ~~KKY~~ _(kapsam dışı, ADR-0013)_ | 22 | 22 | 22 | 0 ✓ |
-| KVKK | 36 | 36 | 33 | 0 ✓ |
-| VUK | 492 | 468 | 564 | 24 |
-
-> **Düzeltildi (Task 6, commit f522f50):** prefix/suffix maddeler (Ek/Geçici/Mükerrer, `N/A`) artık benzersiz `no` alıyor (Türkçe i/İ-güvenli char-class regex). Ana çakışma bug'ı kapandı: **KVKK dup 3→0, VUK dup 104→24.**
-> **Kalan dup'lar gerçek tekrar:** Türk mevzuatında her değişiklik kanununun kendi "Geçici Madde 1"i olur → "Geçici 1" meşru olarak defalarca geçer (VUK 7×). Kod defekti değil; tam benzersizlik için **değişiklik-bağlamı metadata'sı (Faz 3)** gerekir. VUK "215" ×4 anomalisi ayrı incelenecek.
-> `fark` artık birincil metrik değil — chunker, geçici maddeleri ağacın atladığı yerde doğru yakalıyor.
-
-### Faz 2 future-work (öncelik sırası)
-1. ✅ Prefix/suffix madde desteği + benzersiz no (Task 6) — yapıldı.
-2. Birleştirme + metadata → JSONL `{id,text,metadata}` (Faz 4 ile).
-3. Geçici madde tekrarına değişiklik-bağlamı metadata'sı (Faz 3); VUK "215" ×4 anomalisi analizi.
-4. Fıkra `(1)`boşluksuz; serbest-metin mülga tespiti; edge-case testleri; eval'e 5. belge.
-
-## Faz 3 — Metadata ⬜
-- [ ] Temel metadata alanları (ad/no/tür/madde/başlık/fıkra/path/kaynak/R.G.)
-- [ ] Yürürlük durumu (yürürlükte/mülga) işaretleme
-- [ ] Mülga hükümlerin ayrımı
-
-## Faz 4 — Temiz Korpus Artifact ⬜
-- [ ] JSONL şeması `{id, text, metadata}` tanımlı
-- [ ] Korpus üretici çıktıyı yazıyor
-- [ ] Şema dokümante edildi
-
-## Faz 5 — Embedding + Indexleme ⬜
-- [ ] Embedding modeli seçildi/entegre (ör. BGE-M3)
-- [ ] Vektör store kararı (Qdrant↔pgvector) verildi
-- [ ] Hybrid (dense + BM25/sparse) arama kuruldu
-
-## Faz 6 — Sorgu + Retrieval ⬜
-- [ ] Atıf modu (metadata filtreli kesin getirme)
-- [ ] Doğal dil modu (hybrid semantik)
-- [ ] (Opsiyonel) reranker
-- [ ] Sıralı sonuç çıktısı (metadata + atıf)
+**Teşhis:** R@100 = 0.809 >> R@10 → doğru madde getiriliyor, **sıralama** zayıf. Aynı-KANUN toleransıyla R@10 = 0.889 → doğru kanun %89 bulunuyor, darboğaz **madde ayrımı**. Detay: [`retrieval-metrikleri.md`](retrieval-metrikleri.md).
 
 ## Faz 7 — Dockerize ⬜
-- [ ] `docker-compose` (vektör DB + ingestion + retrieval/API)
-- [ ] `docker compose up` ile uçtan uca çalışıyor
+- [ ] `docker-compose` (Qdrant + ingestion + retrieval/API)
+- [ ] `docker compose up` ile uçtan uca
+
+---
+
+## Yapısal sadakat fazları (Faz 0-22) — korpus kalite kampanyası
+
+Roadmap fazlarına **paralel** yürüyen ayrı bir düzeltme serisi. Amaç: parser'ın kanun metnine
+yapısal sadakati (bleed sızması, fıkra/bent sınırları, dipnot/tablo, yürürlük doğruluğu).
+Plan: [`yapisal-sadakat-master-plan.md`](yapisal-sadakat-master-plan.md) · Faz dosyaları: [`faz-planlari/`](faz-planlari/)
+
+**Tamamlanan 18 faz planı** (0,1,2,3,4,5,6,7,8,10,12,13,14,15,16,17-20,21,22). Son üçü:
+
+| Faz | Konu | Kazanç |
+|---|---|---|
+| 21 | Cetvel + kolonsuz başlık bleed | Tablo-imzalı kanun-sonu ekleri kırpıldı |
+| 22 | Numarasız fıkra paragraf-sınır (`\x1f`) | Fıkra 46.643 → **89.745** |
+| 22b | Bent-listeli fıkrada devam-paragraf koruma | 122 maddede 567 bent kaybı geri geldi |
+| 22f | Atıf-alan işlenmiş-madde → yönlendirme chunk | 48 boş-gövde yön kaydı |
+
+### Atıf bulunabilirliği (unique_atiflar.json, 8.290 atıf)
+Oturum başı ~%59.7 → **%75.3**. Kırılım: kanun %98 · madde %86 · fıkra/bent daha düşük.
+
+> **Dürüstlük notu:** %75.3'ün bir kısmı korpus iyileşmesi (kalıcı, kodda — bağımsız `altınset`
+> referansıyla ~%78 uyumlu, overfit değil), bir kısmı **ölçüm toleransı** (atıf "fıkra N" derken
+> korpustaki "N." bent ile eşleştirme — Türk hukuk dilinde bent'e "fıkra" denir). Toleranslar
+> **build kodunda değil**, ayrı karşılaştırma script'indeydi. Yani %75.3 bir **ölçüm üst-sınırıdır**;
+> canlı retrieval'ın aynı toleransı uygulaması gerekir.
 
 ---
 
 ## Açık Konular / Engeller
-- Vektör store seçimi açık (Qdrant ↔ pgvector) — bkz. `decisions.md`
-- Başlangıç korpusu hangi alan/kanun seti olacak? — Faz 1'de netleşmeli
+
+1. **Atıf modu yok.** Roadmap Faz 6 "atıf modu (metadata filtreli kesin getirme)" diyor; korpus
+   metadata'sı buna hazır (kanun_no + madde_no + fıkra/bent ağacı) ama **kod yazılmadı.**
+2. **Reranker entegre değil.** Ölçüldü (+0.04 R@10), GPU/servis çözümü bekliyor.
+3. **R.G. tarihi metadata'da yok** — kapsam listesinde var, chunk'a taşınmadı.
+4. **Fıkra→bent terminoloji toleransı** retrieval tarafına taşınmalı (yukarıdaki dürüstlük notu).
+5. **Dockerize (Faz 7) başlamadı.**
+6. **Çok-versiyonlu kanun artefaktı:** 6111/6736/7143/7326/7440 gibi yapılandırma kanunları aynı
+   konuyu farklı no ile düzenliyor → gold "6111" derken sistem "7326" getirince haksız 0 alıyor.
