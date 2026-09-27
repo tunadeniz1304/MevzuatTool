@@ -8,6 +8,7 @@ puanlanınca RERANK_ADAY ∈ {10,20,30,50} sonuçları aynı skorlardan türetil
 Modlar:
   --capa [--backend torch]           colab/rerank_input.jsonl (2-bacak RRF top-50, metin 1500 krk)
                                      üzerinde ADR-0009 ölçümünü yeniden üret (hedef R@10 0.7060 ± 0.005).
+                                     Skorlar rerank_capa_skor_<B>.jsonl'a yazılır (kaldığı yerden devam).
   --aday-cikar [--embed E] [--n N]  3-bacak WSUM top-50 → data/kanun/olcum/rerank_aday_3bacak[_<E>].jsonl
                                      E (sorgu embed backend): torch (vars.) | onnx-fp32 | onnx-int8
   --skorla --max-len L [--backend B] [--embed E] [--aday A] [--n N]
@@ -51,11 +52,11 @@ ADAYLAR = (10, 20, 30, 50)
 CIFT_BATCH = 256   # bu kadar çift biriktir → uzunluğa göre sırala → reranker batch'leri
 
 
-def _reranker(backend, max_len, cihaz):
+def _reranker(backend, max_len, cihaz, batch=8):
     ayar = ayarlar_oku()
     if backend == "torch":
         from kanun.retrieval.rerank import TorchReranker
-        return TorchReranker(max_length=max_len, cihaz=cihaz)
+        return TorchReranker(max_length=max_len, cihaz=cihaz, batch=batch)
     from kanun.retrieval.rerank import OnnxReranker
     dosya = "model.int8.onnx" if backend.endswith("int8") else "model.onnx"
     return OnnxReranker(os.path.join(ayar.model_dir, "bge-reranker-v2-m3", dosya),
@@ -80,21 +81,28 @@ def _puanla_toplu(rr, satirlar, metin_fn, aday):
 # ---- çapa: ADR-0009 ölçümünü aynı girdiyle yeniden üret -------------------
 def capa(args):
     satirlar = [json.loads(l) for l in open(CAPA_DOSYA, encoding="utf-8")][: args.n]
-    rr = _reranker(args.backend, 512, args.cihaz)
+    cikti = f"{OLCUM}/rerank_capa_skor_{args.backend}.jsonl"
+    yapilan = sum(1 for _ in open(cikti, encoding="utf-8")) if os.path.exists(cikti) else 0
+    if yapilan < len(satirlar):
+        print(f"{cikti}: {yapilan}/{len(satirlar)} hazır, devam ediliyor")
+        rr = _reranker(args.backend, 512, args.cihaz, args.batch)
+        t0 = time.time()
+        with open(cikti, "a", encoding="utf-8") as out:
+            for bas in range(yapilan, len(satirlar), 8):
+                grup = satirlar[bas: bas + 8]
+                for sk in _puanla_toplu(rr, grup, lambda a: a["text"], 50):
+                    out.write(json.dumps(sk) + "\n")
+                out.flush()
+                biten = bas + len(grup)
+                print(f"  {biten}/{len(satirlar)}  ({time.time() - t0:.0f} sn)", end="\r", flush=True)
+    skorlar = [json.loads(l) for l in open(cikti, encoding="utf-8")][: len(satirlar)]
     h_sira, r_sira, h50, r50 = [], [], [], []
-    t0 = time.time()
-    for bas in range(0, len(satirlar), 8):
-        grup = satirlar[bas: bas + 8]
-        for s in grup:
-            s["adaylar"] = [dict(a, key=(a["kn"], a["mn"])) for a in s["adaylar"]]
-        skorlar = _puanla_toplu(rr, grup, lambda a: a["text"], 50)
-        for s, sk in zip(grup, skorlar):
-            hedef = tuple(s["dogru"])
-            keys = [a["key"] for a in s["adaylar"]]
-            yeni = rerank_uygula(keys, sk, 50)
-            h_sira.append(sira(keys, hedef)); r_sira.append(sira(yeni, hedef))
-            h50.append(sira(keys, hedef, 50)); r50.append(sira(yeni, hedef, 50))
-        print(f"  {len(h_sira)}/{len(satirlar)}  ({time.time() - t0:.0f} sn)", end="\r", flush=True)
+    for s, sk in zip(satirlar, skorlar):
+        hedef = tuple(s["dogru"])
+        keys = [(a["kn"], a["mn"]) for a in s["adaylar"]]
+        yeni = rerank_uygula(keys, sk, 50)
+        h_sira.append(sira(keys, hedef)); r_sira.append(sira(yeni, hedef))
+        h50.append(sira(keys, hedef, 50)); r50.append(sira(yeni, hedef, 50))
     h, r = metrikler(h_sira), metrikler(r_sira)
     print(f"\nÇAPA — 2-bacak RRF top-50 + {args.backend} reranker, {h['N']} sorgu")
     print(f"{'Metrik':<10}{'Hybrid':>10}{'+Rerank':>10}{'Fark':>10}")
@@ -141,7 +149,7 @@ def skorla(args):
     cikti = skor_dosya(args.embed, args.backend, args.max_len)
     yapilan = sum(1 for _ in open(cikti, encoding="utf-8")) if os.path.exists(cikti) else 0
     print(f"{cikti}: {yapilan}/{len(satirlar)} hazır, devam ediliyor (aday={args.aday})")
-    rr = _reranker(args.backend, args.max_len, args.cihaz)
+    rr = _reranker(args.backend, args.max_len, args.cihaz, args.batch)
     t0 = time.time()
     with open(cikti, "a", encoding="utf-8") as out:
         for bas in range(yapilan, len(satirlar), max(1, CIFT_BATCH // args.aday)):
@@ -210,6 +218,7 @@ def main():
     p.add_argument("--aday", type=int, default=50)
     p.add_argument("--n", type=int, default=2000)
     p.add_argument("--cihaz", default="auto")
+    p.add_argument("--batch", type=int, default=8)
     args = p.parse_args()
     os.makedirs(OLCUM, exist_ok=True)
     if args.capa:
