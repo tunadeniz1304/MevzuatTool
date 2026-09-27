@@ -24,12 +24,16 @@ def _uzunluk_sirali_batchler(ciftler, batch):
 
 
 class TorchReranker:
-    def __init__(self, model_adi=RERANK_MODEL, max_length=512, batch=16, cihaz="cpu"):
+    def __init__(self, model_adi=RERANK_MODEL, max_length=512, batch=16, cihaz="cpu", vram_orani=0.8):
+        """vram_orani (yalnız cuda): PyTorch ayırıcısının kullanabileceği VRAM payı. Windows sürücüsü VRAM
+        dolunca sessizce sistem RAM'ine taşar (sysmem fallback) ve hız ~10× düşer; tavan bunu önler."""
         import torch
         from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
         if cihaz == "auto":
             cihaz = "cuda" if torch.cuda.is_available() else "cpu"
+        if cihaz == "cuda":
+            torch.cuda.set_per_process_memory_fraction(vram_orani)
         self._torch = torch
         self.cihaz = cihaz
         self.max_length = max_length
