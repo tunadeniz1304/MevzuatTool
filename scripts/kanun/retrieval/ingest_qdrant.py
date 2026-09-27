@@ -53,7 +53,11 @@ def main():
             "sparse": models.SparseVectorParams(),
         },
     )
-    print(f"  '{COLLECTION}' collection oluşturuldu (dense + sparse)")
+    # yürürlük filtresi her aramada çalışır → keyword payload index'i (sonuç aynı, filtre kontrolü
+    # diskteki payload yerine bellekteki index'ten: dense p95 ~208 → ~15 ms, ADR-0016)
+    client.create_payload_index(COLLECTION, field_name="yurutluk",
+                                field_schema=models.PayloadSchemaType.KEYWORD)
+    print(f"  '{COLLECTION}' collection oluşturuldu (dense + sparse + yurutluk index)")
 
     # 3) Point'leri batch'ler halinde yükle
     print("Point'ler yükleniyor...")
