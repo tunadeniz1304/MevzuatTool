@@ -147,3 +147,16 @@ def test_bos_sonuc():
     sonuc = arama.ara("soru")
     assert list(sonuc) == [] and "toplam" in sonuc.sure_ms
 
+
+# ---- HizliBM25 -----------------------------------------------------------
+def test_hizli_bm25_orijinalle_bit_bit_ayni():
+    from rank_bm25 import BM25Okapi
+    from kanun.retrieval.search import HizliBM25
+
+    dokumanlar = [tokenize(t) for t in (
+        "kira bedeli her yıl artırılır", "kiracı kira bedelini öder", "memur disiplin cezası",
+        "bu kanun yayımı tarihinde yürürlüğe girer", "kira kira kira", "")]
+    okapi = BM25Okapi(dokumanlar)
+    hizli = HizliBM25(okapi)
+    for sorgu in (["kira", "bedeli"], ["olmayan"], ["memur", "kira", "memur"], []):
+        assert np.array_equal(hizli.get_scores(sorgu), okapi.get_scores(sorgu))

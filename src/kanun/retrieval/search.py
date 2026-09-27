@@ -68,6 +68,43 @@ def wsum(skorlar, agirliklar):
     return [k for k, _ in sorted(puan.items(), key=lambda x: -x[1])]
 
 
+class HizliBM25:
+    """rank_bm25 `BM25Okapi.get_scores`'un posting-listeli, BİT-BİT AYNI sonuçlu hali.
+
+    Orijinal her sorgu token'ı için 28k dokümanlık bir Python list-comprehension'ı kurar
+    (`[doc.get(q) or 0 for doc in doc_freqs]`) → token başına ~5-10 ms, sorgu başına yüzlerce ms.
+    Burada her terimin (doküman indeksi, frekans) posting listesi bir kez çıkarılır; sorguda aynı
+    int64 frekans dizisi np.zeros + indeksli atama ile kurulur ve orijinal formül AYNI sırayla
+    uygulanır → skorlar birebir eşit (test_search.py doğrular), token başına ~0.1 ms.
+    """
+
+    def __init__(self, okapi):
+        self.okapi = okapi
+        self.doc_len = np.array(okapi.doc_len)
+        n = len(okapi.doc_freqs)
+        postings = {}
+        for i, doc in enumerate(okapi.doc_freqs):
+            for terim, frek in doc.items():
+                postings.setdefault(terim, ([], []))
+                postings[terim][0].append(i)
+                postings[terim][1].append(frek)
+        self.postings = {t: (np.array(ix, dtype=np.int64), np.array(fr, dtype=np.int64))
+                         for t, (ix, fr) in postings.items()}
+        self.n = n
+
+    def get_scores(self, query):
+        o = self.okapi
+        score = np.zeros(self.n)
+        for q in query:
+            q_freq = np.zeros(self.n, dtype=np.int64)
+            p = self.postings.get(q)
+            if p is not None:
+                q_freq[p[0]] = p[1]
+            score += (o.idf.get(q) or 0) * (q_freq * (o.k1 + 1) /
+                                             (q_freq + o.k1 * (1 - o.b + o.b * self.doc_len / o.avgdl)))
+        return score
+
+
 @dataclass
 class BM25Index:
     """Klasik BM25 index'i + reranker/servis için madde metni ve kanun adı haritaları.
@@ -75,7 +112,7 @@ class BM25Index:
     maddeler[i] = (kanun_no, madde_no, madde_id) — BM25 doküman i ile hizalı (yalnız yürürlükte).
     metinler / kanun_adlari: TÜM korpus (mülga dahil) (kanun_no, madde_no) → değer.
     """
-    bm25: object                # get_scores(tokenler) sunan nesne (BM25Okapi)
+    bm25: object                # get_scores(tokenler) sunan nesne (HizliBM25 ya da BM25Okapi)
     maddeler: list
     metinler: dict = field(default_factory=dict)
     kanun_adlari: dict = field(default_factory=dict)
@@ -100,7 +137,7 @@ def bm25_kur(korpus_yol="data/kanun/korpus.jsonl"):
                 continue
             maddeler.append((key[0], key[1], r["id"]))
             dokumanlar.append(tokenize(r["text"]))
-    return BM25Index(BM25Okapi(dokumanlar), maddeler, metinler, adlar)
+    return BM25Index(HizliBM25(BM25Okapi(dokumanlar)), maddeler, metinler, adlar)
 
 
 @dataclass
