@@ -8,7 +8,7 @@ Reranker YOK (bu PC'de hızlı: sadece BGE-M3 embed + Qdrant retriever).
 Çıktı: colab/rerank_input.jsonl
   Her satır: {sorgu, dogru:[kn,mn], adaylar:[{kn,mn,text}, ...50]}
 
-Çalıştır: .venv/Scripts/python.exe scripts/rerank_hazirla.py [N]   (vars. 2000)
+Çalıştır: .venv/Scripts/python.exe scripts/kanun/retrieval/rerank_hazirla.py [N]   (vars. 2000)
 """
 import sys
 import json

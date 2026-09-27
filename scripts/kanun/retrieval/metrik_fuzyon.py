@@ -12,7 +12,7 @@ AYRI çekip, füzyonu KENDİ elimizde farklı ağırlıklarla deneriz:
   - DENSE_ONLY    : sadece dense (füzyon yok — sparse katkısını görmek için)
 
 Reranker YOK. Baseline ile aynı seed → aynı sorgu seti.
-Çalıştır: .venv/Scripts/python.exe scripts/metrik_fuzyon.py [N]   (vars. 2000)
+Çalıştır: .venv/Scripts/python.exe scripts/kanun/retrieval/metrik_fuzyon.py [N]   (vars. 2000)
 """
 import sys
 import json

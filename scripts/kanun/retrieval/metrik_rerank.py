@@ -13,7 +13,7 @@ Akış (her sorgu):
 Çıktı: iki R@1/5/10 tablosu yan yana (hybrid vs +reranker).
 
 Reranker: BAAI/bge-reranker-v2-m3 (transformers ile, ilk sefer ~2GB iner).
-Çalıştır: .venv/Scripts/python.exe scripts/metrik_rerank.py [N]   (vars. 500)
+Çalıştır: .venv/Scripts/python.exe scripts/kanun/retrieval/metrik_rerank.py [N]   (vars. 500)
 """
 import sys
 import json

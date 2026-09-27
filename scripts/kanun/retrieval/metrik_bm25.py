@@ -13,7 +13,7 @@ BM25 index korpus 'text' üzerine (embedding'in gördüğü AYNI metin — adil 
 madde-no/metadata YOK → sızıntı yok). Türkçe için basit lower+kelime tokenizasyon.
 
 Reranker YOK, tek embed modeli. Baseline ile aynı seed → aynı sorgu seti.
-Çalıştır: .venv/Scripts/python.exe scripts/metrik_bm25.py [N]   (vars. 2000)
+Çalıştır: .venv/Scripts/python.exe scripts/kanun/retrieval/metrik_bm25.py [N]   (vars. 2000)
 """
 import re
 import sys

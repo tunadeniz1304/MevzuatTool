@@ -9,7 +9,7 @@ Girdi (colab/outputs/):
 Çıktı: Qdrant'ta 'mevzuat' collection'ı, N point (her madde: dense+sparse+payload).
 
 Qdrant çalışıyor olmalı: docker run -p 6333:6333 qdrant/qdrant
-Çalıştır: .venv/Scripts/python.exe scripts/ingest_qdrant.py
+Çalıştır: .venv/Scripts/python.exe scripts/kanun/retrieval/ingest_qdrant.py
 """
 import json
 import numpy as np

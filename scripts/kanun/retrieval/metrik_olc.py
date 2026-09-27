@@ -14,7 +14,7 @@ Eşleşme: sistemin getirdiği (payload kanun_no+madde_no) == gold (kanun_no+mad
 ÖNEMLİ: Doğru maddesi MÜLGA olan sorgular ölçüm-dışı bırakılır — çünkü arama
 yürürlük filtreli, mülga maddeyi hiç getiremez (haksız 0 olurdu). Bu ayrı raporlanır.
 
-Çalıştır: .venv/Scripts/python.exe scripts/metrik_olc.py [N]   (N=örnek sayısı, vars. 2000)
+Çalıştır: .venv/Scripts/python.exe scripts/kanun/retrieval/metrik_olc.py [N]   (N=örnek sayısı, vars. 2000)
 """
 import sys
 import json

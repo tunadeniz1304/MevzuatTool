@@ -10,7 +10,7 @@ Sparse tek başına ne kadar iyi? Hybrid, dense-only'dan ne kadar ileri?
 Bu üçlü = vanilla RAG'ın ablasyonu.
 
 Reranker YOK. Baseline ile aynı seed → aynı sorgu seti.
-Çalıştır: .venv/Scripts/python.exe scripts/metrik_ablasyon.py [N]   (vars. 2000)
+Çalıştır: .venv/Scripts/python.exe scripts/kanun/retrieval/metrik_ablasyon.py [N]   (vars. 2000)
 """
 import sys
 import json

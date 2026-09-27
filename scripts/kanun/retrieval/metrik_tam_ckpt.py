@@ -12,7 +12,7 @@ CHECKPOINT mantigi:
   - Bitince checkpoint SiLiNiR, sonuc .olcum_tam.txt'e yazilir.
 
 Cikti ASCII-guvenli (cp1254). Calistir (utf-8 io ile onerilir):
-  PYTHONIOENCODING=utf-8 .venv/Scripts/python.exe -u scripts/metrik_tam_ckpt.py
+  PYTHONIOENCODING=utf-8 .venv/Scripts/python.exe -u scripts/kanun/retrieval/metrik_tam_ckpt.py
 Devam icin ayni komutu tekrar calistir - kaldigi yerden surer.
 """
 import re

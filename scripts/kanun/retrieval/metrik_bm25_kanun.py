@@ -12,7 +12,7 @@ MADDE eğrisi = üretim katılığı (tam maddeyi ayırt ediyor mu?).
 İkisinin farkı = "madde-ayrımı darboğazı"nın k'ya göre büyüklüğü.
 
 Füzyon = 3-bacak EŞİT (0.33/0.33/0.34), search_qdrant.py ile aynı.
-Çalıştır: .venv/Scripts/python.exe scripts/metrik_bm25_kanun.py [N]   (vars. 2000)
+Çalıştır: .venv/Scripts/python.exe scripts/kanun/retrieval/metrik_bm25_kanun.py [N]   (vars. 2000)
 """
 import re
 import sys

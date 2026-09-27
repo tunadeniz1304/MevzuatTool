@@ -8,7 +8,7 @@ Geniş k için ADAY büyütülür (her bacak 200 aday) → R@100 anlamlı.
 Füzyon = 3 bacağın min-max normalize skorlarının eşit ağırlıklı toplamı.
 
 Reranker YOK, tek embed modeli. Baseline ile aynı seed → aynı sorgu seti.
-Çalıştır: .venv/Scripts/python.exe scripts/metrik_bm25_profil.py [N]   (vars. 2000)
+Çalıştır: .venv/Scripts/python.exe scripts/kanun/retrieval/metrik_bm25_profil.py [N]   (vars. 2000)
 """
 import re
 import sys
