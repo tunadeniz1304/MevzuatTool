@@ -64,15 +64,26 @@ def _kaydet_tek_dosya(gecici_onnx, hedef_onnx):
     onnx.checker.check_model(hedef_onnx)   # yol ile → >2GB modelde de çalışır
 
 
-def _export(modul, girdiler, girdi_adlari, cikti_adlari, dinamik, hedef_onnx):
+def _export(kur, girdiler, girdi_adlari, cikti_adlari, dinamik, hedef_onnx):
+    """kur() → torch modülü → geçici ONNX (çok parçalı external data) → modülü bellekten at → tek dosyaya topla.
+    Modül burada kurulup burada silinir: torch ağırlıkları ile ONNX proto aynı anda bellekte kalmaz
+    (bu makinede ~16 GB RAM'de tepe bellek kritik)."""
+    import gc
     os.makedirs(os.path.dirname(hedef_onnx), exist_ok=True)
-    with tempfile.TemporaryDirectory(dir=os.path.dirname(hedef_onnx)) as tmp:
+    tmp = tempfile.mkdtemp(dir=os.path.dirname(hedef_onnx))
+    try:
         gecici = os.path.join(tmp, "model.onnx")
+        modul = kur()
         with torch.no_grad():
             torch.onnx.export(modul, girdiler, gecici, input_names=girdi_adlari,
                               output_names=cikti_adlari, dynamic_axes=dinamik,
                               opset_version=OPSET, do_constant_folding=True)
+        del modul
+        gc.collect()
         _kaydet_tek_dosya(gecici, hedef_onnx)
+    finally:
+        import shutil
+        shutil.rmtree(tmp, ignore_errors=True)
     boyut = sum(os.path.getsize(p) for p in (hedef_onnx, hedef_onnx + ".data") if os.path.exists(p))
     print(f"  ✓ {hedef_onnx}  ({boyut / 1e9:.2f} GB)")
 
@@ -81,42 +92,52 @@ def embed_export(model_dir):
     print(f"[embed] {EMBED_MODEL} export ediliyor...")
     hedef = os.path.join(model_dir, "bge-m3", "model.onnx")
     tok = AutoTokenizer.from_pretrained(EMBED_MODEL)
-    model = AutoModel.from_pretrained(EMBED_MODEL, attn_implementation="eager").eval()
-    sl = torch.nn.Linear(1024, 1)
-    sl.load_state_dict(torch.load(hf_hub_download(EMBED_MODEL, "sparse_linear.pt"),
-                                  map_location="cpu", weights_only=True))
-    sarmal = EmbedSarmal(model, sl.eval()).eval()
+    os.makedirs(os.path.dirname(hedef), exist_ok=True)
+    tok.save_pretrained(os.path.dirname(hedef))
+
+    def kur():
+        model = AutoModel.from_pretrained(EMBED_MODEL, attn_implementation="eager").eval()
+        sl = torch.nn.Linear(1024, 1)
+        sl.load_state_dict(torch.load(hf_hub_download(EMBED_MODEL, "sparse_linear.pt"),
+                                      map_location="cpu", weights_only=True))
+        return EmbedSarmal(model, sl.eval()).eval()
+
     ornek = tok(["kira artışı nasıl belirlenir", "memur disiplin cezası"], padding=True,
                 return_tensors="pt")
-    _export(sarmal, (ornek["input_ids"], ornek["attention_mask"]),
+    _export(kur, (ornek["input_ids"], ornek["attention_mask"]),
             ["input_ids", "attention_mask"], ["dense", "sparse_w"],
             {"input_ids": {0: "batch", 1: "seq"}, "attention_mask": {0: "batch", 1: "seq"},
              "dense": {0: "batch"}, "sparse_w": {0: "batch", 1: "seq"}}, hedef)
-    tok.save_pretrained(os.path.dirname(hedef))
+
+
+class LogitSarmal(torch.nn.Module):
+    """SequenceClassification çıktısından yalnız logits tensörü (ONNX çıktı adı: logits)."""
+
+    def __init__(self, m):
+        super().__init__()
+        self.m = m
+
+    def forward(self, input_ids, attention_mask):
+        return self.m(input_ids=input_ids, attention_mask=attention_mask).logits
 
 
 def rerank_export(model_dir):
     print(f"[rerank] {RERANK_MODEL} export ediliyor...")
     hedef = os.path.join(model_dir, "bge-reranker-v2-m3", "model.onnx")
     tok = AutoTokenizer.from_pretrained(RERANK_MODEL)
-    model = AutoModelForSequenceClassification.from_pretrained(
-        RERANK_MODEL, attn_implementation="eager").eval()
+    os.makedirs(os.path.dirname(hedef), exist_ok=True)
+    tok.save_pretrained(os.path.dirname(hedef))
 
-    class LogitSarmal(torch.nn.Module):
-        def __init__(self, m):
-            super().__init__()
-            self.m = m
-
-        def forward(self, input_ids, attention_mask):
-            return self.m(input_ids=input_ids, attention_mask=attention_mask).logits
+    def kur():
+        return LogitSarmal(AutoModelForSequenceClassification.from_pretrained(
+            RERANK_MODEL, attn_implementation="eager").eval()).eval()
 
     ornek = tok([["kira artışı", "Kira bedeli her yıl artırılır."], ["memur", "Disiplin cezası"]],
                 padding=True, return_tensors="pt")
-    _export(LogitSarmal(model).eval(), (ornek["input_ids"], ornek["attention_mask"]),
+    _export(kur, (ornek["input_ids"], ornek["attention_mask"]),
             ["input_ids", "attention_mask"], ["logits"],
             {"input_ids": {0: "batch", 1: "seq"}, "attention_mask": {0: "batch", 1: "seq"},
              "logits": {0: "batch"}}, hedef)
-    tok.save_pretrained(os.path.dirname(hedef))
 
 
 def main():
