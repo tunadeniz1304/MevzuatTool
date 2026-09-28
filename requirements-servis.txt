@@ -1,0 +1,11 @@
+# MevzuatTool — retrieval SERVİS imajı bağımlılıkları (torch YOK, ADR-0018)
+# ONNX Runtime ile int8 embed + reranker; transformers yalnız tokenizer için (torch'suz çalışır).
+# ingest_qdrant.py de aynı imajla koşar (numpy + qdrant-client).
+onnxruntime==1.30.0
+transformers==4.48.3
+huggingface_hub==0.36.2
+numpy==2.4.6
+qdrant-client==1.18.0
+rank-bm25==0.2.2
+fastapi==0.141.1
+uvicorn==0.49.0
