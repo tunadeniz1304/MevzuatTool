@@ -329,6 +329,52 @@ Güncel mimari görünümü: [`arch.md`](arch.md). Kapsam: [`mevzuat-mvp-kapsam.
   - **MANTIK:** worker = istekleri işleyen süreç. Tek süreç + thread havuzu: modeller tek kopya, ama aynı
     anda gelen iki istek CPU çekirdeklerini paylaşır (eşzamanlı yük testi kapsam dışı).
 
+## ADR-0018 — docker-compose topolojisi (qdrant + api + ingest profili, modeller volume)
+- **Durum:** ✅ Kabul + uygulandı (2026-09-28)
+- **Bağlam:** Roadmap Faz 7 + MVP Definition of Done: "tamamı dockerize, reproducible". Faz 6'da retrieval
+  servisi (ADR-0017) ve torch'suz ONNX int8 çıkarım (ADR-0016) hazır → servis imajı torch'suz kurulabilir.
+- **Karar:**
+  - **3 servis:** `qdrant` (sabit tag `qdrant/qdrant:v1.18.0` — `qdrant-client 1.18.0` ile eşleşik; `qdrant_storage`
+    named volume; healthcheck imajda curl olmadığı için `bash /dev/tcp`), `api` (`depends_on: qdrant (healthy)`,
+    `QDRANT_URL=http://qdrant:6333`, healthcheck `/saglik`), `ingest` (**profil `ingest`** → `docker compose up`
+    ile kalkmaz; `docker compose --profile ingest run --rm ingest` ile bir kez koşar).
+  - **Tek imaj** (`Dockerfile`, `python:3.11-slim`, non-root `mevzuat` kullanıcısı): `requirements-servis.txt`
+    (onnxruntime, transformers yalnız tokenizer, qdrant-client, rank-bm25, numpy, fastapi, uvicorn) — **torch yok**.
+    api ve ingest aynı imajı kullanır (ingest için numpy + qdrant-client yeter).
+  - **Modeller ve korpus imaja gömülmez:** `./models/onnx` ve `./data/kanun/korpus.jsonl` **read-only volume**;
+    `colab/outputs` yalnız ingest'e ro mount. `.dockerignore` `.env*`, `data/`, `models/`, `colab/`, `.venv/`,
+    `docs/`, `tests/` dışarıda bırakır → build context küçük, secret sızmaz.
+  - Varsayılan `EMBED_BACKEND=onnx-int8`, reranker ayarları ADR-0015 kararından (`RERANK_*` ortam değişkenleri,
+    compose'da `${VAR:-varsayılan}` ile override edilebilir). Host portları `API_PORT`/`QDRANT_PORT` ile değişir.
+  - `ingest_qdrant.py`'deki `QDRANT_URL` sabiti ortam değişkeni varsayılanına çevrildi (davranış aynı).
+- **Sonuç / neden:**
+  - **Neden modeller volume?** int8 embed + reranker ~1.2 GB, FP32 ~4.5 GB: imaja gömmek imajı GB'larca şişirir,
+    her model değişikliğinde yeniden build ister ve repo'ya/registry'ye büyük artifact taşır (>5 MB commit yasağı,
+    `docs/commit_discipline.md`). Volume ile imaj yalnız kod + kütüphane.
+  - **Neden ingest ayrı profil?** Korpus vektörlerinin Qdrant'a yüklenmesi tek seferlik iş (collection'ı silip
+    yeniden kurar); her `up`'ta koşsa servis açılışını dakikalarca geciktirir ve veriyi gereksiz yeniden yazar.
+  - **Neden torch'suz?** torch CPU wheel'i ~200 MB+, CUDA'lı ~2.5 GB; ONNX Runtime ~20 MB. Servis zaten int8 ONNX
+    kullanıyor → torch gereksiz ağırlık. Kanıt: `docker compose run --rm api python -c "import torch"` →
+    ModuleNotFoundError.
+  - **Doğrulama (2026-09-28):** `docker compose build` 67 sn; imaj **629 MB** (sıkıştırılmış 147 MB), `import torch` →
+    ModuleNotFoundError, kullanıcı uid 10001. `QDRANT_PORT=6334 API_PORT=8001`: `up -d qdrant` → `--profile ingest run
+    --rm ingest` (31.416 point, 45 sn) → `up -d api` → healthy, `/saglik` 200. `/ara` üzerinden 200 sorgu: R@10
+    **0.610** = in-process C satırı 0.610 (±0.005 ✓; R@1 0.425 vs 0.430, MRR 0.484 vs 0.488 — ayrı Qdrant
+    örneğinde HNSW bağ sırası farkı). İstemci duvar saati p50/p95/p99 178/334/502 ms (Docker port yönlendirmesi dahil,
+    ısınma yok — protokol satırı değil, gösterge). api konteyneri 1.73 GB bellek (reranker kapalı).
+  - ⚠️ Doğrulama `RERANK_BACKEND=kapali` ile yapıldı (makine bellek sıkışması; servis varsayılanı zaten reranker kapalı).
+    Compose varsayılanı `onnx-int8` reranker'ı da yükler (+~0.6-1.5 GB) — bu haliyle konteynerde koşturulmadı.
+  - ❌ Ön koşullar compose'un işi değil: `colab/outputs/` (Colab korpus embed'i), `models/onnx/` (`onnx_export.py` +
+    `onnx_quantize.py`), `data/kanun/korpus.jsonl` (`build_corpus.py`) host'ta hazır olmalı.
+- **Öğrenme notu:**
+  - **NASIL:** `docker compose up -d qdrant api` → qdrant sağlıklı olunca api kalkar; api `lifespan`'da modelleri
+    volume'dan yükler; `curl localhost:8000/saglik`.
+  - **NEYE GÖRE:** roadmap Faz 7 çıktısı + DoD "reproducible"; imaj boyutu; commit yasağı.
+  - **NEDEN (alternatif):** (a) modelleri build sırasında HF'den indirmek → build ağ bağımlı ve yavaş, ONNX
+    export'u torch ister; (b) ingest'i api başlangıcına gömmek → her restart'ta yeniden yükleme.
+  - **MANTIK:** `depends_on: condition: service_healthy` yalnız "konteyner başladı" değil "healthcheck geçti"yi
+    bekler → api, Qdrant portu açılmadan bağlanmaya çalışmaz.
+
 ---
 
 ## Yapı Kararları
