@@ -1,7 +1,7 @@
 # Mimari Durum (Architecture)
 
 **Son güncelleme:** 2026-09-28
-**Olgunluk:** 🟢 Ingestion + indexing + retrieval kütüphanesi + HTTP servisi çalışıyor. Korpus 31.419 chunk, 3-bacak R@10 = 0.6885 (bugünkü index). Eksik: atıf modu, docker-compose.
+**Olgunluk:** 🟢 Ingestion + indexing + retrieval kütüphanesi + HTTP servisi çalışıyor. Korpus 31.419 chunk, 3-bacak R@10 = 0.6885 (bugünkü index). Eksik: atıf modu. Paketleme: docker-compose (qdrant + api + ingest profili).
 
 Bu dosya **güncel mimari durumu** tutar (bugün ne var, ne kararlaştırıldı, ne açık).
 Kararların **gerekçesi/tarihçesi**: [`decisions.md`](decisions.md). Kapsam: [`mevzuat-mvp-kapsam.md`](mevzuat-mvp-kapsam.md). İlerleme: [`status.md`](status.md).
@@ -73,7 +73,7 @@ Arama tek yerde (`HybridArama`); `search_qdrant.py` CLI'ı, ölçüm script'leri
 | **Retrieval — atıf modu** | kanun/madde/fıkra/bent → metadata filtresi | ⬜ **kod yok** | — |
 | **Reranker** | ilk 20 adayı yeniden sıralama (`bge-reranker-v2-m3`) | ✅ entegre, varsayılan kapalı (ADR-0015) | `retrieval/rerank.py` |
 | **Servis / API** | HTTP arayüzü (`/ara`, `/saglik`) | ✅ FastAPI (ADR-0017) | `src/kanun/api/app.py` |
-| **Docker compose** | Qdrant + ingestion + retrieval orkestrasyonu | ⬜ yok | — |
+| **Docker compose** | Qdrant + ingestion + retrieval orkestrasyonu | ✅ ADR-0018, torch'suz imaj | `docker-compose.yml`, `Dockerfile` |
 | **LLM/generation** | cevap üretimi | ⛔ **kapsam dışı** (config endpoint) | — |
 
 ---
@@ -105,7 +105,7 @@ Arama tek yerde (`HybridArama`); `search_qdrant.py` CLI'ı, ölçüm script'leri
 | Çıkarım | ONNX Runtime CPU, dinamik int8 (ADR-0016) | ✅ uygulandı |
 | Servis | FastAPI + uvicorn (ADR-0017) | ✅ uygulandı |
 | Korpus formatı | JSONL `{id, text, metadata}` | ✅ uygulandı |
-| Paketleme | docker-compose | ⬜ yapılmadı |
+| Paketleme | docker-compose (qdrant + api + ingest profili) | ✅ uygulandı |
 
 > Detaylı gerekçeler ve açık kararlar: [`decisions.md`](decisions.md).
 

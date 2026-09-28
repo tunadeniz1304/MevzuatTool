@@ -53,8 +53,8 @@ Bu dosya, yapılan her işin [`mevzuat-mvp-kapsam.md`](mevzuat-mvp-kapsam.md) il
 - [x] Servis/API katmanı — FastAPI `POST /ara`, `GET /saglik` (`src/kanun/api/app.py`, ADR-0017)
 
 ### 7. Dockerize
-- [ ] `docker-compose` ile vektör DB + ingestion + retrieval/API — **başlamadı**
-- [ ] Uçtan uca reproducible
+- [x] `docker-compose` ile vektör DB + ingestion (profil) + retrieval/API (ADR-0018)
+- [x] 🟡 Uçtan uca reproducible — compose kısmı evet; korpus embed'i (Colab GPU) ve ONNX model üretimi compose dışında
 
 ---
 
@@ -86,6 +86,6 @@ Aşağıdakilerden **herhangi biri** projede iş olarak yapılıyorsa, kapsam ih
 - [x] Doğal dil sorgusu → **yürürlükteki ilgili mevzuat maddeleri** dönüyor (R@10 = 0.6885; HTTP `/ara` ile de)
 - [ ] ❗ **Atıf sorgusu** → kesin madde getirme (atıf modu kodu yok)
 - [x] Altında temiz, chunk'lanmış + indexlenmiş korpus var (31.419 chunk, Qdrant'ta)
-- [ ] Tamamı dockerize, reproducible — **Faz 7 başlamadı**
+- [x] Dockerize, reproducible — `docker compose up` (ön koşul artifact'leri host'ta)
 
-> **MVP tamamlanma durumu: 2/4.** Kalan: atıf modu + dockerize.
+> **MVP tamamlanma durumu: 3/4.** Kalan: atıf modu.

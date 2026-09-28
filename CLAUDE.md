@@ -32,7 +32,7 @@ mevzuat.gov.tr **kanunlarını** (yalnız `KANUN` türü) `mevzuat-mcp` ile çek
 - **Atomik commit** — tek mantıksal değişiklik; `type(scope): özet` formatı.
 
 ## Teknoloji (uygulanan)
-Python 3.10+ · bedesten API (saf `httpx` — ADR-0012 sapması, bkz. `docs/arch.md` §6) · **BGE-M3** embedding (ADR-0007) · **Qdrant** vektör store (ADR-0008) · 3-bacak hybrid arama: dense + BGE-sparse + klasik BM25, WSUM füzyon (ADR-0010) · reranker `bge-reranker-v2-m3` istek başına, varsayılan kapalı (ADR-0015) · ONNX Runtime dinamik int8 CPU çıkarımı (ADR-0016) · FastAPI servisi (ADR-0017) · docker-compose *(phase-7/dockerize — ADR-0018)*.
+Python 3.10+ · bedesten API (saf `httpx` — ADR-0012 sapması, bkz. `docs/arch.md` §6) · **BGE-M3** embedding (ADR-0007) · **Qdrant** vektör store (ADR-0008) · 3-bacak hybrid arama: dense + BGE-sparse + klasik BM25, WSUM füzyon (ADR-0010) · reranker `bge-reranker-v2-m3` istek başına, varsayılan kapalı (ADR-0015) · ONNX Runtime dinamik int8 CPU çıkarımı (ADR-0016) · FastAPI servisi (ADR-0017) · docker-compose (qdrant + api + ingest profili, torch'suz imaj — ADR-0018).
 
 ## Doküman haritası
 | Soru | Dosya |
@@ -74,13 +74,14 @@ data/gold/        altınset gold set (tür-bağımsız, retrieval ölçümü)
 `metadata.mevzuat_tur` ekle. Ayrıntı: `src/teblig/__init__.py`.
 
 ## Bugünkü durum (2026-09-28)
-**Faz 1-6 çalışıyor** (kütüphane + HTTP servisi, yalnız KANUN türü). Ayrıntı → [`docs/status.md`](docs/status.md).
+**Faz 1-7 çalışıyor** (kütüphane + HTTP servisi + docker-compose, yalnız KANUN türü). Ayrıntı → [`docs/status.md`](docs/status.md).
 
 - **Korpus:** `data/kanun/korpus.jsonl` — 31.419 chunk / 916 kanun. `python scripts/kanun/build_corpus.py` ile cache'ten (`data/kanun/raw/`) ~75 sn'de **deterministik** üretilir. (89.745 fıkra, 29.428 bent, 1.718 mülga.)
 - **Retrieval:** kütüphane `src/kanun/retrieval/search.py` (`HybridArama`), BGE-M3 + Qdrant, 3-bacak hybrid. **R@10 = 0.6885** (bugünkü index; eski 0.700 index/korpus yürürlük uyuşmazlığından düştü — ADR-0015). +reranker 20/512 (istek başına) R@10 0.711 ama R@1 0.481→0.465 → varsayılan kapalı. ONNX int8 sorgu embed'i R@10 0.688, embed gecikmesi ~3× düşük. (Eski "+reranker 0.706" 2-bacak RRF tabanındaydı.)
 - **Servis:** FastAPI `POST /ara`, `GET /saglik` (`src/kanun/api/app.py`); ayarlar ortam değişkeninden (`config.py`).
 - **Testler:** 381 test geçiyor (`pytest -q`); gerçek-model parity testleri `pytest -m model`.
-- **Eksik:** atıf modu (metadata hazır, kod yok) · docker-compose (phase-7/dockerize) · Qdrant index'inin güncel korpusla yeniden embed'i.
+- **Docker:** `docker compose up -d qdrant api` + `--profile ingest run --rm ingest` (ön koşul: `colab/outputs/`, `models/onnx/`, korpus).
+- **Eksik:** atıf modu (metadata hazır, kod yok) · Qdrant index'inin güncel korpusla yeniden embed'i.
 
 ### Build zincirine dokunacaksan — kritik invariant'lar
 Bunlar bozulursa korpus **sessizce** bozulur (mevcut testler yakalamayabilir):

@@ -4,7 +4,7 @@ Fazlar: [`roadmap.md`](roadmap.md) · Kapsam uygunluğu: [`compliance.md`](compl
 Yapısal düzeltme fazları: [`yapisal-sadakat-master-plan.md`](yapisal-sadakat-master-plan.md) · Retrieval ölçümleri: [`retrieval-metrikleri.md`](retrieval-metrikleri.md)
 
 **Son güncelleme:** 2026-09-28
-**Genel durum:** 🟢 Faz 1-6 tamam. Korpus üretiliyor (31.419 chunk / 916 kanun), embed+index kurulu (BGE-M3 + Qdrant), arama kütüphanede (`HybridArama`) + FastAPI servisi (`/ara`, `/saglik`). 3-bacak taban R@10 = **0.6885** (index/korpus yürürlük uyuşmazlığı, bkz. ADR-0015); +reranker (istek başına, 20/512) 0.711 ama R@1 düşer → varsayılan kapalı. ONNX int8 sorgu embed'i kaliteyi korur (0.688), embed gecikmesini ~3× düşürür. Kalan: Faz 7 (dockerize), atıf modu.
+**Genel durum:** 🟢 Faz 1-6 tamam. Korpus üretiliyor (31.419 chunk / 916 kanun), embed+index kurulu (BGE-M3 + Qdrant), arama kütüphanede (`HybridArama`) + FastAPI servisi (`/ara`, `/saglik`). 3-bacak taban R@10 = **0.6885** (index/korpus yürürlük uyuşmazlığı, bkz. ADR-0015); +reranker (istek başına, 20/512) 0.711 ama R@1 düşer → varsayılan kapalı. ONNX int8 sorgu embed'i kaliteyi korur (0.688), embed gecikmesini ~3× düşürür. Faz 7: docker-compose (qdrant + api + ingest profili) çalışıyor, torch'suz imaj. Kalan: atıf modu.
 
 İşaretler: ✅ tamam · 🟡 devam ediyor · ⬜ başlamadı · ⛔ engelli
 
@@ -21,7 +21,7 @@ Yapısal düzeltme fazları: [`yapisal-sadakat-master-plan.md`](yapisal-sadakat-
 | 4 | Temiz Korpus Artifact | ✅ | `korpus.jsonl` — 31.419 chunk `{id,text,metadata}` |
 | 5 | Embedding + Indexleme | ✅ | BGE-M3 (Colab) → Qdrant (dense+sparse) |
 | 6 | Sorgu + Retrieval | ✅ | `HybridArama` + reranker (ops.) + ONNX int8 + FastAPI servisi (ADR-0015/16/17) |
-| 7 | Dockerize | ⬜ | `docker-compose` yok |
+| 7 | Dockerize | ✅ | `docker-compose.yml` + `Dockerfile` (ADR-0018); compose üzerinden `/ara` R@10 = in-process |
 
 **Test durumu:** 381 test geçiyor (`pytest -q`); 3 gerçek-model parity testi `pytest -m model` ile ayrı (ağ/model indirmez varsayılan koşu).
 
@@ -107,9 +107,11 @@ Yapısal düzeltme fazları: [`yapisal-sadakat-master-plan.md`](yapisal-sadakat-
 
 **Teşhis:** R@100 = 0.809 >> R@10 → doğru madde getiriliyor, **sıralama** zayıf. Aynı-KANUN toleransıyla R@10 = 0.889 → doğru kanun %89 bulunuyor, darboğaz **madde ayrımı**. Detay: [`retrieval-metrikleri.md`](retrieval-metrikleri.md).
 
-## Faz 7 — Dockerize ⬜
-- [ ] `docker-compose` (Qdrant + ingestion + retrieval/API)
-- [ ] `docker compose up` ile uçtan uca
+## Faz 7 — Dockerize ✅
+- [x] `docker-compose.yml`: `qdrant` (v1.18.0, healthcheck) + `api` (FastAPI, onnx-int8) + `ingest` (profil) — ADR-0018
+- [x] `Dockerfile`: python:3.11-slim, non-root, `requirements-servis.txt` (**torch yok**), imaj 629 MB; modeller/korpus read-only volume
+- [x] `docker compose up` ile uçtan uca: ingest 31.416 point, `/saglik` 200, `/ara` 200 sorguda R@10 0.610 = in-process
+- [ ] Ön koşul artifact'leri (Colab embed, ONNX modelleri, korpus) compose dışında üretiliyor
 
 ---
 
@@ -146,7 +148,7 @@ Oturum başı ~%59.7 → **%75.3**. Kırılım: kanun %98 · madde %86 · fıkra
 2. **Reranker CPU'da yavaş + R@1'i düşürüyor** (ADR-0015): istek başına açık, varsayılan kapalı. Skor füzyonu / GPU servisi future.
 3. **R.G. tarihi metadata'da yok** — kapsam listesinde var, chunk'a taşınmadı.
 4. **Fıkra→bent terminoloji toleransı** retrieval tarafına taşınmalı (yukarıdaki dürüstlük notu).
-5. **Dockerize (Faz 7) başlamadı.**
+5. **Dockerize ön koşulları compose dışında:** Colab embed + ONNX export/quantize elle.
 6. **Çok-versiyonlu kanun artefaktı:** 6111/6736/7143/7326/7440 gibi yapılandırma kanunları aynı
    konuyu farklı no ile düzenliyor → gold "6111" derken sistem "7326" getirince haksız 0 alıyor.
 7. **Qdrant index'i korpusun gerisinde:** eski Colab embed'i 1.678 maddede yürürlük uyuşmazlığı taşıyor → taban 0.700 → 0.6885. Yeniden embed gerekiyor.
