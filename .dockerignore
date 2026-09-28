@@ -1,0 +1,25 @@
+# Build context'e girmeyecekler — secret, büyük veri ve modeller imaja GÖMÜLMEZ (ADR-0018)
+.env
+.env.*
+.git/
+.venv/
+venv/
+data/
+models/
+colab/
+handoff*
+altınset/
+analiz/
+backlog/
+research_outputs/
+comparison_results/
+embedder_results/
+docs/
+tests/
+**/__pycache__/
+*.pdf
+*.onnx
+*.onnx.data
+progress.md
+UserProgress.md
+MevzuatTool.md
