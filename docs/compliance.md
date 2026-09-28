@@ -13,7 +13,7 @@ Bu dosya, yapılan her işin [`mevzuat-mvp-kapsam.md`](mevzuat-mvp-kapsam.md) il
 
 ## A. Kapsam İçi — sadakat kontrolü (YAPILMALI)
 
-> Son kontrol: 2026-07-10. Ayrıntılı durum: [`status.md`](status.md).
+> Son kontrol: 2026-09-28. Ayrıntılı durum: [`status.md`](status.md).
 
 ### 1. Veri Çekme
 - [x] Kaynak yalnızca `mevzuat-mcp` **API sözleşmesi** (bedesten `searchDocuments` / `mevzuatMaddeTree` / `getDocumentContent`) — ⚠️ transport MCP client değil, saf `httpx` (ADR-0012 sapması; gerekçe: mevzuat-mcp client 429/`Retry-After`'ı yutuyordu — bkz. `arch.md` §6)
@@ -47,9 +47,10 @@ Bu dosya, yapılan her işin [`mevzuat-mvp-kapsam.md`](mevzuat-mvp-kapsam.md) il
 
 ### 6. Sorgu + Retrieval
 - [ ] ❗ **Atıf modu (metadata filtresiyle kesin getirme) — KOD YOK.** Metadata hazır (kanun_no + madde_no + fıkra/bent ağacı) ama yazılmadı.
-- [x] Doğal dil modu (hybrid semantik) çalışıyor — `scripts/kanun/retrieval/search_qdrant.py`, R@10 = 0.700
+- [x] Doğal dil modu (hybrid semantik) çalışıyor — kütüphane `src/kanun/retrieval/search.py` (`HybridArama`), R@10 = 0.6885 (bugünkü index; ADR-0015)
+- [x] Reranker entegre — istek başına, varsayılan kapalı (ADR-0015); ONNX int8 CPU çıkarımı (ADR-0016)
 - [x] Çıktı: sıralı ilgili maddeler + metadata (yürürlük filtreli)
-- [ ] Servis/API katmanı yok (script seviyesinde)
+- [x] Servis/API katmanı — FastAPI `POST /ara`, `GET /saglik` (`src/kanun/api/app.py`, ADR-0017)
 
 ### 7. Dockerize
 - [ ] `docker-compose` ile vektör DB + ingestion + retrieval/API — **başlamadı**
@@ -64,6 +65,7 @@ Aşağıdakilerden **herhangi biri** projede iş olarak yapılıyorsa, kapsam ih
 - [ ] 🚫 LLM ile **cevap üretme (generation)** kodlandı mı? → Pipeline retrieval'da bitmeli. (LLM yalnızca en sonda config'le takılan swap'lanabilir endpoint)
 - [ ] 🚫 GraphRAG / **agentic RAG** / advanced RAG teknikleri (atıf grafı, bitemporal versiyonlama, multi-representation index, fine-tuned embedder, RAPTOR) eklendi mi? → Yaklaşım **vanilla RAG**'tır; bunlar future work.
 - [ ] 🚫 Formal eval / benchmark harness kuruldu mu? → küçük sanity kontrolü hariç, future work
+      *(Not: `metrik_gecikme.py` tek script + sabit protokol + tek tablo — harness değil; sınır ADR-0016 "Kapsam sınırı". Eşzamanlı yük testi, MTEB, genel çerçeve YOK.)*
 - [ ] 🚫 PDF / OCR işleme eklendi mi? → kapsam dışı
 - [ ] 🚫 İçtihat / özelge (`yargi-mcp`: Yargıtay, Danıştay, GİB) işleniyor mu? → bu MVP dışı
 - [ ] 🚫 Kanun dışı tür (KHK / tüzük / yönetmelik / tebliğ) işlendi mi? → bu MVP yalnız **KANUN** (ADR-0013)
@@ -81,7 +83,7 @@ Aşağıdakilerden **herhangi biri** projede iş olarak yapılıyorsa, kapsam ih
 - [x] `corpus.py` atıf listesini bilmez — atıf-farkındalık yalnız build katmanında (`build_corpus.py`)
 
 ## D. Definition of Done
-- [x] Doğal dil sorgusu → **yürürlükteki ilgili mevzuat maddeleri** dönüyor (R@10 = 0.700)
+- [x] Doğal dil sorgusu → **yürürlükteki ilgili mevzuat maddeleri** dönüyor (R@10 = 0.6885; HTTP `/ara` ile de)
 - [ ] ❗ **Atıf sorgusu** → kesin madde getirme (atıf modu kodu yok)
 - [x] Altında temiz, chunk'lanmış + indexlenmiş korpus var (31.419 chunk, Qdrant'ta)
 - [ ] Tamamı dockerize, reproducible — **Faz 7 başlamadı**

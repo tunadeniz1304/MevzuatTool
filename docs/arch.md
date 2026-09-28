@@ -1,7 +1,7 @@
 # Mimari Durum (Architecture)
 
-**Son güncelleme:** 2026-07-10
-**Olgunluk:** 🟢 Ingestion + indexing + retrieval çalışıyor (script seviyesinde). Korpus 31.419 chunk, hybrid R@10 = 0.700. Eksik: atıf modu, servis/API katmanı, docker-compose.
+**Son güncelleme:** 2026-09-28
+**Olgunluk:** 🟢 Ingestion + indexing + retrieval kütüphanesi + HTTP servisi çalışıyor. Korpus 31.419 chunk, 3-bacak R@10 = 0.6885 (bugünkü index). Eksik: atıf modu, docker-compose.
 
 Bu dosya **güncel mimari durumu** tutar (bugün ne var, ne kararlaştırıldı, ne açık).
 Kararların **gerekçesi/tarihçesi**: [`decisions.md`](decisions.md). Kapsam: [`mevzuat-mvp-kapsam.md`](mevzuat-mvp-kapsam.md). İlerleme: [`status.md`](status.md).
@@ -34,22 +34,24 @@ Kararların **gerekçesi/tarihçesi**: [`decisions.md`](decisions.md). Kapsam: [
 │  ingest_qdrant.py ──► Qdrant (dense + sparse + payload)                      │
 └─────────────────────────────────────┬───────────────────────────────────────┘
                                       │
-┌───────────────────── RETRIEVAL (online, script) ─────┼──────────────────────┐
-│  sorgu ─► retrieval/embed.py ─┬─► dense       (Qdrant)                       │
-│           (BGE-M3)            ├─► BGE-sparse  (Qdrant)                       │
-│                               └─► klasik BM25 (rank_bm25, korpus text)       │
+┌──────────── RETRIEVAL (online: src/kanun/retrieval/search.py) ┼─────────────┐
+│  HTTP ─► api/app.py (FastAPI: POST /ara, GET /saglik)  ✓ ADR-0017            │
+│           │                                                                  │
+│  sorgu ─► embed (BGE-M3: torch FP32 | ONNX FP32 | ONNX int8 ✓ ADR-0016)      │
+│           ├─► dense       (Qdrant)                                           │
+│           ├─► BGE-sparse  (Qdrant)                                           │
+│           └─► klasik BM25 (HizliBM25, korpus text)                           │
 │                    └─► 3-bacak WSUM füzyon + yürürlük filtresi               │
+│                    └─► (ops., istek başına) reranker ilk 20 aday  ✓ ADR-0015  │
 │                               ─► sıralı maddeler                             │
-│                    (reranker: ölçüldü ✓, entegre ✗)                          │
 └─────────────────────────────────────────────────────────────────────────────┘
                                       │
                      ⋯⋯ KAPSAM DIŞI: LLM / generation ⋯⋯
                      (en sonda config'le takılan swap'lanabilir endpoint)
 ```
 
-**Eksik oklar:** `atıf modu` (kanun/madde/fıkra/bent → metadata filtresiyle kesin getirme) ve
-`servis/API` katmanı henüz yok — retrieval script seviyesinde
-(`scripts/kanun/retrieval/search_qdrant.py`).
+**Eksik ok:** `atıf modu` (kanun/madde/fıkra/bent → metadata filtresiyle kesin getirme) henüz yok.
+Arama tek yerde (`HybridArama`); `search_qdrant.py` CLI'ı, ölçüm script'leri ve servis onu çağırır.
 
 ---
 
@@ -65,11 +67,12 @@ Kararların **gerekçesi/tarihçesi**: [`decisions.md`](decisions.md). Kapsam: [
 | **Korpus artifact** | JSONL `{id, text, metadata}` (modüler sınır) | ✅ 31.419 chunk | `corpus.py` |
 | **Embedder** | BGE-M3 dense (CLS pooling) + sparse | ✅ çalışıyor | `colab/`, `retrieval/embed.py` |
 | **Vektör store** | dense+sparse index + payload filtre | ✅ Qdrant (ADR-0008) | `ingest_qdrant.py` |
-| **Sparse/BM25** | hybrid lexical bacak (BGE-sparse + klasik BM25) | ✅ 3-bacak WSUM (ADR-0010) | `search_qdrant.py` |
-| **Retrieval — NL modu** | doğal dil → hybrid semantik + yürürlük filtresi | ✅ script | `search_qdrant.py` |
+| **Sparse/BM25** | hybrid lexical bacak (BGE-sparse + klasik BM25) | ✅ 3-bacak WSUM (ADR-0010) | `retrieval/search.py` |
+| **Retrieval — NL modu** | doğal dil → hybrid semantik + yürürlük filtresi | ✅ kütüphane | `retrieval/search.py` (`HybridArama`) |
+| **Çıkarım backend'i** | sorgu embed + reranker: torch / ONNX FP32 / ONNX int8 | ✅ ADR-0016 | `retrieval/embed_onnx.py`, `fabrika.py` |
 | **Retrieval — atıf modu** | kanun/madde/fıkra/bent → metadata filtresi | ⬜ **kod yok** | — |
-| **Reranker** | precision artırma (`bge-reranker-v2-m3`) | 🟡 ölçüldü (+0.04 R@10), entegre değil | `metrik_rerank.py` |
-| **Servis / API** | HTTP arayüzü | ⬜ yok | — |
+| **Reranker** | ilk 20 adayı yeniden sıralama (`bge-reranker-v2-m3`) | ✅ entegre, varsayılan kapalı (ADR-0015) | `retrieval/rerank.py` |
+| **Servis / API** | HTTP arayüzü (`/ara`, `/saglik`) | ✅ FastAPI (ADR-0017) | `src/kanun/api/app.py` |
 | **Docker compose** | Qdrant + ingestion + retrieval orkestrasyonu | ⬜ yok | — |
 | **LLM/generation** | cevap üretimi | ⛔ **kapsam dışı** (config endpoint) | — |
 
@@ -98,7 +101,9 @@ Kararların **gerekçesi/tarihçesi**: [`decisions.md`](decisions.md). Kapsam: [
 | Embedding | **BGE-M3** (ADR-0007), dense=CLS pooling | ✅ uygulandı |
 | Vektör store | **Qdrant** (ADR-0008) | ✅ uygulandı |
 | Arama | 3-bacak hybrid: dense + BGE-sparse + klasik BM25, WSUM (ADR-0010) | ✅ uygulandı |
-| Reranker | `bge-reranker-v2-m3` (ADR-0009) | 🟡 ölçüldü, entegre değil |
+| Reranker | `bge-reranker-v2-m3` (ADR-0009/0015) | ✅ istek başına, varsayılan kapalı |
+| Çıkarım | ONNX Runtime CPU, dinamik int8 (ADR-0016) | ✅ uygulandı |
+| Servis | FastAPI + uvicorn (ADR-0017) | ✅ uygulandı |
 | Korpus formatı | JSONL `{id, text, metadata}` | ✅ uygulandı |
 | Paketleme | docker-compose | ⬜ yapılmadı |
 
@@ -135,7 +140,8 @@ pydantic/ABI kırılganlığından muaf. (Kaynak: `fetch.py` modül docstring'i.
 **Bilinen sınırlar:**
 1. **Atıf modu yok** — metadata hazır (kanun_no + madde_no + fıkra/bent ağacı), kod yazılmadı.
 2. **R.G. tarihi** chunk metadata'sında taşınmıyor (bedesten liste yanıtında var).
-3. **Reranker entegre değil** — ölçüldü (R@10 0.667→0.706), GPU/servis çözümü bekliyor.
+3. **Reranker CPU'da pahalı ve R@1'i düşürüyor** (ADR-0015) — istek başına açık, varsayılan kapalı.
+   **Qdrant index'i korpusun gerisinde** (1.678 maddede yürürlük uyuşmazlığı) → taban 0.700 → 0.6885.
 4. **Sıralama darboğazı:** R@100 = 0.809 >> R@10 = 0.700 → doğru madde getiriliyor, sıralanamıyor.
    Aynı-KANUN toleransıyla R@10 = 0.889 → darboğaz **madde ayrımı**, kanun ayrımı değil.
 5. **Çok-versiyonlu kanun artefaktı:** 6111/6736/7143/7326/7440 aynı konuyu farklı no ile düzenler;

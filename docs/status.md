@@ -3,8 +3,8 @@
 Fazlar: [`roadmap.md`](roadmap.md) · Kapsam uygunluğu: [`compliance.md`](compliance.md) · Mimari: [`arch.md`](arch.md)
 Yapısal düzeltme fazları: [`yapisal-sadakat-master-plan.md`](yapisal-sadakat-master-plan.md) · Retrieval ölçümleri: [`retrieval-metrikleri.md`](retrieval-metrikleri.md)
 
-**Son güncelleme:** 2026-07-10
-**Genel durum:** 🟢 Faz 1-6 çalışır durumda. Korpus üretiliyor (31.419 chunk / 916 kanun), embed+index kurulu (BGE-M3 + Qdrant), hybrid retrieval ölçülmüş (R@10 = 0.700; +reranker 0.706). Kalan: Faz 7 (dockerize) + reranker'ın kalıcı entegrasyonu.
+**Son güncelleme:** 2026-09-28
+**Genel durum:** 🟢 Faz 1-6 tamam. Korpus üretiliyor (31.419 chunk / 916 kanun), embed+index kurulu (BGE-M3 + Qdrant), arama kütüphanede (`HybridArama`) + FastAPI servisi (`/ara`, `/saglik`). 3-bacak taban R@10 = **0.6885** (index/korpus yürürlük uyuşmazlığı, bkz. ADR-0015); +reranker (istek başına, 20/512) 0.711 ama R@1 düşer → varsayılan kapalı. ONNX int8 sorgu embed'i kaliteyi korur (0.688), embed gecikmesini ~3× düşürür. Kalan: Faz 7 (dockerize), atıf modu.
 
 İşaretler: ✅ tamam · 🟡 devam ediyor · ⬜ başlamadı · ⛔ engelli
 
@@ -20,10 +20,10 @@ Yapısal düzeltme fazları: [`yapisal-sadakat-master-plan.md`](yapisal-sadakat-
 | 3 | Metadata | ✅ | `enrich.py` — hiyerarşi, yürürlük, künye, dipnot, tablo |
 | 4 | Temiz Korpus Artifact | ✅ | `korpus.jsonl` — 31.419 chunk `{id,text,metadata}` |
 | 5 | Embedding + Indexleme | ✅ | BGE-M3 (Colab) → Qdrant (dense+sparse) |
-| 6 | Sorgu + Retrieval | 🟡 | 3-bacak hybrid çalışıyor; reranker ölçüldü, entegre değil |
+| 6 | Sorgu + Retrieval | ✅ | `HybridArama` + reranker (ops.) + ONNX int8 + FastAPI servisi (ADR-0015/16/17) |
 | 7 | Dockerize | ⬜ | `docker-compose` yok |
 
-**Test durumu:** 285 test, hepsi geçiyor (`pytest -q`).
+**Test durumu:** 381 test geçiyor (`pytest -q`); 3 gerçek-model parity testi `pytest -m model` ile ayrı (ağ/model indirmez varsayılan koşu).
 
 ---
 
@@ -88,20 +88,22 @@ Yapısal düzeltme fazları: [`yapisal-sadakat-master-plan.md`](yapisal-sadakat-
 - [x] Hybrid: dense + BGE-sparse + klasik BM25 (`rank_bm25`) — 3-bacak WSUM füzyon (ADR-0010)
 - [x] `scripts/kanun/retrieval/ingest_qdrant.py` — vektörleri yükle
 
-## Faz 6 — Sorgu + Retrieval 🟡
-- [x] Doğal dil modu: 3-bacak hybrid + yürürlük filtresi (`scripts/kanun/retrieval/search_qdrant.py`)
-- [x] Ölçüm altyapısı: altınset gold (21.737 sızıntısız sorgu), R@k/MRR/nDCG (`scripts/kanun/retrieval/metrik_*.py`)
-- [x] Reranker (`bge-reranker-v2-m3`) **ölçüldü** — R@10 0.667→0.706 (ADR-0009)
-- [ ] **Reranker kalıcı entegre değil** (GPU/servis çözümü bekliyor)
-- [ ] **Atıf modu** (kanun/madde/fıkra/bent → metadata filtresiyle kesin getirme) — kod olarak YOK
-- [ ] Servis/API katmanı yok (script seviyesinde)
+## Faz 6 — Sorgu + Retrieval ✅
+- [x] Doğal dil modu: 3-bacak hybrid + yürürlük filtresi — kütüphane `src/kanun/retrieval/search.py` (`HybridArama`), eski script ile 50/50 birebir
+- [x] Ölçüm altyapısı: altınset gold (21.737 sızıntısız sorgu), R@k/MRR/nDCG (`scripts/kanun/retrieval/metrik_*.py`, `src/kanun/retrieval/olcum.py`)
+- [x] Reranker (`bge-reranker-v2-m3`) **entegre** (ADR-0015): 3-bacak üstünde yeniden ölçüldü; varsayılan kapalı, istek başına açık (önerilen 20 aday / 512 token)
+- [x] ONNX Runtime + dinamik int8 (ADR-0016): parity + 2000 sorgu kalite + p50/p95/p99 gecikme tablosu
+- [x] Servis katmanı: FastAPI `POST /ara`, `GET /saglik` (ADR-0017)
+- [ ] **Atıf modu** (kanun/madde/fıkra/bent → metadata filtresiyle kesin getirme) — kod olarak YOK (bu fazın kapsamı dışı bırakıldı)
 
 ### Ölçülmüş retrieval performansı (2000 sorgu, altınset)
 | Konfigürasyon | R@1 | R@10 | MRR |
 |---|---|---|---|
 | Hybrid (dense+sparse, RRF) | 0.436 | 0.667 | 0.507 |
-| 3-bacak WSUM (eşit ağırlık) | 0.491 | **0.700** | — |
-| + Reranker (top-50 aday) | — | **0.706** | — |
+| 3-bacak WSUM (eşit ağırlık) — 2026-07 ölçümü | 0.491 | 0.700 | 0.562 |
+| 3-bacak WSUM — **bugünkü index** (2026-09) | 0.481 | **0.6885** | 0.5515 |
+| + Reranker 20 aday / 512 (istek başına) | 0.4645 | **0.711** | 0.5501 |
+| ONNX int8 sorgu embed (reranker yok) | 0.4795 | 0.688 | 0.5510 |
 
 **Teşhis:** R@100 = 0.809 >> R@10 → doğru madde getiriliyor, **sıralama** zayıf. Aynı-KANUN toleransıyla R@10 = 0.889 → doğru kanun %89 bulunuyor, darboğaz **madde ayrımı**. Detay: [`retrieval-metrikleri.md`](retrieval-metrikleri.md).
 
@@ -141,9 +143,10 @@ Oturum başı ~%59.7 → **%75.3**. Kırılım: kanun %98 · madde %86 · fıkra
 
 1. **Atıf modu yok.** Roadmap Faz 6 "atıf modu (metadata filtreli kesin getirme)" diyor; korpus
    metadata'sı buna hazır (kanun_no + madde_no + fıkra/bent ağacı) ama **kod yazılmadı.**
-2. **Reranker entegre değil.** Ölçüldü (+0.04 R@10), GPU/servis çözümü bekliyor.
+2. **Reranker CPU'da yavaş + R@1'i düşürüyor** (ADR-0015): istek başına açık, varsayılan kapalı. Skor füzyonu / GPU servisi future.
 3. **R.G. tarihi metadata'da yok** — kapsam listesinde var, chunk'a taşınmadı.
 4. **Fıkra→bent terminoloji toleransı** retrieval tarafına taşınmalı (yukarıdaki dürüstlük notu).
 5. **Dockerize (Faz 7) başlamadı.**
 6. **Çok-versiyonlu kanun artefaktı:** 6111/6736/7143/7326/7440 gibi yapılandırma kanunları aynı
    konuyu farklı no ile düzenliyor → gold "6111" derken sistem "7326" getirince haksız 0 alıyor.
+7. **Qdrant index'i korpusun gerisinde:** eski Colab embed'i 1.678 maddede yürürlük uyuşmazlığı taşıyor → taban 0.700 → 0.6885. Yeniden embed gerekiyor.
