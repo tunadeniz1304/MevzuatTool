@@ -113,7 +113,9 @@ Güncel mimari görünümü: [`arch.md`](arch.md). Kapsam: [`mevzuat-mvp-kapsam.
 - **Not (kapsam):** Qdrant'ı *kullanmak* retrieval'ın parçası → kapsam-içi. Embedder *eğitmek* değil.
 
 ## ADR-0009 — Reranker kullanılacak mı?
-- **Durum:** ✅ Kabul (değerli) — **entegrasyon ertelendi** (2026-07-02)
+- **Durum:** ✅ Kabul (değerli) — **entegrasyon ertelendi** (2026-07-02) → **entegrasyon ADR-0015'te** (2026-09-28):
+  kod kütüphanede, 3-bacak üstünde yeniden ölçüldü, varsayılan kapalı / istek başına açık.
+  ⚠️ Aşağıdaki ölçümün aday havuzu **2-bacak RRF**'tir (bugünkü 3-bacak WSUM değil).
 - **Bağlam:** Reranker precision/sıralamayı (nDCG, MRR, R@k) artırır ama recall'u artırmaz; gecikme + komplekslik ekler.
 - **Ölçüm (2000 sorgu, altınset gold, bge-reranker-v2-m3, Colab T4):**
 
@@ -153,6 +155,179 @@ Güncel mimari görünümü: [`arch.md`](arch.md). Kapsam: [`mevzuat-mvp-kapsam.
   her sorguda 3 bacağı normalize + eşit ağırlıkla toplar. GPU/fine-tune YOK. rank_bm25 saf-Python bağımlılık.
   BGE-sparse atılamaz (ölçümle kanıtlı). Reranker (ADR-0009) hâlâ üstüne eklenebilir (ayrık kazanç).
 - **Araçlar:** `scripts/kanun/retrieval/metrik_bm25.py` (ÖLÇÜM 4), `.../metrik_bm25_agirlik.py` (ÖLÇÜM 5).
+
+---
+
+## Faz 6 Kapanışı — Servis Kararları
+
+## ADR-0015 — Reranker entegrasyonu: 3-bacak üstünde cross-encoder
+- **Durum:** ✅ Kabul + uygulandı (2026-09-28) — ADR-0009'un "entegrasyon ertelendi" durumunu kapatır.
+- **Bağlam:** ADR-0009 reranker'ı (`BAAI/bge-reranker-v2-m3`) ölçtü (R@10 0.6665 → 0.7060) ama o ölçümün aday
+  havuzu **2-bacak RRF**'ti (`rerank_hazirla.py` / `metrik_rerank.py`: `FusionQuery(RRF)`). Sonra füzyon 3-bacak
+  WSUM'a geçti (ADR-0010) ve "R@10 = 0.700; +reranker 0.706" yan yana yazıldı — yanıltıcı: 0.706 RRF tabanının
+  üstündeydi, **3-bacak + reranker hiç ölçülmemişti.** Klasik BM25 bacağı üst sırayı zaten iyileştirdiği için
+  reranker'ın ek katkısı küçülebilirdi → yeniden ölçmek şarttı.
+- **Ne yapıldı:**
+  1. Arama mantığı 9 script'teki kopyalardan kütüphaneye çıkarıldı (`src/kanun/retrieval/search.py`,
+     `HybridArama`); eski `search_qdrant.ara` ile 50/50 birebir aynı (`esdeger_kontrol.py`).
+  2. `rerank.py`: `TorchReranker` / `OnnxReranker`, arayüz `skorla(sorgu, metinler)`. `HybridArama.ara(rerank=...)`
+     WSUM sırasının ilk `RERANK_ADAY` adayını kararlı yeniden sıralar; gerisine dokunmaz.
+  3. **Çapa:** ADR-0009 girdisi (`colab/rerank_input.jsonl`) kütüphane koduyla yeniden puanlandı → R@1 0.4525,
+     R@5 0.6530, **R@10 0.7060**, nDCG@10 0.5784, MRR(50) 0.5411 — **birebir aynı.**
+  4. **Asıl ölçüm** (2000 sorgu, FP32, 3-bacak top-50 aday): `docs/olcum-sonuclari/rerank-3bacak.md`.
+- **Ölçüm (N=2000, max_len 512; taban 3-bacak R@1 0.4810 / R@10 0.6885 / MRR@10 0.5515):**
+
+  | ADAY | R@1 | R@5 | R@10 | MRR@10 | nDCG@10 | ΔR@10 | ΔMRR | ΔR@1 |
+  |---|---|---|---|---|---|---|---|---|
+  | 10 | 0.4705 | 0.6585 | 0.6885 | 0.5502 | 0.5842 | +0.0000 | −0.0013 | −0.0105 |
+  | **20** | 0.4645 | 0.6635 | **0.7110** | 0.5501 | 0.5893 | **+0.0225** | −0.0014 | −0.0165 |
+  | 30 | 0.4570 | 0.6585 | 0.7100 | 0.5442 | 0.5845 | +0.0215 | −0.0073 | −0.0240 |
+  | 50 | 0.4485 | 0.6550 | 0.7035 | 0.5352 | 0.5761 | +0.0150 | −0.0163 | −0.0325 |
+
+  max_len 256 (N=1000 eşleştirilmiş) her ADAY'da 512'den kötü (R@1 −0.03/−0.04). Sorgu bazında: ADAY=20'de R@10
+  kazancı 76'ya 31 (z=+4.35, anlamlı), R@1 kaybı 194'e 227 (z=−1.61, anlamlı değil); ADAY=50'de R@1 kaybı z=−3.14.
+- **Karar:**
+  - **V-2 kuralı** (3-bacak üstünde ADAY=50/512: ΔR@10 ≥ +0.02, ΔMRR ≥ +0.01, ΔR@1 ≥ 0) → +0.0150 / −0.0163 /
+    −0.0325: **tutmadı.** Reranker kodu kalır, **varsayılan KAPALI** (`RERANK_VARSAYILAN=0`); servis istek başına
+    `rerank=true` ile açar (reranker `RERANK_BACKEND` ile yüklüyse).
+  - **Önerilen ADAY/max_len = 20/512** (istek başına açıldığında kullanılan). Kural harfiyen 20/256'yı verirdi
+    (N=1000'de R@10 0.7010 = referans 0.7060 − 0.005, tam sınırda); 20/256 aynı sorgularda R@1 −0.033, MRR −0.035
+    daha kötü ve sınır değeri gürültü içinde → **sapma: 20/512** (taramanın en iyi R@10'u, R@1 kaybı anlamlı değil).
+  - **p95 bütçesi (V-3, 1500 ms) ekı:** reranker-açık satırların CPU gecikmesi (ADR-0016 tablosu): int8 E (20/512)
+    p95 **16 121 ms** (reranker aşaması tek başına 15 965 ms); F (50/512) ve torch FP32 D **ölçülmedi** (makine bellek
+    sıkışması, bkz. `retrieval-metrikleri.md`) — F'in çift sayısı 2.5× olduğundan daha yavaş olacağı açık → **bütçeye sığmıyor** ve kalite
+    kuralını da geçen konfig yok → servis varsayılanı `rerank` kapalı kalır; istek başına açma "yavaş ama daha
+    yüksek R@10" seçeneği olarak belgelenir.
+- **Sonuç:**
+  - ✅ Reranker artık kütüphanede + serviste (istek başına); ADR-0009'daki "entegre değil" kapandı.
+  - ✅ "R@10 0.700; +reranker 0.706" yanıltıcı yan yanalığı düzeltildi: bugünkü taban 0.6885, +reranker (20/512)
+    0.7110, ama R@1/MRR düşüyor.
+  - ❌ Reranker 1. sırayı WSUM'dan kötü seçiyor (ADAY=10'da ilk 10 kümesi aynı, R@1 yine −0.0105) → skor füzyonu
+    (reranker skoru + WSUM puanı) ya da alan-içi fine-tune ile düzelebilir — ikisi de ölçüm/ağırlık ayarı ya da
+    kapsam dışı (fine-tune) gerektirdiği için bu hedefte **yapılmadı** (future work).
+  - Taban sapması: belgelenen 0.7000 yerine ölçülen **0.6885** — Qdrant index'i (eski Colab embed'i) güncel
+    korpusla 1.678 maddede yürürlük uyuşmazlığı taşıyor; 2000 sorgunun 37'sinin doğru maddesi Qdrant'ta "mülga"
+    işaretli (dense/sparse filtresi getiremez). Korpus yeniden embed'i kapsam dışı; not düşüldü.
+- **Öğrenme notu:**
+  - **NASIL:** adaylar bir kez çıkarılıp dosyaya yazıldı (`--aday-cikar`), reranker ayrı aşamada top-50'yi puanladı
+    (`--skorla`); bir çiftin skoru diğer adaylardan bağımsız olduğu için ADAY ∈ {10,20,30,50} aynı skorlardan türetildi.
+  - **NEYE GÖRE:** V-2 kuralı (2000 sorguda R@10 standart hatası ≈ √(0.7·0.3/2000) ≈ 0.010 → +0.02 gürültü değil),
+    ayrıca eşleştirilmiş kazanç/kayıp sayımı (aynı sorguda iki sistemi karşılaştırmak, iki bağımsız ortalamayı
+    karşılaştırmaktan çok daha hassas).
+  - **NEDEN (alternatif):** "reranker'ı hep aç" — R@10 artar ama kullanıcının gördüğü 1. sonuç daha sık yanlış olur
+    ve CPU'da saniyeler sürer; "reranker'ı kaldır" — R@10'da anlamlı +0.02'lik kazanç çöpe gider. Orta yol: kod +
+    istek başına bayrak.
+  - **MANTIK:** **bi-encoder** (BGE-M3) sorgu ve maddeyi ayrı ayrı vektöre çevirir → maddeler önceden gömülebilir,
+    arama milisaniye. **cross-encoder** (reranker) sorgu+maddeyi tek girdi olarak birlikte okur → kelime kelime
+    etkileşim görür, daha isabetli ama her aday için ayrı model geçişi gerekir → yalnız ilk N adaya uygulanır
+    ("getir, sonra yeniden sırala" = iki aşamalı retrieval).
+
+## ADR-0016 — ONNX Runtime + dinamik int8 çıkarım (CPU); gecikme ölçümünün kapsam sınırı
+- **Durum:** ✅ Kabul + uygulandı (2026-09-28)
+- **Bağlam:** Servis CPU'da koşacak (V-4: i5-11300H 4 çekirdek/8 thread; 4 GB VRAM embed+reranker'ı birlikte
+  taşımıyor — ADR-0009). İstek yolunda iki XLM-R-large modeli var (BGE-M3 sorgu embedder'ı, bge-reranker-v2-m3).
+  FP32 torch ile gecikme ve bellek yüksek; servis imajı torch taşırsa GB'larca büyür (ADR-0018). Hiç gecikme ölçümü yoktu.
+- **Seçenekler:**
+  - **ORT dinamik int8** (`quantize_dynamic`, QInt8, per-channel) — kalibrasyon verisi gerekmez.
+  - **Optimum `ORTQuantizer`** — aynı ORT quantization'ın sarmalayıcısı; ek bağımlılık, bizim özel embed
+    sarmalayıcımız (dense + sparse_w çıktısı) için yine elle export gerekir → katma değer yok.
+  - **Statik (kalibrasyonlu) int8** — aktivasyon ölçekleri önceden sabit; kalibrasyon seti seçimi + transformer'da
+    doğruluk riski; kapsam dışı (V-6).
+  - **fp16** — bu CPU'da hızlandırmaz (GPU işi). **GPU/CUDA EP** — servis CPU (V-4).
+  - **Yalnız thread ayarı (torch FP32)** — A satırı bunu ölçer; model boyutu/bellek aynı kalır.
+- **Karar:** Sorgu embedder'ı ve reranker ONNX'e export edilir (`onnx_export.py`, opset 17, dinamik batch/seq, FP32
+  > 2 GB → tek dosya external data), ORT dinamik int8'e çevrilir (`onnx_quantize.py`, QInt8 per-channel,
+  `MatMulConstBOnly`); çıkarım `CPUExecutionProvider`, `intra_op_num_threads=4`. **Karma hassasiyet:** tam int8
+  BGE-M3'te dense kosinüsü 0.985'e düşürdü (< 0.99 eşiği) → deney (40 sorgu): embedding/Gather hariç 0.985
+  (etkisiz), FFN çıkışları hariç 0.990, ilk 4 katman hariç 0.985, **son 4 katman hariç 0.991 (0.72 GB)**, son 6
+  hariç 0.994 (0.80 GB). Hata son katmanlarda birikiyor (CLS vektörü doğrudan son katmandan çıkar) → embed'de son 4
+  transformer katmanı FP32. Reranker tam int8. Korpus vektörleri **değişmez** (Colab FP32); yalnız **sorgu tarafı**.
+- **Sorgu/korpus asimetrisi:** korpus FP32, sorgu int8 BGE-M3 ile gömülür. İkisi aynı uzayda kalır (int8 ağırlıklar
+  FP32'nin yaklaşığı); hata sorgu vektörüne küçük gürültü olarak biner. Etkisi kosinüsle değil doğrudan R@10/MRR ile ölçüldü.
+- **Ölçüm — doğruluk (parity, `tests/kanun/test_onnx_parity.py`, `pytest -m model`, N=200):**
+
+  | Kontrol | Eşik | Sonuç |
+  |---|---|---|
+  | ONNX-FP32 vs torch dense kosinüs (ort) | ≥ 0.9999 | **1.000000** (sparse maks fark 1.3e-5) |
+  | ONNX-int8 vs torch dense (ort / min) | ≥ 0.99 / ≥ 0.97 | **0.99116 / 0.98600** |
+  | reranker int8 vs FP32 top-10 kesişimi (50 liste × 20 aday) | ort ≥ 0.9 | **0.950** (min 0.90) |
+
+- **Ölçüm — kalite (2000 sorgu, 3-bacak, reranker kapalı):** torch R@10 0.6885 / MRR 0.5515; ONNX-FP32 0.6885 /
+  0.5515 (birebir); **ONNX-int8 0.6880 / 0.5510** (−0.0005 / −0.0005; eşik −0.01 ✓). int8 embed + int8 reranker:
+  ilk 200 sorguda (eşleştirilmiş) R@1 0.425 / R@10 0.645 / MRR 0.504; aynı 200 sorguda torch FP32 + torch reranker
+  0.400 / 0.650 / 0.487 → ΔR@10 −0.005 (eşik −0.01 ✓). 2000 sorguda **ölçülmedi** (CPU'da ≈0.7 sn/çift → 2000×20
+  çift ≈ 7-8 saat; GPU'daki FP32 ölçümü + parity + bu 200'lük eşleştirme yeterli kanıt sayıldı).
+- **Ölçüm — gecikme (CPU, N=200, p95 ms):** A torch FP32 708 · B ONNX FP32 511 · **C ONNX int8 253**
+  (embed p95 672 → 215 ms, 0.32×; V-3 ≤ 400 ms ✓) · E int8 + int8 reranker 20/512 16 121 · D, F, C-http **ölçülmedi**
+  (bellek sıkışması: F 20/100 sorguda Qdrant zaman aşımıyla düştü, D/C-http durduruldu). Tepe RSS: A 3076 / C 2325 /
+  E 3806 MB. Tam tablo + protokol + ortam: `docs/retrieval-metrikleri.md`, ham JSON
+  `docs/olcum-sonuclari/gecikme-2026-09-28.json`.
+- **Kapsam sınırı (V-5):** compliance B "Formal eval / benchmark harness 🚫". Gecikme ölçümü **tek script**
+  (`metrik_gecikme.py`), **sabit protokol** (N=200, 10 ısınma, sıralı tek istek, 4 thread, model yükleme ölçüm
+  dışı), **tek tablo** (`docs/retrieval-metrikleri.md`). Genel çerçeve, MTEB, eşzamanlı yük testi yok.
+- **Sonuç:**
+  - ✅ Servis torch'suz koşabilir (ORT ~20 MB vs torch GB'lar); model 2.27 GB → 0.72 GB (embed) / 0.57 GB (reranker).
+  - ✅ Reranker'sız yol (C) bütçede; embed aşaması 3× hızlandı.
+  - ❌ Cross-encoder CPU'da int8 ile bile istek başına saniyeler (≈0.7 sn/çift; E satırında 20 çift ≈ 14.4 sn p50) → reranker CPU'da etkileşimli
+    kullanım için pahalı (ADR-0015).
+  - ⚠️ i5-11300H AVX-512 VNNI destekler; ORT'nin VNNI çekirdeklerini kullandığı **doğrulanmadı** (ORT profilleme
+    yapılmadı) — hızlanma ölçüldü, mekanizması varsayım.
+- **Öğrenme notu:**
+  - **NASIL:** `torch.onnx.export` modeli örnek girdiyle bir kez çalıştırıp hesap grafiğini (MatMul, Add, Softmax…)
+    ONNX dosyasına yazar; `quantize_dynamic` bu grafikteki MatMul ağırlıklarını int8'e çevirir; ORT grafiği CPU için
+    optimize edip koşturur.
+  - **NEYE GÖRE:** parity eşikleri (export doğruluğu), 2000 sorguluk R@10/MRR (asıl kalite), p95 (asıl hız).
+  - **NEDEN (alternatif):** statik int8 daha hızlı olabilirdi ama kalibrasyon seti = altınsete ayar riski ve kapsam
+    dışı; fp16 bu CPU'da hız getirmez.
+  - **MANTIK:** **quantization** = sayıları daha az bitle saklamak. **Dinamik** int8'de ağırlıklar önceden int8,
+    ara çıktıların (aktivasyon) ölçeği her çağrıda o anki min/max'tan hesaplanır → veri gerekmez ama her çağrıda
+    küçük bir ölçek hesabı maliyeti var. **per-channel** = matrisin her satırı kendi ölçeğini alır. **Execution
+    provider** = ORT'nin grafiği hangi donanım arka ucunda koşturduğu (burada CPU). **intra-op thread** = tek bir
+    MatMul'ın kaç çekirdeğe bölündüğü (4 fiziksel çekirdek; hyper-thread'ler aynı FPU'yu paylaştığı için 8 genelde
+    kazandırmaz). **p95** = sorguların %95'inin bu sürenin altında bittiği değer (ortalama "tipik"i, p95 "kötü günü"
+    anlatır; p99 N=200'de ≈ en yavaş 2 sorgu → güvenilirliği düşük).
+
+
+## ADR-0017 — Retrieval servis katmanı: FastAPI
+- **Durum:** ✅ Kabul + uygulandı (2026-09-28)
+- **Bağlam:** Roadmap Faz 6 çıktısı "çalışan retrieval API/servisi"; status/compliance "servis/API katmanı yok"
+  diyordu. Arama script seviyesindeydi (`search_qdrant.py`) ve model her süreçte yeniden yükleniyordu
+  (BGE-M3 ~2.3 GB, yükleme ~20-60 sn). Servis, modeli **bir kez** yükleyip her isteğe aynı bellekten cevap verir.
+- **Seçenekler:**
+  - **FastAPI** — pydantic ile girdi doğrulama (boş/uzun sorgu, `top_k` sınırı → otomatik 422), OpenAPI şeması
+    (`/docs`), `TestClient` ile ağsız test, `uvicorn` zaten kurulu.
+  - **Flask** — olgun ama doğrulama/şema elle; tip ipuçlarından şema üretmez.
+  - **stdlib `http.server`** — bağımlılık yok ama JSON doğrulama, hata kodları, eşzamanlılık hepsi elle.
+  - **gRPC** — hızlı ikili protokol, ama `.proto` derleme + istemci stub'ı gerekir; tek istemci/insan-okur
+    JSON ihtiyacı için aşırı.
+- **Karar:** FastAPI + uvicorn, **tek worker**. `src/kanun/api/app.py`:
+  - `GET /saglik` → `{durum, qdrant, embed_backend, rerank_backend, rerank_aday, rerank_varsayilan, madde_sayisi}`
+  - `POST /ara` → `{sorgu (1..2000 krk, boşluk-only reddedilir), top_k (1..50), rerank (null = sunucu
+    varsayılanı), yururlukte_only, metin}` → `{sonuclar[{sira, madde_id, kanun_no, kanun_ad, madde_no, skor,
+    rerank_skor, metin?}], sure_ms, config}`. `rerank=true` ama reranker yüklü değilse **400**.
+  - Modeller + BM25 + Qdrant client `lifespan`'da bir kez kurulur (`fabrika.arama_kur`). Endpoint'ler `def`
+    (async değil) → CPU-bağlı çıkarım FastAPI'nin thread havuzunda koşar, event loop bloklanmaz.
+  - **Generation/LLM endpoint'i yok** (ADR-0001); test bunu da doğrular.
+- **Sonuç:**
+  - ⚠️ Servis in-process kütüphaneyle aynı `HybridArama.ara` çağrısını kullanır (servis
+    yalnız ince sarmalayıcı); 200 sorguluk HTTP eşdeğerlik + C-http gecikme koşusu (`metrik_gecikme.py --satir C-http
+    --esdeger`) hazır ama **koşulamadı** (makine bellek sıkışması) → servis ek yükü ölçülmedi. Servis varsayılanı
+    reranker kapalı olduğundan HTTP satırı C üzerinden planlandı (E-http değil).
+  - ✅ İstek yolu hızlandırmaları (sonuç değiştirmeyen): `HizliBM25` (rank_bm25 ile bit-bit aynı skor, posting
+    list üzerinden → BM25 bacağı ~100 ms → ~10 ms) ve Qdrant `yurutluk` keyword payload index'i (filtreli sorguda
+    p95 208 → 15 ms, 30/30 sonuç aynı; `ingest_qdrant.py` artık index'i kendisi kurar).
+  - ✅ `tests/kanun/test_api.py` — sahte `HybridArama` ile şema, sınırlar, 422/400, `rerank=null` varsayılanı.
+  - ❌ Tek worker = modeller süreç başına bellekte; çoklu worker her biri modeli ayrı yükler (int8 embed +
+    reranker ≈ 1.2 GB/worker). Kimlik doğrulama, rate-limit, yatay ölçek **kapsam dışı** (bu fazın hedefi değil).
+- **Öğrenme notu:**
+  - **NASIL:** pydantic `BaseModel` istek şemasını tanımlar; FastAPI gelen JSON'u buna göre doğrular, uymazsa
+    handler'a hiç girmeden 422 döner. `lifespan` = uygulama açılırken/kapanırken bir kez çalışan kod.
+  - **NEYE GÖRE:** roadmap Faz 6 çıktısı + compliance A.6 "servis yok" + gecikme bütçesi (model yüklemesi
+    istek yolunda olmamalı).
+  - **NEDEN (alternatif):** Flask'ta aynı doğrulama elle yazılırdı; gRPC tek bir JSON istemcisi için gereksiz
+    derleme adımı ekler.
+  - **MANTIK:** worker = istekleri işleyen süreç. Tek süreç + thread havuzu: modeller tek kopya, ama aynı
+    anda gelen iki istek CPU çekirdeklerini paylaşır (eşzamanlı yük testi kapsam dışı).
 
 ---
 
