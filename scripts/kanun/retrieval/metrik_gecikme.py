@@ -10,7 +10,8 @@ Satırlar (her biri AYRI süreçte → bellek ve ısınma izolasyonu):
   D  torch FP32 embed      | torch FP32 reranker (önerilen ADAY/max_len)
   E  ONNX int8 embed       | ONNX int8 reranker  (önerilen ADAY/max_len)
   F  ONNX int8 embed       | ONNX int8 reranker  (ADAY=50, max_len=512 — "tam" maliyet)
-  E-http                   | E'nin FastAPI servisi üzerinden ölçümü (servis ek yükü = E-http − E)
+  E-http / C-http          | E'nin / C'nin FastAPI servisi üzerinden ölçümü (servis ek yükü = X-http − X).
+                             Servis varsayılanı reranker KAPALI olduğundan (ADR-0015) asıl HTTP satırı C-http.
 
 Protokol: gold SEED 4721 ilk N=200 uygun sorgu; 10 ısınma sorgusu (N'den sonraki 10) ölçüm dışı;
 sıralı tek istek; torch.set_num_threads(4), ORT_THREADS=4 (fiziksel çekirdek); model yükleme ve
@@ -63,6 +64,8 @@ def satirlar(onerilen_aday, onerilen_len):
         "F": dict(embed="onnx-int8", rerank="onnx-int8", aday=50, max_len=512, not_="tam reranker maliyeti"),
         "E-http": dict(embed="onnx-int8", rerank="onnx-int8", aday=onerilen_aday, max_len=onerilen_len,
                        not_="E, FastAPI üzerinden (istemci tarafı duvar saati)"),
+        "C-http": dict(embed="onnx-int8", rerank="kapali", aday=None, max_len=None,
+                       not_="C, FastAPI üzerinden — servis varsayılanı (istemci tarafı duvar saati)"),
     }
 
 
@@ -254,7 +257,7 @@ def tablo(args):
 def main():
     ayar = ayarlar_oku()
     p = argparse.ArgumentParser()
-    p.add_argument("--satir", default=None, help="A|B|C|D|E|F|E-http|hepsi")
+    p.add_argument("--satir", default=None, help="A|B|C|D|E|F|E-http|C-http|hepsi")
     p.add_argument("--n", type=int, default=200)
     p.add_argument("--onerilen-aday", type=int, default=ayar.rerank_aday)
     p.add_argument("--onerilen-len", type=int, default=ayar.rerank_max_len)
