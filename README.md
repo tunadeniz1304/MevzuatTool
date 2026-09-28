@@ -7,7 +7,7 @@
 Bir doğal dil sorusuna ya da atfa karşılık, **yürürlükteki ilgili kanun maddelerini** getirir.
 mevzuat.gov.tr kanunlarını madde-seviyesinde chunk'lar, zengin metadata çıkarır, hybrid arama ile getirir.
 
-[![Durum](https://img.shields.io/badge/durum-Faz%201--6%20tamam-brightgreen)](docs/status.md)
+[![Durum](https://img.shields.io/badge/durum-Faz%201--7%20tamam-brightgreen)](docs/status.md)
 [![Kapsam](https://img.shields.io/badge/kapsam-yalnız%20KANUN-blue)](docs/mevzuat-mvp-kapsam.md)
 [![Yaklaşım](https://img.shields.io/badge/yaklaşım-vanilla%20RAG-orange)](CLAUDE.md)
 [![Korpus](https://img.shields.io/badge/korpus-31.4k%20madde-informational)](#-korpus)
@@ -97,7 +97,7 @@ Türk mevzuatı aranırken klasik zorluklar:
 
 **Teknoloji:** Python · [`saidsurucu/mevzuat-mcp`](https://github.com/saidsurucu/mevzuat-mcp) ·
 [BGE-M3](https://huggingface.co/BAAI/bge-m3) embedding · [Qdrant](https://qdrant.tech) vektör store ·
-`rank_bm25` · hybrid arama (dense + sparse + BM25) · Docker Compose (hedef).
+`rank_bm25` · hybrid arama (dense + sparse + BM25) · ONNX Runtime int8 · FastAPI · Docker Compose.
 
 ---
 
@@ -142,7 +142,24 @@ kanun içinde **madde ayrımı**. (Sıradaki: index'i yeniden embed, reranker sk
 
 ## 🚀 Kurulum
 
-> ⏳ Tam dockerize hedefi **Faz 7.** Şu an bileşenler ayrı çalışır.
+### Hızlı başlangıç — Docker Compose (Faz 7, ADR-0018)
+
+Ön koşullar (compose üretmez, host'ta hazır olmalı): `colab/outputs/` (Colab korpus embed'i:
+`colab/bge_m3_embed.ipynb`), `models/onnx/` (`onnx_export.py hepsi` + `onnx_quantize.py hepsi`),
+`data/kanun/korpus.jsonl` (`build_corpus.py`).
+
+```bash
+docker compose build                                   # torch'suz imaj (~630 MB)
+docker compose up -d qdrant                            # Qdrant v1.18.0
+docker compose --profile ingest run --rm ingest        # vektörleri yükle (ilk kurulumda bir kez)
+docker compose up -d api                               # retrieval servisi
+curl -s localhost:8000/saglik
+curl -s -X POST localhost:8000/ara -H 'Content-Type: application/json' -d '{"sorgu": "kira artışı", "top_k": 5}'
+```
+
+Port doluysa: `API_PORT=8001 QDRANT_PORT=6334 docker compose ...`. Reranker'ı yüklememek için `RERANK_BACKEND=kapali`.
+
+### Yerel geliştirme (venv)
 
 ```bash
 # 1. Depoyu klonla
@@ -246,9 +263,9 @@ MevzuatTool/
 | 4 | Temiz Korpus Artifact (JSONL) | ✅ |
 | 5 | Embedding + Indexleme (BGE-M3 + Qdrant) | ✅ |
 | 6 | Sorgu + Retrieval (3-bacak hybrid) | ✅ |
-| 7 | Dockerize (`docker compose up`) | ⬜ |
+| 7 | Dockerize (`docker compose up`) | ✅ |
 
-Sıradaki iyileştirmeler: dockerize (Faz 7), atıf modu, Qdrant index'ini güncel korpusla yeniden embed.
+Sıradaki iyileştirmeler: atıf modu, Qdrant index'ini güncel korpusla yeniden embed.
 Detay: [`docs/status.md`](docs/status.md) · [`docs/roadmap.md`](docs/roadmap.md).
 
 ---
