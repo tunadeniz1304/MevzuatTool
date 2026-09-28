@@ -10,12 +10,14 @@ Girdi (colab/outputs/):
 
 Qdrant çalışıyor olmalı: docker run -p 6333:6333 qdrant/qdrant
 Çalıştır: .venv/Scripts/python.exe scripts/kanun/retrieval/ingest_qdrant.py
+          (Qdrant adresi: QDRANT_URL ortam değişkeni, varsayılan http://localhost:6333 — compose: http://qdrant:6333)
 """
+import os
 import json
 import numpy as np
 from qdrant_client import QdrantClient, models
 
-QDRANT_URL = "http://localhost:6333"
+QDRANT_URL = os.environ.get("QDRANT_URL", "http://localhost:6333")
 COLLECTION = "mevzuat"
 DENSE_YOL = "colab/outputs/dense.npy"
 SPARSE_YOL = "colab/outputs/sparse.json"
