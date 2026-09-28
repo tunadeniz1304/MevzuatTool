@@ -2,14 +2,16 @@
 
 > Sistemin **ölçülmüş** durumu. Cetvel: dışarıdan gelen **altınset** gold set (21.737 sızıntısız
 > sorgu; `ilgi`=sorgu, kanun_no+madde_no=doğru madde). Kapsam: retrieval'da biter (CLAUDE.md).
-> Son güncelleme: 2026-07-02.
+> Son güncelleme: 2026-09-28 (Faz 6 kapanışı: reranker entegrasyonu, ONNX int8, servis, gecikme tablosu).
 
 ## Sistem mimarisi (ölçülen)
 
 ```
 Korpus (31.416 madde) → BGE-M3 embed (Colab, dense+sparse) → Qdrant (dense+sparse+payload)
-Sorgu → BGE-M3 embed (PC) → dense + BGE-sparse (Qdrant) + klasik-BM25 (rank_bm25)
+Sorgu → BGE-M3 embed (PC; torch FP32 ya da ONNX int8) → dense + BGE-sparse (Qdrant) + klasik-BM25
         → 3-bacak WSUM füzyon (EŞİT) + yürürlük filtresi (yalnız yürürlükte)
+        → (ops., istek başına) bge-reranker-v2-m3 ilk 20 adayı yeniden sıralar     [ADR-0015]
+Kütüphane: src/kanun/retrieval/search.py (HybridArama) · Servis: src/kanun/api/app.py (FastAPI)
 ```
 
 - **Embedder:** BGE-M3 (ADR-0007). Dense=CLS pooling (FlagEmbedding ile birebir, 0.9998 aynı-metin).
@@ -34,7 +36,10 @@ Sorgu → BGE-M3 embed (PC) → dense + BGE-sparse (Qdrant) + klasik-BM25 (rank_
 - **Recall eğrisi teşhisi:** R@100 (0.809) >> R@10 (0.667) → doğru madde **getiriliyor** ama **sıralama kötü**
   → reranker adayı. (%19 top-100'de bile yok; bir kısmı çok-versiyonlu kanun artefaktı.)
 
-## + Reranker (bge-reranker-v2-m3, top-50 aday), 2000 sorgu
+## + Reranker (bge-reranker-v2-m3, top-50 aday), 2000 sorgu — ⚠️ 2-bacak RRF tabanı üzerinde
+
+> Bu tablonun aday havuzu **2-bacak RRF**'tir (bugünkü 3-bacak WSUM değil). 3-bacak üstündeki ölçüm:
+> aşağıda "3-bacak + reranker (ADR-0015)". Bu ölçüm 2026-09-28'de kütüphane koduyla **birebir** tekrarlandı (çapa).
 
 | Metrik | Hybrid | +Reranker | Fark |
 |---|---|---|---|
@@ -44,8 +49,7 @@ Sorgu → BGE-M3 embed (PC) → dense + BGE-sparse (Qdrant) + klasik-BM25 (rank_
 | MRR | 0.5099 | 0.5411 | +0.031 |
 | nDCG@10 | 0.5432 | 0.5784 | +0.035 |
 
-- Reranker **işe yarıyor** (ADR-0009). Hybrid+reranker R@10=0.706.
-- **Entegrasyon ertelendi** (yerel 4GB VRAM darboğazı); ölçüm-kanıtı + scriptler saklı.
+- Reranker RRF tabanında **işe yarıyordu** (ADR-0009). Entegrasyon ADR-0015'te yapıldı; 3-bacak üstünde tablo aşağıda.
 
 ## Füzyon: WSUM_050 (RRF yerine) — UYGULANDI
 
@@ -168,25 +172,101 @@ Aynı sıralama iki hedef tanımıyla puanlandı: **MADDE** = (kanun_no, madde_n
 3. **Cetvel = altınset:** resmi-dilli (`ilgi`) sorgular + tek-doğru-madde. Vatandaş-dilli gold (bizim
    workflow, tamamlanmadı) farklı sayı verebilir.
 
+## 3-bacak + reranker (ADR-0015) — 2000 sorgu, FP32
+
+Ayrıntı + eşleştirilmiş testler: [`olcum-sonuclari/rerank-3bacak.md`](olcum-sonuclari/rerank-3bacak.md).
+
+| Konfig | R@1 | R@5 | R@10 | MRR@10 | nDCG@10 |
+|---|---|---|---|---|---|
+| Taban (3-bacak WSUM, reranker yok) | **0.4810** | 0.6455 | 0.6885 | **0.5515** | 0.5847 |
+| + reranker ADAY=10 / 512 | 0.4705 | 0.6585 | 0.6885 | 0.5502 | 0.5842 |
+| + reranker **ADAY=20 / 512** (önerilen) | 0.4645 | **0.6635** | **0.7110** | 0.5501 | **0.5893** |
+| + reranker ADAY=30 / 512 | 0.4570 | 0.6585 | 0.7100 | 0.5442 | 0.5845 |
+| + reranker ADAY=50 / 512 | 0.4485 | 0.6550 | 0.7035 | 0.5352 | 0.5761 |
+
+- ⚠️ **Taban 0.700 değil 0.688:** Qdrant index'i (eski Colab `meta.json`) güncel korpusla 1.678 maddede yürürlük
+  uyuşmazlığı taşıyor → 2000 sorgunun 37'sinin doğru maddesi dense/sparse'ta "mülga" filtreleniyor. Korpus
+  yeniden embed'i bu fazın kapsamı dışı; yeni taban 0.688 (sayılar değil, index verisi değişti).
+- Reranker 3-bacak üstünde **R@10'u artırıyor** (+0.0225, z=+4.35) ama **R@1/MRR'yi düşürüyor** (klasik BM25 bacağı
+  üst sırayı reranker'ın ulaşabildiğinin üstüne çıkarmış). V-2 kuralı tutmadı → **varsayılan kapalı**, istek başına
+  `rerank=true`. max_len 256 her ADAY'da 512'den kötü (N=1000).
+
+## ONNX + dinamik int8 (ADR-0016) — kalite
+
+| Embed backend | N | R@1 | R@10 | MRR@10 | Dense kosinüs (torch'a) | Model |
+|---|---|---|---|---|---|---|
+| torch FP32 (taban) | 2000 | 0.4810 | 0.6885 | 0.5515 | 1 | 2.27 GB |
+| ONNX FP32 | 2000 | 0.4810 | 0.6885 | 0.5515 | 1.000000 (N=200) | 2.27 GB |
+| ONNX int8 (son 4 katman FP32) | 2000 | 0.4795 | 0.6880 | 0.5510 | 0.99116 ort. / 0.986 min (N=200) | 0.72 GB |
+
+- Reranker int8 (tam int8, 0.57 GB): FP32'ye top-10 kesişimi ort. **0.950** (min 0.90; 50 liste × 20 aday).
+- int8 embed + int8 reranker (20/512), ilk 200 sorgu (eşleştirilmiş): R@1 0.425 / R@10 0.645 / MRR 0.504 —
+  aynı 200 sorguda torch FP32 + torch reranker: 0.400 / 0.650 / 0.487 (ΔR@10 −0.005, eşik −0.01 içinde).
+  2000 sorguluk int8-reranker kalitesi **ölçülmedi** (CPU'da ~0.7 sn/çift → 2000×20 çift ≈ 7-8 saat).
+
+## Gecikme × kalite — FP32 vs int8, reranker açık/kapalı (CPU, ADR-0016)
+
+Ham veri: [`olcum-sonuclari/gecikme-2026-09-28.json`](olcum-sonuclari/gecikme-2026-09-28.json) · Script: `scripts/kanun/retrieval/metrik_gecikme.py`.
+Ortam: i5-11300H (4 çekirdek / 8 thread), 15.8 GB RAM, Windows 11, Python 3.11, onnxruntime 1.30.0 CPUExecutionProvider,
+torch 2.5.1 (CPU'da), Qdrant v1.18.0 yerel Docker. Protokol: gold SEED 4721 ilk N=200 uygun sorgu, 10 ısınma sorgusu ölçüm
+dışı, sıralı tek istek, 4 thread, model yükleme + BM25 kurulumu ölçüm dışı; her satır ayrı süreçte. Süreler ms (toplam =
+embed + 3 bacak + füzyon + reranker). Kalite sütunları **2000 sorgu** (`rerank_3bacak_rapor.json`).
+
+| # | Embed | Reranker | p50 | p95 | p99 | p95 embed | p95 rerank | R@1 | R@10 | MRR@10 | nDCG@10 | Tepe RSS (MB) | N |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| A | torch FP32 | kapalı | 412 | 708 | 831 | 672 | – | 0.481 | 0.689 | 0.551 | 0.585 | 3076 | 200 |
+| B | ONNX FP32 | kapalı | 253 | 511 | 559 | 474 | – | 0.481 | 0.689 | 0.552 | 0.585 | 2597 | 200 |
+| **C** | **ONNX int8** | kapalı | **132** | **253** | 382 | 215 | – | 0.480 | 0.688 | 0.551 | 0.584 | 2325 | 200 |
+| D | torch FP32 | torch FP32 (20/512) | ölçülmedi ¹ | | | | | 0.465 ² | 0.711 ² | 0.550 ² | 0.589 ² | | |
+| E | ONNX int8 | ONNX int8 (20/512) | 14622 | 16121 | 17860 | 286 | 15965 | ölçülmedi ³ | ölçülmedi ³ | ölçülmedi ³ | ölçülmedi ³ | 3806 | 200 |
+| F | ONNX int8 | ONNX int8 (50/512) | ölçülmedi ¹ | | | | | | | | | | |
+| C-http | ONNX int8, FastAPI | kapalı | ölçülmedi ¹ | | | | | | | | | | |
+
+¹ **Ölçülmedi — bellek:** F koşusu 20/100 sorguda Qdrant zaman aşımıyla düştü, D ve C-http başlayamadan durduruldu; makine
+  (15.8 GB, WSL VM'i ~8 GB tutuyor) kritik bellek sıkışmasına girdi ve ağır işlerin yeniden başlatılmaması gerekti.
+  Tahmin (ölçüm değil, tabloya yazılmadı): F ≈ 50 çift × ~0.72 sn ≈ 36 sn/sorgu; D, E ile aynı mertebede (saniyeler).
+² D'nin kalitesi = FP32 reranker taramasının ADAY=20/512 satırı (2000 sorgu, GPU'da çevrimdışı ölçüldü; kalite
+  donanımdan bağımsız).
+³ int8 embed + int8 reranker 2000 sorguda ölçülmedi (CPU'da ≈ 7-8 saat). İlk 200 sorguda (eşleştirilmiş): R@1 0.425 /
+  R@10 0.645 / MRR 0.504; aynı 200'de torch FP32 + torch reranker 0.400 / 0.650 / 0.487, taban 0.420 / 0.615 / 0.486.
+
+**Okuma:**
+- **int8 embed işe yarıyor:** embed p95 672 → 215 ms (0.32×), toplam p95 708 → 253 ms, bellek −750 MB, kalite farkı
+  R@10 −0.0005. V-3 bütçesi (reranker-kapalı int8 p95 ≤ 400 ms) **✓**. ONNX'in quantization'sız katkısı (B) ~1.4×.
+- **Reranker CPU'da bütçeye sığmıyor:** E p95 16.1 sn (bütçe 1.5 sn, ~10×); süre neredeyse tamamen reranker
+  (20 çift × ~0.7 sn — cross-encoder her çift için 512 token'lık tam XLM-R-large geçişi). Bu, ADR-0015'in
+  "varsayılan kapalı" kararını kalite kuralından bağımsız olarak da destekliyor.
+- p99 N=200'de ≈ en yavaş 2 sorgu → düşük güvenilirlik; bacak süreleri (dense/sparse/BM25) her satırda ~10-25 ms.
+- Servis ek yükü (C-http − C) ölçülmedi; servis doğruluğu `tests/kanun/test_api.py` ile (sahte arama) test edildi.
+
 ## Araçlar
 
-| Script | İş |
+Tüm script'ler `scripts/kanun/retrieval/` altında; kütüphane `src/kanun/retrieval/`, servis `src/kanun/api/`.
+
+| Yol | İş |
 |---|---|
-| `scripts/ingest_qdrant.py` | Colab vektörlerini Qdrant'a yükle |
-| `scripts/search_qdrant.py` | 3-bacak arama (dense+BGE-sparse+klasik-BM25 WSUM+yürürlük) |
-| `scripts/metrik_bm25.py` | ÖLÇÜM 4: klasik BM25 üçüncü bacak katkısı |
-| `scripts/metrik_bm25_agirlik.py` | ÖLÇÜM 5: 3-bacak ağırlık taraması |
-| `scripts/metrik_olc.py` | R@1/5/10 + MRR + nDCG (hybrid) |
-| `scripts/metrik_egri.py` | Recall eğrisi R@1/5/10/50/100 |
-| `scripts/metrik_rerank.py` | Reranker deneyi (yerel, 4GB'da yavaş) |
-| `scripts/rerank_hazirla.py` + `colab/rerank_olc.ipynb` | Reranker ölçümü (Colab T4) |
-| `src/mevzuat_tool/retrieval/embed.py` | BGE-M3 sorgu embed (dense+sparse) |
+| `src/kanun/retrieval/search.py` | `HybridArama`: 3-bacak WSUM + yürürlük filtresi + ops. reranker (kütüphane) |
+| `src/kanun/retrieval/config.py` · `fabrika.py` | Ortam değişkeni ayarları · backend seçimi (torch / onnx-fp32 / onnx-int8) |
+| `src/kanun/retrieval/embed.py` · `embed_onnx.py` | BGE-M3 sorgu embed (torch) · ONNX Runtime karşılığı |
+| `src/kanun/retrieval/rerank.py` | `TorchReranker` / `OnnxReranker` (bge-reranker-v2-m3) |
+| `src/kanun/retrieval/olcum.py` | Ortak gold örnekleme (SEED 4721) + R@k/MRR/nDCG |
+| `src/kanun/api/app.py` | FastAPI `/ara`, `/saglik` (ADR-0017) |
+| `ingest_qdrant.py` | Colab vektörlerini Qdrant'a yükle (+ `yurutluk` payload index) |
+| `search_qdrant.py` | Arama CLI (kütüphanenin ince sarmalayıcısı) |
+| `esdeger_kontrol.py` | Kütüphane = eski script (50 sorgu, birebir) |
+| `metrik_bm25.py` · `metrik_bm25_agirlik.py` | ÖLÇÜM 4 (3. bacak) · ÖLÇÜM 5 (ağırlık taraması) |
+| `metrik_olc.py` · `metrik_egri.py` · `metrik_ablasyon.py` | R@k/MRR/nDCG · recall eğrisi · ablasyon (eski 2-bacak) |
+| `metrik_rerank_3bacak.py` | Reranker çapa + ADAY×max_len taraması (ADR-0015) |
+| `onnx_export.py` · `onnx_quantize.py` | FP32 ONNX export · dinamik int8 (ADR-0016) |
+| `metrik_gecikme.py` | p50/p95/p99 × kalite tablosu (A–F + HTTP) |
+| `metrik_rerank.py` · `rerank_hazirla.py` + `colab/rerank_olc.ipynb` | Eski RRF-tabanlı reranker ölçümü (ADR-0009) |
 | `colab/bge_m3_embed.ipynb` | Korpus embed (Colab) |
 
 ## Sonraki adımlar (açık)
 
-- Reranker'ı kalıcı entegre (Faz 6/7, GPU/servis çözümü sonrası).
-- BM25 (klasik) ekle + hybrid'e kıyasla (metriğe bak).
-- Ablasyon: dense-only vs hybrid (sparse'ın katkısını ölç).
+- **Qdrant index'ini güncel korpusla yeniden embed et** (1.678 maddelik yürürlük uyuşmazlığı → taban 0.688 → ~0.70).
+- Reranker'ı R@1'i bozmadan kullanmak: WSUM skoruyla reranker skorunu **birleştirmek** (şimdi saf yer değiştirme).
+- Reranker'ı GPU'lu ayrı bir serviste koşmak (CPU'da ~15 sn/sorgu, bütçe 1.5 sn).
+- 2000 sorguluk int8-reranker kalitesi (GPU'da ya da gece koşusu).
 - Çok-versiyonlu kanun toleransıyla "gerçek" R@10.
-- (Future, kapsam-dışı) fine-tune Colab'da.
+- (Future, kapsam-dışı) fine-tune; statik int8; atıf modu.
