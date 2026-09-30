@@ -1,44 +1,46 @@
+[Türkçe](README.tr.md) · **English**
+
 <div align="center">
 
 # ⚖️ MevzuatTool
 
-**Türk kanunları için yapısal RAG retrieval motoru**
+**A structural RAG retrieval engine for Turkish laws**
 
-Bir doğal dil sorusuna ya da atfa karşılık, **yürürlükteki ilgili kanun maddelerini** getirir.
-mevzuat.gov.tr kanunlarını madde-seviyesinde chunk'lar, zengin metadata çıkarır, hybrid arama ile getirir.
+Given a natural-language question or a legal citation, it returns the **relevant law articles that are currently in force**.
+It chunks the laws from mevzuat.gov.tr at the article level, extracts rich metadata, and retrieves them with hybrid search.
 
-[![Durum](https://img.shields.io/badge/durum-Faz%205--6%20çalışır-brightgreen)](docs/status.md)
-[![Kapsam](https://img.shields.io/badge/kapsam-yalnız%20KANUN-blue)](docs/mevzuat-mvp-kapsam.md)
-[![Yaklaşım](https://img.shields.io/badge/yaklaşım-vanilla%20RAG-orange)](CLAUDE.md)
-[![Korpus](https://img.shields.io/badge/korpus-31.4k%20madde-informational)](#-korpus)
-[![R@10](https://img.shields.io/badge/R%4010-0.700-success)](#-metrikler)
-[![Lisans](https://img.shields.io/badge/lisans-LICENSE-lightgrey)](LICENSE)
+[![Status](https://img.shields.io/badge/status-phase%205--6%20working-brightgreen)](docs/status.md)
+[![Scope](https://img.shields.io/badge/scope-laws%20only-blue)](docs/mevzuat-mvp-kapsam.md)
+[![Approach](https://img.shields.io/badge/approach-vanilla%20RAG-orange)](CLAUDE.md)
+[![Corpus](https://img.shields.io/badge/corpus-31.4k%20articles-informational)](#-corpus)
+[![R@10](https://img.shields.io/badge/R%4010-0.700-success)](#-metrics)
+[![License](https://img.shields.io/badge/license-LICENSE-lightgrey)](LICENSE)
 
 </div>
 
 ---
 
-## 📖 İçindekiler
+## 📖 Table of contents
 
-- [Ne yapar?](#-ne-yapar)
-- [Neden?](#-neden)
-- [Mimari](#-mimari)
-- [Metrikler](#-metrikler)
-- [Korpus](#-korpus)
-- [Kurulum](#-kurulum)
-- [Kullanım](#-kullanım)
-- [Proje yapısı](#-proje-yapısı)
-- [Yol haritası](#-yol-haritası)
-- [Kapsam](#-kapsam)
-- [Dokümantasyon](#-dokümantasyon)
-- [Katkı](#-katkı)
+- [What it does](#-what-it-does)
+- [Why?](#-why)
+- [Architecture](#-architecture)
+- [Metrics](#-metrics)
+- [Corpus](#-corpus)
+- [Installation](#-installation)
+- [Usage](#-usage)
+- [Project structure](#-project-structure)
+- [Roadmap](#-roadmap)
+- [Scope](#-scope)
+- [Documentation](#-documentation)
+- [Contributing](#-contributing)
 
 ---
 
-## 🎯 Ne yapar?
+## 🎯 What it does
 
-Bir kanun/madde atfını veya doğal dil sorusunu alır; temiz, chunk'lanmış ve indexlenmiş
-mevzuat korpusundan **yürürlükteki ilgili maddeleri** sıralayarak döndürür.
+It takes a law/article citation or a natural-language question and returns a ranked list of the
+**relevant articles currently in force** from a clean, chunked and indexed legislation corpus.
 
 ```
 "memurun disiplin cezası olarak devlet memurluğundan çıkarılması"
@@ -51,99 +53,101 @@ mevzuat korpusundan **yürürlükteki ilgili maddeleri** sıralayarak döndürü
  ...
 ```
 
-> **🧭 Sınır:** Pipeline **retrieval'da biter.** Cevabı yazan LLM (generation) **kapsam dışıdır** —
-> en sonda config'le takılan, OpenAI-uyumlu, swap'lanabilir bir endpoint olarak bırakılmıştır.
-> Bu proje, vanilla RAG'ın **retrieval yarısıdır.**
+(Example query: "dismissal from the civil service as a disciplinary penalty for a civil servant"; results come from the Civil Servants Law — *Devlet Memurları Kanunu* — and the Turkish Radio and Television Law.)
+
+> **🧭 Boundary:** The pipeline **ends at retrieval.** The LLM that writes the answer (generation) is **out of scope** —
+> it is left as a swappable, OpenAI-compatible endpoint plugged in via config at the very end.
+> This project is the **retrieval half** of vanilla RAG.
 
 ---
 
-## 💡 Neden?
+## 💡 Why?
 
-Türk mevzuatı aranırken klasik zorluklar:
+Classic difficulties when searching Turkish legislation:
 
-| Sorun | MevzuatTool çözümü |
+| Problem | MevzuatTool's solution |
 |---|---|
-| Naive sabit-boy chunking bağlamı böler | **Madde-seviyesi yapısal chunking** (uzun maddeler fıkra bazında) |
-| Mülga (yürürlükten kalkmış) hükümler karışır | **Yürürlük durumu birinci sınıf metadata** → mülga filtrelenir |
-| Sadece anlam ya da sadece kelime yetmez | **3-bacak hybrid** (dense + öğrenilmiş sparse + klasik BM25) |
-| Hiyerarşi (kitap/kısım/bölüm) kaybolur | `kanun → kitap → madde → fıkra → bent` korunur |
+| Naive fixed-size chunking splits context | **Article-level structural chunking** (long articles split by fıkra (paragraph)) |
+| Mülga (repealed) provisions get mixed in | **In-force status as first-class metadata** → repealed provisions are filtered out |
+| Semantic-only or keyword-only search is not enough | **3-leg hybrid** (dense + learned sparse + classic BM25) |
+| The hierarchy (kitap (book) / kısım (part) / bölüm (chapter)) gets lost | `kanun → kitap → madde → fıkra → bent` (law → book → article → paragraph → sub-clause) is preserved |
 
 ---
 
-## 🏗️ Mimari
+## 🏗️ Architecture
 
 ```
 ┌─────────────────┐     ┌──────────────────┐     ┌─────────────────────┐
-│  mevzuat-mcp    │────▶│  Yapısal chunk   │────▶│  Temiz korpus JSONL │
-│  (veri çekme)   │     │  madde + fıkra   │     │  {id, text, meta}   │
+│  mevzuat-mcp    │────▶│  Structural chunk│────▶│  Clean corpus JSONL │
+│  (data fetch)   │     │  article + para  │     │  {id, text, meta}   │
 └─────────────────┘     └──────────────────┘     └──────────┬──────────┘
                                                             │
                                             ┌───────────────▼───────────────┐
                                             │      BGE-M3 embed (Colab)      │
-                                            │      dense + öğrenilmiş sparse │
+                                            │      dense + learned sparse    │
                                             └───────────────┬───────────────┘
                                                             │
-     Sorgu ──▶ BGE-M3 embed ──┐                 ┌───────────▼───────────┐
+     Query ──▶ BGE-M3 embed ──┐                 ┌───────────▼───────────┐
                               │                 │   Qdrant (dense +     │
                               ▼                 │   sparse + payload)   │
               ┌───────────────────────────┐    └───────────────────────┘
-              │   3-bacak WSUM füzyon      │◀─── dense + BGE-sparse (Qdrant)
-              │   dense + sparse + BM25    │◀─── klasik BM25 (rank_bm25)
-              │   + yürürlük filtresi      │
+              │   3-leg WSUM fusion        │◀─── dense + BGE-sparse (Qdrant)
+              │   dense + sparse + BM25    │◀─── classic BM25 (rank_bm25)
+              │   + in-force filter        │
               └─────────────┬──────────────┘
                             ▼
-                   Top-k yürürlükteki madde
+                   Top-k in-force articles
 ```
 
-**Teknoloji:** Python · [`saidsurucu/mevzuat-mcp`](https://github.com/saidsurucu/mevzuat-mcp) ·
-[BGE-M3](https://huggingface.co/BAAI/bge-m3) embedding · [Qdrant](https://qdrant.tech) vektör store ·
-`rank_bm25` · hybrid arama (dense + sparse + BM25) · Docker Compose (hedef).
+**Stack:** Python · [`saidsurucu/mevzuat-mcp`](https://github.com/saidsurucu/mevzuat-mcp) ·
+[BGE-M3](https://huggingface.co/BAAI/bge-m3) embeddings · [Qdrant](https://qdrant.tech) vector store ·
+`rank_bm25` · hybrid search (dense + sparse + BM25) · Docker Compose (planned).
 
 ---
 
-## 📊 Metrikler
+## 📊 Metrics
 
-Cetvel: dışarıdan gelen **altınset** gold set (21.737 sızıntısız sorgu; resmi-dilli), 2000 sorgu.
-Detay: [`docs/retrieval-metrikleri.md`](docs/retrieval-metrikleri.md).
+Benchmark: the external **altınset** gold set (21,737 leakage-free queries; formal legal language), 2,000 queries.
+Details: [`docs/retrieval-metrikleri.md`](docs/retrieval-metrikleri.md).
 
-**Füzyon evrimi (madde-seviyesi):**
+**Fusion evolution (article level):**
 
-| Yöntem | R@1 | R@10 | MRR | nDCG@10 |
+| Method | R@1 | R@10 | MRR | nDCG@10 |
 |---|---|---|---|---|
 | RRF hybrid (baseline) | 0.436 | 0.667 | 0.507 | 0.545 |
-| WSUM_050 (2-bacak) | 0.447 | 0.669 | 0.520 | 0.556 |
-| **3-bacak EŞİT + klasik BM25 ← uygulanan** | **0.491** | **0.700** | **0.562** | **0.596** |
-| + reranker (`bge-reranker-v2-m3`, ölçüldü) | – | 0.706 | – | – |
+| WSUM_050 (2-leg) | 0.447 | 0.669 | 0.520 | 0.556 |
+| **3-leg EQUAL + classic BM25 ← in use** | **0.491** | **0.700** | **0.562** | **0.596** |
+| + reranker (`bge-reranker-v2-m3`, measured) | – | 0.706 | – | – |
 
-Fine-tune / GPU olmadan, yalnızca **füzyon + klasik BM25** ile baseline'dan **R@1 +0.055, R@10 +0.033.**
-Reranker ölçüldü ama henüz kalıcı entegre değil.
+With no fine-tuning and no GPU, using only **fusion + classic BM25**, the gain over the baseline is **R@1 +0.055, R@10 +0.033.**
+The reranker has been measured but is not yet permanently integrated.
 
-**Erişim vs ayrım (darboğaz teşhisi):** R@100 = 0.809 >> R@10 = 0.700 → doğru madde **getiriliyor**, ama
-sıralanamıyor. Aynı-**kanun** toleransıyla R@10 = **0.889** → sistem doğru kanunu buluyor; darboğaz aynı
-kanun içinde **madde ayrımı**. (Sıradaki: reranker entegrasyonu / fine-tune.)
-
----
-
-## 📚 Korpus
-
-- **31.419 chunk / 916 kanun** (yalnız `KANUN` türü — ADR-0013)
-- İç yapı: **89.745 fıkra**, **29.428 bent**; 1.718 mülga chunk (elenmez, işaretlenir — tarihsel sorgu)
-- Her chunk: `{id, text, metadata}` — bağımsız teslim edilebilir JSONL
-- Metadata: kanun_no/ad, madde_no/başlık, **yürürlük (yürürlükte/mülga)**, hiyerarşi yolu, fıkra/bent ağacı, değişiklik geçmişi, dipnotlar, tablolar
-- Atomik birim = **madde** (uzun maddeler fıkra bazında); naive sabit-boy token chunking **yok**
-- `python scripts/kanun/build_corpus.py` ile cache'ten ~75 sn'de **deterministik** üretilir
+**Recall vs. discrimination (bottleneck diagnosis):** R@100 = 0.809 >> R@10 = 0.700 → the correct article **is retrieved**, but
+not ranked high enough. With same-**law** tolerance, R@10 = **0.889** → the system finds the right law; the bottleneck is
+**distinguishing between articles** within the same law. (Next: reranker integration / fine-tuning.)
 
 ---
 
-## 🚀 Kurulum
+## 📚 Corpus
 
-> ⏳ Tam dockerize hedefi **Faz 7.** Şu an bileşenler ayrı çalışır.
+- **31,419 chunks / 916 laws** (`KANUN` type only — ADR-0013)
+- Internal structure: **89,745 fıkra (paragraphs)**, **29,428 bent (sub-clauses)**; 1,718 repealed chunks (not removed but flagged — for historical queries)
+- Each chunk: `{id, text, metadata}` — a standalone, deliverable JSONL
+- Metadata: law number/name, article number/title, **in-force status (in force / repealed)**, hierarchy path, fıkra/bent tree, amendment history, footnotes, tables
+- Atomic unit = **madde (article)** (long articles split by fıkra); **no** naive fixed-size token chunking
+- Generated **deterministically** from the cache in ~75 s with `python scripts/kanun/build_corpus.py`
+
+---
+
+## 🚀 Installation
+
+> ⏳ Full dockerization is the goal of **Phase 7.** For now the components run separately.
 
 ```bash
-# 1. Depoyu klonla
-git clone <repo-url> && cd MevzuatTool
+# 1. Clone the repository
+git clone https://github.com/tunadeniz1304/MevzuatTool.git && cd MevzuatTool
 
-# 2. Sanal ortam + bağımlılıklar
+# 2. Virtual environment + dependencies
 python -m venv .venv
 .venv/Scripts/activate          # Windows
 pip install -r requirements.txt
@@ -151,125 +155,131 @@ pip install -r requirements.txt
 # 3. Qdrant (Docker)
 docker run -p 6333:6333 -v qdrant_storage:/qdrant/storage qdrant/qdrant
 
-# 4. Korpus vektörlerini Qdrant'a yükle
+# 4. Load the corpus vectors into Qdrant
 python scripts/kanun/retrieval/ingest_qdrant.py
 ```
 
-> **Not:** BGE-M3 korpus embed'i ağır (GPU) — Colab'da üretilir (`colab/bge_m3_embed.ipynb`),
-> vektörler PC'ye indirilir. Sorgu embed'i hafif, CPU'da çalışır.
+> **Note:** BGE-M3 corpus embedding is heavy (GPU) — it is produced on Colab (`colab/bge_m3_embed.ipynb`)
+> and the vectors are downloaded to the local machine. Query embedding is lightweight and runs on CPU.
 
 ---
 
-## 🔍 Kullanım
+## 🔍 Usage
 
 ```bash
-# Tek sorgu
+# Single query
 python scripts/kanun/retrieval/search_qdrant.py "kira artışı nasıl belirlenir"
 
-# İnteraktif mod
+# Interactive mode
 python scripts/kanun/retrieval/search_qdrant.py
 ```
 
-Çıktı: yürürlükteki en ilgili top-10 madde, füzyon skoru + kanun/madde bilgisiyle sıralı.
+(Example query: "how is a rent increase determined".)
+
+Output: the top-10 most relevant in-force articles, ranked by fusion score, with law/article information.
 
 ---
 
-## 📂 Proje yapısı
+## 📂 Project structure
 
-Her mevzuat türü **kendi paketinde, tam izole.** Ortak kod yok — kanun tarafındaki bir
-değişiklik başka türü asla bozamaz. Yeni tür eklerken `src/kanun/` modülleri **kopyalanır**,
-import edilmez.
+Each legislation type lives **in its own package, fully isolated.** There is no shared code — a change on the
+kanun (law) side can never break another type. When adding a new type, the `src/kanun/` modules are **copied**,
+not imported.
 
 ```
 MevzuatTool/
 ├── src/
-│   ├── kanun/                    # ✅ ÇALIŞIYOR — 15 modül
-│   │   ├── fetch.py              #   bedesten çekici (429/Retry-After uyumlu, cache'li)
-│   │   ├── chunker.py fikra.py   #   madde bölme · fıkra/bent ağacı
-│   │   ├── enrich.py corpus.py   #   metadata birleştirme · chunk üretimi
-│   │   └── retrieval/embed.py    #   BGE-M3 sorgu embed (dense + sparse)
-│   ├── teblig/                   # ⬜ iskelet (sıfırdan yazılacak)
-│   └── yonetmelik/               # ⬜ iskelet
+│   ├── kanun/                    # ✅ WORKING — 15 modules
+│   │   ├── fetch.py              #   bedesten fetcher (429/Retry-After aware, cached)
+│   │   ├── chunker.py fikra.py   #   article splitting · fıkra/bent tree
+│   │   ├── enrich.py corpus.py   #   metadata merging · chunk generation
+│   │   └── retrieval/embed.py    #   BGE-M3 query embedding (dense + sparse)
+│   ├── teblig/                   # ⬜ skeleton (to be written from scratch)
+│   └── yonetmelik/               # ⬜ skeleton
 ├── scripts/
 │   ├── kanun/
-│   │   ├── build_corpus.py       # Korpus üretici (ana giriş)
-│   │   ├── eval_*.py             # Parser doğruluk ölçümleri
+│   │   ├── build_corpus.py       # Corpus builder (main entry point)
+│   │   ├── eval_*.py             # Parser accuracy measurements
 │   │   └── retrieval/
-│   │       ├── ingest_qdrant.py  #   Korpus vektörlerini Qdrant'a yükle
-│   │       ├── search_qdrant.py  #   3-bacak hybrid arama (ana giriş)
-│   │       └── metrik_*.py       #   Retrieval değerlendirme ölçümleri
-│   ├── teblig/ · yonetmelik/     # ⬜ boş
-├── tests/kanun/                  # 17 dosya, 285 test
+│   │       ├── ingest_qdrant.py  #   Load corpus vectors into Qdrant
+│   │       ├── search_qdrant.py  #   3-leg hybrid search (main entry point)
+│   │       └── metrik_*.py       #   Retrieval evaluation measurements
+│   ├── teblig/ · yonetmelik/     # ⬜ empty
+├── tests/kanun/                  # 17 files, 285 tests
 ├── colab/
-│   ├── bge_m3_embed.ipynb        # Korpus embed (GPU)
-│   └── rerank_olc.ipynb          # Reranker ölçümü (T4)
+│   ├── bge_m3_embed.ipynb        # Corpus embedding (GPU)
+│   └── rerank_olc.ipynb          # Reranker measurement (T4)
 ├── data/
 │   ├── kanun/                    # raw/ (HTML cache) · korpus.jsonl
-│   ├── teblig/ · yonetmelik/     # ⬜ boş
-│   └── gold/                     # altınset gold set (tür-bağımsız)
-├── docs/                         # Tüm proje dokümanları
-├── CLAUDE.md                     # AI ajan / katkı sağlayıcı hafızası
+│   ├── teblig/ · yonetmelik/     # ⬜ empty
+│   └── gold/                     # altınset gold set (type-agnostic)
+├── docs/                         # All project documentation
+├── CLAUDE.md                     # AI agent / contributor memory
 └── README.md
 ```
 
+(`teblig` = tebliğ (communiqué), `yonetmelik` = yönetmelik (regulation).)
+
 ---
 
-## 🗺️ Yol haritası
+## 🗺️ Roadmap
 
-| Faz | Ad | Durum |
+| Phase | Name | Status |
 |---|---|---|
-| 0 | Kurulum & Yönetişim | ✅ |
-| 1 | Veri Çekme (mevzuat-mcp) | ✅ |
-| 2 | Yapısal Chunking (madde/fıkra) | ✅ |
-| 3 | Metadata (yürürlük/hiyerarşi) | ✅ |
-| 4 | Temiz Korpus Artifact (JSONL) | ✅ |
-| 5 | Embedding + Indexleme (BGE-M3 + Qdrant) | ✅ |
-| 6 | Sorgu + Retrieval (3-bacak hybrid) | ✅ |
+| 0 | Setup & Governance | ✅ |
+| 1 | Data Fetching (mevzuat-mcp) | ✅ |
+| 2 | Structural Chunking (madde/fıkra) | ✅ |
+| 3 | Metadata (in-force status/hierarchy) | ✅ |
+| 4 | Clean Corpus Artifact (JSONL) | ✅ |
+| 5 | Embedding + Indexing (BGE-M3 + Qdrant) | ✅ |
+| 6 | Query + Retrieval (3-leg hybrid) | ✅ |
 | 7 | Dockerize (`docker compose up`) | ⬜ |
 
-Sıradaki iyileştirmeler: reranker entegrasyonu (kanıtlı +0.04), yapısal-sadakat düzeltmeleri.
-Detay: [`docs/status.md`](docs/status.md) · [`docs/roadmap.md`](docs/roadmap.md).
+Next improvements: reranker integration (proven +0.04), structural-fidelity fixes.
+Details: [`docs/status.md`](docs/status.md) · [`docs/roadmap.md`](docs/roadmap.md).
 
 ---
 
-## 🎯 Kapsam
+## 🎯 Scope
 
-**✅ Kapsam içi:** Yalnız `KANUN` türü · veri çekme (mevzuat-mcp) · yapısal chunking · zengin metadata
-(yürürlük/mülga, hiyerarşi) · temiz JSONL korpus · embedding + hybrid index · atıf & doğal dil retrieval · docker-compose.
+**✅ In scope:** `KANUN` type only · data fetching (mevzuat-mcp) · structural chunking · rich metadata
+(in force/repealed, hierarchy) · clean JSONL corpus · embedding + hybrid index · citation & natural-language retrieval · docker-compose.
 
-**❌ Kapsam dışı (future work):** Kanun dışı türler (KHK/tüzük/yönetmelik/tebliğ) · LLM generation ·
-GraphRAG / agentic / ileri RAG · embedding fine-tune · PDF/OCR · içtihat/özelge.
+**❌ Out of scope (future work):** Non-law types (KHK (decree-law) / tüzük (bylaw) / yönetmelik (regulation) / tebliğ (communiqué)) · LLM generation ·
+GraphRAG / agentic / advanced RAG · embedding fine-tuning · PDF/OCR · içtihat (case law) / özelge (tax rulings).
 
-Detay: [`docs/mevzuat-mvp-kapsam.md`](docs/mevzuat-mvp-kapsam.md) · [`docs/compliance.md`](docs/compliance.md).
+Details: [`docs/mevzuat-mvp-kapsam.md`](docs/mevzuat-mvp-kapsam.md) · [`docs/compliance.md`](docs/compliance.md).
 
 ---
 
-## 📄 Dokümantasyon
+## 📄 Documentation
 
-| Dosya | İçerik |
+(The linked documents are in Turkish.)
+
+| File | Contents |
 |---|---|
-| [`mevzuat-mvp-kapsam.md`](docs/mevzuat-mvp-kapsam.md) | Kapsam tanımı (kaynak doğruluk) |
-| [`status.md`](docs/status.md) | Güncel ilerleme |
-| [`roadmap.md`](docs/roadmap.md) | Faz planı |
-| [`arch.md`](docs/arch.md) | Güncel mimari durum |
-| [`decisions.md`](docs/decisions.md) | Karar kaydı (ADR) |
-| [`retrieval-metrikleri.md`](docs/retrieval-metrikleri.md) | Ölçülmüş retrieval metrikleri |
-| [`compliance.md`](docs/compliance.md) | Kapsam uygunluk checklist'i |
-| [`commit_discipline.md`](docs/commit_discipline.md) | Commit / branch kuralları |
-| [`CLAUDE.md`](CLAUDE.md) | AI ajan / katkı sağlayıcı hafızası (kökte) |
+| [`mevzuat-mvp-kapsam.md`](docs/mevzuat-mvp-kapsam.md) | Scope definition (source of truth) |
+| [`status.md`](docs/status.md) | Current progress |
+| [`roadmap.md`](docs/roadmap.md) | Phase plan |
+| [`arch.md`](docs/arch.md) | Current architecture state |
+| [`decisions.md`](docs/decisions.md) | Decision log (ADR) |
+| [`retrieval-metrikleri.md`](docs/retrieval-metrikleri.md) | Measured retrieval metrics |
+| [`compliance.md`](docs/compliance.md) | Scope compliance checklist |
+| [`commit_discipline.md`](docs/commit_discipline.md) | Commit / branch rules |
+| [`CLAUDE.md`](CLAUDE.md) | AI agent / contributor memory (at repo root) |
 
 ---
 
-## 🤝 Katkı
+## 🤝 Contributing
 
-Çalışmaya başlamadan önce [`docs/commit_discipline.md`](docs/commit_discipline.md) okunmalıdır:
+Read [`docs/commit_discipline.md`](docs/commit_discipline.md) before starting work:
 
-- 🚫 `main`'e doğrudan push **yasak** — `phase-N/feature-adi` branch'leri + PR.
-- 🚫 Commit mesajlarında AI co-author / "Generated with" satırı **yok**.
-- ⚛️ **Atomik commit** — tek mantıksal değişiklik; `type(scope): özet` formatı.
+- 🚫 Pushing directly to `main` is **forbidden** — use `phase-N/feature-name` branches + PRs.
+- 🚫 **No** AI co-author / "Generated with" lines in commit messages.
+- ⚛️ **Atomic commits** — one logical change each; `type(scope): summary` format.
 
 ---
 
-## 📜 Lisans
+## 📜 License
 
-Bkz. [`LICENSE`](LICENSE).
+See [`LICENSE`](LICENSE).
