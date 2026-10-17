@@ -23,7 +23,7 @@ Yapısal düzeltme fazları: [`yapisal-sadakat-master-plan.md`](yapisal-sadakat-
 | 6 | Sorgu + Retrieval | ✅ | `HybridArama` + reranker (ops.) + ONNX int8 + FastAPI servisi (ADR-0015/16/17) |
 | 7 | Dockerize | ✅ | `docker-compose.yml` + `Dockerfile` (ADR-0018); compose üzerinden `/ara` R@10 = in-process |
 
-**Test durumu:** 381 test geçiyor (`pytest -q`); 3 gerçek-model parity testi `pytest -m model` ile ayrı (ağ/model indirmez varsayılan koşu).
+**Test durumu:** 381 test geçiyor (`pytest -q`): `tests/kanun/` 22 dosya 328 test + `tests/teblig/` 2 dosya 53 test; 3 gerçek-model parity testi `pytest -m model` ile ayrı (ağ/model indirmez varsayılan koşu).
 
 ---
 

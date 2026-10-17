@@ -62,7 +62,8 @@ scripts/kanun/            build_corpus.py · eval_*.py · fetch_*.py
 scripts/kanun/retrieval/  ingest_qdrant · search_qdrant · metrik_* · onnx_export/quantize · esdeger_kontrol
 scripts/teblig/           (boş) · scripts/yonetmelik/ (boş)
 
-tests/kanun/      23 dosya, 381 test (+3 `-m model`)    tests/teblig/ · tests/yonetmelik/ (boş)
+tests/kanun/      22 dosya, 328 test (+3 `-m model`)
+tests/teblig/     2 dosya, 53 test    · tests/yonetmelik/ (boş)
 
 data/kanun/       raw/ (cache) · korpus.jsonl · unique_atiflar.json
 data/teblig/ · data/yonetmelik/   (boş)
@@ -79,7 +80,7 @@ data/gold/        altınset gold set (tür-bağımsız, retrieval ölçümü)
 - **Korpus:** `data/kanun/korpus.jsonl` — 31.419 chunk / 916 kanun. `python scripts/kanun/build_corpus.py` ile cache'ten (`data/kanun/raw/`) ~75 sn'de **deterministik** üretilir. (89.745 fıkra, 29.428 bent, 1.718 mülga.)
 - **Retrieval:** kütüphane `src/kanun/retrieval/search.py` (`HybridArama`), BGE-M3 + Qdrant, 3-bacak hybrid. **R@10 = 0.6885** (bugünkü index; eski 0.700 index/korpus yürürlük uyuşmazlığından düştü — ADR-0015). +reranker 20/512 (istek başına) R@10 0.711 ama R@1 0.481→0.465 → varsayılan kapalı. ONNX int8 sorgu embed'i R@10 0.688, embed gecikmesi ~3× düşük. (Eski "+reranker 0.706" 2-bacak RRF tabanındaydı.)
 - **Servis:** FastAPI `POST /ara`, `GET /saglik` (`src/kanun/api/app.py`); ayarlar ortam değişkeninden (`config.py`).
-- **Testler:** 381 test geçiyor (`pytest -q`); gerçek-model parity testleri `pytest -m model`.
+- **Testler:** 381 test geçiyor (`pytest -q`: `tests/kanun/` 328 + `tests/teblig/` 53); 3 gerçek-model parity testi ayrıca `pytest -m model`.
 - **Docker:** `docker compose up -d qdrant api` + `--profile ingest run --rm ingest` (ön koşul: `colab/outputs/`, `models/onnx/`, korpus).
 - **Eksik:** atıf modu (metadata hazır, kod yok) · Qdrant index'inin güncel korpusla yeniden embed'i.
 

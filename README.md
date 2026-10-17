@@ -245,7 +245,10 @@ MevzuatTool/
 │   │       ├── onnx_export.py · onnx_quantize.py  # ONNX FP32 export · dynamic int8
 │   │       └── metrik_*.py       #   Retrieval evaluation measurements
 │   ├── teblig/ · yonetmelik/     # ⬜ empty
-├── tests/kanun/                  # 23 files, 381 tests (+3 real-model: pytest -m model)
+├── tests/
+│   ├── kanun/                    # 22 files, 328 tests (+3 real-model: pytest -m model)
+│   ├── teblig/                   # 2 files, 53 tests
+│   └── yonetmelik/               # ⬜ empty
 ├── colab/
 │   ├── bge_m3_embed.ipynb        # Corpus embedding (GPU)
 │   └── rerank_olc.ipynb          # Reranker measurement (T4)

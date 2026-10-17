@@ -239,7 +239,10 @@ MevzuatTool/
 │   │       ├── onnx_export.py · onnx_quantize.py  # ONNX FP32 export · dinamik int8
 │   │       └── metrik_*.py       #   Retrieval değerlendirme ölçümleri
 │   ├── teblig/ · yonetmelik/     # ⬜ boş
-├── tests/kanun/                  # 23 dosya, 381 test (+3 gerçek-model: pytest -m model)
+├── tests/
+│   ├── kanun/                    # 22 dosya, 328 test (+3 gerçek-model: pytest -m model)
+│   ├── teblig/                   # 2 dosya, 53 test
+│   └── yonetmelik/               # ⬜ boş
 ├── colab/
 │   ├── bge_m3_embed.ipynb        # Korpus embed (GPU)
 │   └── rerank_olc.ipynb          # Reranker ölçümü (T4)
