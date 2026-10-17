@@ -389,11 +389,14 @@ def modlu_ara(dogal, indeks, sorgu, mod="otomatik", top_k=10, yururlukte_only=Tr
         neden = "; ".join(c.aciklama for c in cozumler if c.aciklama)
         return dogal_dil("eslesme_yok", f"{neden} → doğal dil moduna düşüldü", ayr.atiflar, cozumler)
 
+    # aynı madde + aynı alt-parça bir kez; aynı maddenin FARKLI alt-parçaları ('m. 141/1 ve m. 141/2')
+    # ayrı satır — her atıf kendi cevabını alsın
     satirlar, gorulen = [], set()
     for i, c in enumerate(cozumler, 1):
         for e in c.eslesmeler:
-            if e.kayit.madde_id not in gorulen:
-                gorulen.add(e.kayit.madde_id)
+            anahtar = (e.kayit.madde_id, (e.alt_parca.fikra, e.alt_parca.bent) if e.alt_parca else None)
+            if anahtar not in gorulen:
+                gorulen.add(anahtar)
                 satirlar.append((i, e))
     notlar = [c.aciklama for c in cozumler if c.aciklama]
     return ModluSonuc("atif", mod, satirlar=satirlar[:top_k], atiflar=ayr.atiflar, cozumler=cozumler,

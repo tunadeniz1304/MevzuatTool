@@ -665,9 +665,15 @@ def test_coklu_atif_sirasi_ve_top_k(indeks):
         (1, "400-5"), (1, "401-5")]
 
 
-def test_ayni_madde_iki_kez_donmez(indeks):
-    s = modlu_ara(SahteDogal(), indeks, "TCK m. 141 ve 5237 sayılı Kanun m. 141/2")
+def test_ayni_madde_ayni_alt_parca_bir_kez_doner(indeks):
+    s = modlu_ara(SahteDogal(), indeks, "TCK m. 141 son fıkrası ve TCK m. 141/2")   # ikisi de (2)
     assert len(s.atiflar) == 2 and _satirlar(s) == [(1, "100-141")]
+
+
+def test_ayni_maddenin_farkli_alt_parcalari_ayri_satir(indeks):
+    s = modlu_ara(SahteDogal(), indeks, "TCK m. 141/1 ve m. 141/2")
+    assert _satirlar(s) == [(1, "100-141"), (2, "100-141")]
+    assert [e.alt_parca.fikra for _, e in s.satirlar] == ["(1)", "(2)"]
 
 
 def test_atif_modunda_yururluk_filtresi_uygulanmaz(indeks):
