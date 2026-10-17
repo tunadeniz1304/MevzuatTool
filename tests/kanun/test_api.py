@@ -274,6 +274,35 @@ def test_openapi_semasi_mod_alanini_icerir():
     assert "atif" in sema["AraYanit"]["properties"] and "atif" in sema["SonucModel"]["properties"]
 
 
+def test_varsayilan_lifespan_ayni_korpustan_bm25_ve_atif_indeksi_kurar(tmp_path, monkeypatch):
+    """Fabrikasız (servis) dalı: arama_kur → gerçek bm25_kur, atif_indeks_kur → aynı KORPUS_YOL.
+    Qdrant client'ı ve embedder sahte (ağ/model yok); atıf sorgusu ikisini de hiç çağırmaz."""
+    import json
+    import qdrant_client
+    import kanun.retrieval.fabrika as fabrika
+
+    yol = tmp_path / "korpus.jsonl"
+    yol.write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in ATIF_KORPUS), encoding="utf-8")
+    monkeypatch.setenv("KORPUS_YOL", str(yol))
+    monkeypatch.setenv("RERANK_BACKEND", "kapali")
+
+    class SahteQdrant:
+        def __init__(self, url=None, **kw):
+            pass
+
+        def collection_exists(self, ad):
+            return True
+
+    monkeypatch.setattr(qdrant_client, "QdrantClient", SahteQdrant)
+    monkeypatch.setattr(fabrika, "embedder_sec", lambda ayar: (lambda s: ([0.0], {})))
+    with TestClient(uygulama_olustur()) as c:
+        saglik = c.get("/saglik").json()
+        j = c.post("/ara", json={"sorgu": "TCK m. 141/2"}).json()
+    yururlukte = sum(r["metadata"]["yurutluk"] == "yürürlükte" for r in ATIF_KORPUS)
+    assert saglik["madde_sayisi"] == yururlukte and saglik["atif_indeks"] == len(ATIF_KORPUS)  # mülga dahil
+    assert j["config"]["mod"] == "atif" and j["sonuclar"][0]["atif"]["alt_parca"]["metin"] == "(2) ikinci"
+
+
 def test_korpus_degisirse_503(tmp_path):
     import json
     from kanun.retrieval.atif_getir import atif_indeks_kur
