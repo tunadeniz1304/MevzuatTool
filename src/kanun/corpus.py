@@ -2,8 +2,9 @@
 
 Modüler sınır (CLAUDE.md): bağımsız teslim edilebilir JSONL `{id, text, metadata}`.
   - text   = madde_baslik + body_temiz → embedding girdisi (anlamsal arama bunun üzerinde).
-  - metadata = hiyerarşi + yürürlük + kaynak + fıkra/bent ağacı + değişiklik künyeleri +
-               dipnot/tablo. Filtreleme (yürürlük), atıf (kanun_no+madde_no), gösterim için.
+  - metadata = tür (mevzuat_tur) + R.G. tarihi/sayısı + hiyerarşi + yürürlük + kaynak + fıkra/bent
+               ağacı + değişiklik künyeleri + dipnot/tablo. Filtreleme (yürürlük), atıf
+               (kanun_no+madde_no), gösterim için.
 Boş-gövde maddeler (içeriksiz işlenmiş maddeler) korpusa GİRMEZ. Mülga DAHİL ama işaretli
 (tarihsel sorgu için; yurutluk='mülga' ile filtrelenebilir).
 """
@@ -11,6 +12,11 @@ import re
 from dataclasses import asdict
 
 from kanun.enrich import Madde
+
+# Tür etiketi: her chunk'ta açık (korpus tek-tür olsa da). Türler ileride tek Qdrant'ta birleşebilsin
+# diye (CLAUDE.md, ADR-0014) — tebliğ/yönetmelik kendi değerini yazar. Değer bedesten tür adıdır
+# (fetch.py liste isteğindeki mevzuatTurList ["KANUN"] / yanıttaki mevzuatTur.name ile aynı).
+MEVZUAT_TUR = "KANUN"
 
 # İçeriksiz yönlendirme notu: maddenin TÜM gövdesi '(... yerine işlenmiştir.)' veya
 # '(... ile ilgili olup ... işlenmiştir.)' gibi bir nottan ibaret — gerçek hüküm BAŞKA kanuna
@@ -154,14 +160,17 @@ def _text(m: Madde) -> str:
     return govde
 
 
-def yonlendirme_chunk(m: Madde, kanun_ad: str, kanun_no: str) -> dict | None:
+def yonlendirme_chunk(m: Madde, kanun_ad: str, kanun_no: str, *,
+                      resmi_gazete_tarihi: str | None = None,
+                      resmi_gazete_sayisi: str | None = None) -> dict | None:
     """FAZ 22f: içeriksiz 'yerine işlenmiştir' maddesini YÖNLENDİRME chunk'ına çevir (madde_to_chunk
     bunu eler; bu fonksiyon build_corpus'ta atıf-alan işlenmiş-maddeler için AYRICA çağrılır).
 
     Gerçek hüküm başka kanuna taşınmış → madde no korunur (atıf o maddeyi bulur), gövde boş,
     hedef kanun 'tasindigi_kanun' etiketiyle. Normal içerik-chunk'ı DEĞİL (madde_tipi ayrı);
     CLAUDE.md 'boş-gövde girmez' prensibi normal-içerik için — bu bilinçli, dar istisna (yön kaydı).
-    Yalnız gövde SADECE işlenmiştir-notuysa ve hedef kanun çıkarılabiliyorsa chunk döner; yoksa None."""
+    Yalnız gövde SADECE işlenmiştir-notuysa ve hedef kanun çıkarılabiliyorsa chunk döner; yoksa None.
+    R.G. alanları kanun düzeyidir (madde_to_chunk ile aynı sözleşme)."""
     govde = (m.body_temiz or m.body or "").strip()
     if not govde or not _sadece_islenmis_notu(govde):
         return None
@@ -174,8 +183,11 @@ def yonlendirme_chunk(m: Madde, kanun_ad: str, kanun_no: str) -> dict | None:
         "text": "",
         "metadata": {
             "mevzuat_id": mevzuat_id,
+            "mevzuat_tur": MEVZUAT_TUR,
             "kanun_no": kanun_no,
             "kanun_ad": kanun_ad,
+            "resmi_gazete_tarihi": resmi_gazete_tarihi,
+            "resmi_gazete_sayisi": resmi_gazete_sayisi,
             "madde_no": m.no,
             "madde_baslik": None,
             "madde_tipi": "islenmistir_yonlendirme",
@@ -193,12 +205,18 @@ def yonlendirme_chunk(m: Madde, kanun_ad: str, kanun_no: str) -> dict | None:
     }
 
 
-def madde_to_chunk(m: Madde, kanun_ad: str, kanun_no: str) -> dict | None:
+def madde_to_chunk(m: Madde, kanun_ad: str, kanun_no: str, *,
+                   resmi_gazete_tarihi: str | None = None,
+                   resmi_gazete_sayisi: str | None = None) -> dict | None:
     """Bir Madde'yi korpus chunk'ına çevir. Boş gövde VEYA sadece-işlenmiştir-notu → None.
 
     m.id mevzuatId tabanlıdır (enrich'e mid verilir → 'MID-madde'; globalde benzersiz).
     kanun_no AYRI parametredir: kanun numarası globalde benzersiz DEĞİL (6551 iki kanun) ve
-    id çok-parçalı olabilir ('MID-5-3') → id'den parse güvenilmez."""
+    id çok-parçalı olabilir ('MID-5-3') → id'den parse güvenilmez.
+
+    resmi_gazete_tarihi ('YYYY-MM-DD') / resmi_gazete_sayisi (str) KANUN düzeyidir: build katmanı
+    bedesten liste yanıtından verir (fetch.parse_liste_kaydi). Bilinmiyorsa None — alan yine DURUR
+    (şema sabit). Yalnız metadata'ya eklenir; id/text/filtreleme kararlarına etkisi YOK."""
     govde = (m.body_temiz or m.body or "").strip()
     if not govde or _sadece_islenmis_notu(govde):
         return None
@@ -220,8 +238,11 @@ def madde_to_chunk(m: Madde, kanun_ad: str, kanun_no: str) -> dict | None:
         "text": text,
         "metadata": {
             "mevzuat_id": mevzuat_id,
+            "mevzuat_tur": MEVZUAT_TUR,
             "kanun_no": kanun_no,
             "kanun_ad": kanun_ad,
+            "resmi_gazete_tarihi": resmi_gazete_tarihi,
+            "resmi_gazete_sayisi": resmi_gazete_sayisi,
             "madde_no": m.no,
             "madde_baslik": m.madde_baslik,
             "madde_tipi": m.madde_tipi,
@@ -242,11 +263,15 @@ def madde_to_chunk(m: Madde, kanun_ad: str, kanun_no: str) -> dict | None:
     }
 
 
-def maddeler_to_chunks(maddeler, kanun_ad: str, kanun_no: str) -> list[dict]:
-    """Madde listesini korpus chunk listesine çevir; boş-gövde + içeriksiz-not maddeleri eler."""
+def maddeler_to_chunks(maddeler, kanun_ad: str, kanun_no: str, *,
+                       resmi_gazete_tarihi: str | None = None,
+                       resmi_gazete_sayisi: str | None = None) -> list[dict]:
+    """Madde listesini korpus chunk listesine çevir; boş-gövde + içeriksiz-not maddeleri eler.
+    R.G. alanları (kanun düzeyi) her chunk'a aynen geçer."""
     out = []
     for m in maddeler:
-        c = madde_to_chunk(m, kanun_ad, kanun_no)
+        c = madde_to_chunk(m, kanun_ad, kanun_no, resmi_gazete_tarihi=resmi_gazete_tarihi,
+                           resmi_gazete_sayisi=resmi_gazete_sayisi)
         if c is not None:
             out.append(c)
     return out

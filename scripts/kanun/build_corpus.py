@@ -2,6 +2,9 @@
 
 Pipeline: fetch (cache'li HTML + tree) → normalize → split_articles → parse_tree →
 enrich → maddeler_to_chunks → korpus.jsonl. Boş-gövde maddeler elenir; mülga işaretli kalır.
+Kanun düzeyi R.G. tarihi/sayısı liste cache'inden (data/kanun/raw/_kanun_liste.json, ağsız) her
+chunk'a eklenir; cache yoksa alanlar None olur, başka hiçbir şey değişmez (doldurmak için:
+python -m kanun.fetch).
 
 Çalıştırma:
   .venv/Scripts/python.exe scripts/build_corpus.py                 # hepsi (916)
@@ -11,7 +14,7 @@ enrich → maddeler_to_chunks → korpus.jsonl. Boş-gövde maddeler elenir; mü
 import asyncio, json, os, pathlib, sys, time
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent.parent / "src"))
-from kanun.fetch import MevzuatFetcher
+from kanun.fetch import MevzuatFetcher, liste_cache_oku, parse_liste_kaydi
 from kanun.normalize import normalize_text
 from kanun.chunker import split_articles
 from kanun.tree import parse_tree
@@ -38,12 +41,15 @@ def _norm_madde_no(x):
     return _re.sub(r"[\s\-]+", "", x)
 
 
-async def build_one(f, no, mid, ad, atif_madde=None):
+async def build_one(f, no, mid, ad, atif_madde=None, liste_kaydi=None):
     """Bir kanunu çek + parse + chunk listesi döndür.
 
     atif_madde: {(kanun_no, norm_madde_no)} — FAZ 22f: içeriksiz 'yerine işlenmiştir' maddesi
     normalde elenir; AMA bu sette (birileri atıf yapmış) ise YÖNLENDİRME chunk'ı üretilir
-    (madde bulunur, gövde boş, hedef kanun etiketli). Atıf-farkındalık yalnız build katmanında."""
+    (madde bulunur, gövde boş, hedef kanun etiketli). Atıf-farkındalık yalnız build katmanında.
+    liste_kaydi: bu kanunun ham bedesten liste kaydı (yoksa None) → R.G. tarihi/sayısı, kanunun
+    TÜM chunk'larına (yönlendirme dahil). Yalnız metadata'ya eklenir; parse/filtre etkilenmez."""
+    rg = parse_liste_kaydi(liste_kaydi)          # asla hata atmaz; kayıt/alan yoksa None
     nodes = await f.fetch_tree(mid)
     html = await f.fetch_html(mid)
     content = f.html_to_text(html)
@@ -56,7 +62,7 @@ async def build_one(f, no, mid, ad, atif_madde=None):
     # id MID tabanlı (globalde benzersiz; kanun_no tekrar edebilir — 6551 iki kanun) → enrich'e mid.
     # kanun_no (no) korpus metadata'sında AYRI taşınır.
     maddeler, _gdip = enrich(arts, tree, mid, html_tables=ht, html_dipnotlar=hd, gercek_kanun_no=no)
-    chunks = maddeler_to_chunks(maddeler, kanun_ad=ad, kanun_no=no)
+    chunks = maddeler_to_chunks(maddeler, kanun_ad=ad, kanun_no=no, **rg)
     # FAZ 22f: atıf-alan işlenmiş-maddeler için yönlendirme chunk'ı ekle (maddeler_to_chunks eledi).
     if atif_madde:
         no_norm = str(no).strip().lstrip("0") or "0"    # atıf seti kanun_no'yu sıfır-dolgusuz tutar
@@ -64,7 +70,7 @@ async def build_one(f, no, mid, ad, atif_madde=None):
         for m in maddeler:
             mn = _norm_madde_no(m.no)
             if (no_norm, mn) in atif_madde and mn not in mevcut:
-                yc = yonlendirme_chunk(m, kanun_ad=ad, kanun_no=no)
+                yc = yonlendirme_chunk(m, kanun_ad=ad, kanun_no=no, **rg)
                 if yc is not None:
                     chunks.append(yc)
                     mevcut.add(mn)
@@ -94,6 +100,17 @@ def _load_atif_madde():
     return out
 
 
+def _load_liste(cache_dir):
+    """R.G. tarihi/sayısı kaynağı: bedesten liste yanıtı cache'i {mid: ham kayıt} (üretici:
+    python -m kanun.fetch). AĞA GİTMEZ. Yoksa {}; bozuksa uyarı + {} → R.G. alanları None, build
+    kırılmaz, chunk sayısı/diğer alanlar değişmez."""
+    try:
+        return liste_cache_oku(cache_dir)
+    except ValueError as e:
+        print(f"[UYARI] liste cache okunamadı, R.G. alanları None: {e}", flush=True)
+        return {}
+
+
 async def main():
     LIMIT = int(os.environ.get("CORPUS_LIMIT", "0")) or None
     ONLY_MID = os.environ.get("CORPUS_MID", "").strip() or None
@@ -109,16 +126,24 @@ async def main():
         elif LIMIT:
             ids = ids[:LIMIT]
         print(f"{len(ids)} kanun işlenecek -> {OUT}", flush=True)
+        liste = _load_liste(f.cache)
+        n_rg = sum(1 for _no, mid, _ad in ids
+                   if parse_liste_kaydi(liste.get(mid))["resmi_gazete_tarihi"])
+        print(f"[R.G.] {n_rg}/{len(ids)} kanunda R.G. tarihi var (liste cache: {len(liste)} kayıt)"
+              + ("" if liste else " — cache yok, doldurmak için: python -m kanun.fetch"), flush=True)
         n_chunk = 0
         n_kanun = 0
+        n_rg_chunk = 0
         with OUT.open("w", encoding="utf-8") as out:
             for no, mid, ad in ids:
                 try:
-                    chunks = await build_one(f, no, mid, ad, atif_madde=atif_madde)
+                    chunks = await build_one(f, no, mid, ad, atif_madde=atif_madde,
+                                             liste_kaydi=liste.get(mid))
                     for c in chunks:
                         out.write(json.dumps(c, ensure_ascii=False) + "\n")
                     n_chunk += len(chunks)
                     n_kanun += 1
+                    n_rg_chunk += sum(1 for c in chunks if c["metadata"].get("resmi_gazete_tarihi"))
                     if n_kanun % 25 == 0:
                         print(f"  {n_kanun}/{len(ids)} kanun, {n_chunk} chunk "
                               f"({time.monotonic()-t0:.0f}s) son: {no}", flush=True)
@@ -126,6 +151,7 @@ async def main():
                     print(f"  [HATA] {no} ({mid}): {type(e).__name__} {str(e)[:60]}", flush=True)
     print(f"\nKORPUS TAMAM: {n_kanun} kanun, {n_chunk} chunk "
           f"({time.monotonic()-t0:.0f}s) -> {OUT}", flush=True)
+    print(f"  R.G. tarihi dolu chunk: {n_rg_chunk}/{n_chunk}", flush=True)
 
 
 if __name__ == "__main__":

@@ -130,8 +130,48 @@ biri yürürlükte ise madde yürürlükte.
 ### Aşama 6 — `corpus`: RAG chunk üretimi
 Zenginleştirilmiş maddeyi son `{id, text, metadata}` JSONL satırına çevirir:
 - **`text`** = başlık + temiz gövde → embedding'e gidecek (anlamsal arama bunun üzerinde)
-- **`metadata`** = hiyerarşi + yürürlük + fıkra/bent ağacı + değişiklik künyeleri (filtreleme/atıf için)
+- **`metadata`** = tür + R.G. künyesi + hiyerarşi + yürürlük + fıkra/bent ağacı + değişiklik künyeleri (filtreleme/atıf için)
 - Boş/içeriksiz/saf-artefakt maddeler filtrelenir; tablolar text'ten çıkarılıp metadata'da tutulur
+
+### Yan kol — kanun düzeyi alanlar: tür + R.G. künyesi
+Madde metninden **çıkarılmayan**, kanunun tamamına ait iki bilgi her chunk'a eklenir:
+
+```
+bedesten searchDocuments (liste yanıtı) ──▶ _kanun_liste.json (ham cache) ──▶ parse_liste_kaydi ──▶ corpus
+        python -m kanun.fetch                  data/kanun/raw/                build_corpus (ağsız)
+```
+
+| Alan | Kaynak | Biçim | Bilinmiyorsa |
+|---|---|---|---|
+| `mevzuat_tur` | sabit `corpus.MEVZUAT_TUR` (bedesten tür adı; liste isteğindeki `mevzuatTurList: ["KANUN"]`) | `"KANUN"` | her zaman dolu |
+| `resmi_gazete_tarihi` | liste kaydının `resmiGazeteTarihi` alanı | ISO tarih `"YYYY-MM-DD"` | `null` |
+| `resmi_gazete_sayisi` | liste kaydının `resmiGazeteSayisi` alanı | string `"29677"` (`kanun_no` gibi) | `null` |
+
+- **Neden `mevzuat_tur`?** Korpus tek türlü olduğu için alan örtüktü; tebliğ/yönetmelik korpusları
+  ileride tek Qdrant'ta birleşebilsin diye her chunk'ta açık taşınır (CLAUDE.md, ADR-0014). Tebliğ
+  ve yönetmelik kendi değerlerini yazar (`TEBLIGLER`, `YONETMELIK`).
+- **Kaynak ölçüldü (bedesten canlı, 2026-10-18).** Liste kaydı örneği (KVKK):
+  `"resmiGazeteTarihi": "2016-04-07T00:00:00"`, `"resmiGazeteSayisi": "29677"`. Bazı yeni
+  kayıtlarda saat kısmı kayıt zamanı gürültüsüdür (`"2025-02-27T10:39:37.023"`); **yalnız tarih
+  kısmı** alınır, saat dilimi dönüşümü yapılmaz. ISO dışı biçim, geçersiz takvim günü veya yanlış
+  tip → `null` (tahmin yok).
+- **Kabul tarihi taşınmadı:** liste yanıtında böyle bir alan yok (HTML başlığındaki "Kabul Tarihi"
+  ayrıştırılmıyor — bu parser değişikliği olurdu).
+- **Cache `_kanun_ids.txt`'den bağımsız:** liste canlıda değişebilir (ölçümde canlı 917, ids cache
+  916 kanun). Build'in kanun seti ve sırası ids cache'inden gelir; liste cache'i yalnız **mevzuatId
+  ile eşleşen** kanunlara alan ekler, kapsamı değiştirmez.
+- **`null` davranışı:** liste cache'i yoksa, bozuksa (build uyarı basar), kanun listede yoksa ya da
+  alan eksik/bozuksa R.G. alanları `null` olur; build **kırılmaz**. Alanlar şemada her zaman
+  **durur** (filtre tutarlılığı). Değişiklik yalnız **eklemelidir**: chunk seti, `id`, `text` ve
+  diğer tüm metadata alanları R.G. bilgisi olsa da olmasa da birebir aynıdır (testlerle kilitli:
+  `tests/kanun/test_corpus.py`, `tests/kanun/test_build_corpus.py`).
+- **Doldurma ve doğrulama:** `python -m kanun.fetch` (cache doluysa istek atmaz; yoksa ~46 liste
+  sayfası) → `python scripts/kanun/build_corpus.py`. Build çıktısı iki satır basar:
+  `[R.G.] X/Y kanunda R.G. tarihi var` ve `R.G. tarihi dolu chunk: N/M`.
+- **Qdrant payload'ı:** `ingest_qdrant.py` payload'ı seçmez, `meta.json`'u aynen yazar; seçim
+  `colab/bge_m3_embed.ipynb`'deki `payloadlar` hücresindedir ve `mevzuat_tur`,
+  `resmi_gazete_tarihi`, `resmi_gazete_sayisi` oraya eklendi. Alanlar Qdrant'a ancak güncel
+  korpusla **yeniden embed + ingest** sonrası girer.
 
 ---
 
@@ -159,8 +199,12 @@ haklarına sahiptir.
   "id": "104383-11",
   "text": "İlgili kişinin hakları\n(1) Herkes, veri sorumlusuna başvurarak kendisiyle ilgili; a) Kişisel veri işlenip işlenmediğini öğrenme, b) ... haklarına sahiptir.",
   "metadata": {
+    "mevzuat_id": "104383",
+    "mevzuat_tur": "KANUN",
     "kanun_no": "6698",
     "kanun_ad": "KİŞİSEL VERİLERİN KORUNMASI KANUNU",
+    "resmi_gazete_tarihi": "2016-04-07",
+    "resmi_gazete_sayisi": "29677",
     "madde_no": "11",
     "madde_baslik": "İlgili kişinin hakları",
     "madde_tipi": "asil",
@@ -218,6 +262,9 @@ hiyerarsi_yolu = "İKİNCİ KİTAP › BİRİNCİ KISIM › BİRİNCİ BÖLÜM �
 - **Madde → fıkra → bent** üç seviye doğru ayrıştırıldı: 1 fıkra `(1)`, içinde 9 bent (`a` → `ğ`,
   Türkçe alfabe sırasıyla)
 - **Hiyerarşi** metinden değil **ağaçtan** alındı: `ÜÇÜNCÜ BÖLÜM - Haklar ve Yükümlülükler`
+- **Kanun düzeyi** alanlar maddeden gelmez: `mevzuat_tur` sabittir, `resmi_gazete_tarihi` /
+  `resmi_gazete_sayisi` **bedesten liste kaydından** gelir; kanunun tüm chunk'larında aynıdır
+  (7/4/2016 tarihli ve 29677 sayılı Resmî Gazete)
 - **`text`** (embedding girdisi) ile **`metadata`** (filtreleme/atıf) ayrı: arama text üzerinde,
   "yürürlükte mi", "6698 Madde 11" gibi sorgular metadata üzerinde
 - **Yürürlük** her seviyede ayrı: madde, fıkra ve her bent kendi durumunu taşır

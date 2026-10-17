@@ -11,9 +11,11 @@ strip, base64 decode, istek-sarmalama) ve ağaç-parse buraya gömülüdür.
 429'da Retry-After'ı OKUR, tam o kadar bekler, retry eder; proaktif olarak kova dolmadan da hız
 ayarlar (_RateState). Production-ingest omurgası: `python -m kanun.fetch` ile deterministik,
 sıfır-kayıp çeker; cache (data/kanun/raw/html_<mid>.html) sayesinde kesinti-güvenli (docker-dostu).
+Liste yanıtının ham kayıtları (R.G. tarihi/sayısı) data/kanun/raw/_kanun_liste.json'a cache'lenir.
 """
 import asyncio
 import base64
+import datetime
 import html as _htmllib
 import json
 import pathlib
@@ -101,6 +103,72 @@ def parse_tree_json(children: list) -> list:
         )
         out.append(node)
     return out
+
+
+# --- Liste (searchDocuments) yanıtı → KANUN-DÜZEYİ künye (R.G. tarihi/sayısı) ---
+# Ölçüldü (bedesten canlı, 2026-10-18): her mevzuatList kaydı 'resmiGazeteTarihi' (ISO datetime:
+# '2016-04-07T00:00:00'; bazı yeni kayıtlarda saat kısmı kayıt-zamanı gürültüsü:
+# '2025-02-27T10:39:37.023' — tarih kısmı R.G. tarihidir) ve 'resmiGazeteSayisi' (string: '29677')
+# taşır. Kabul tarihi liste yanıtında YOK. Ham kayıtlar {mevzuatId: kayıt} olarak
+# '_kanun_liste.json'a cache'lenir; bu cache '_kanun_ids.txt'den BAĞIMSIZDIR (build'in kanun seti ve
+# sırası ids cache'inden gelir — canlı liste değişse de korpus kapsamı değişmez).
+LISTE_CACHE = "_kanun_liste.json"
+_ISO_TARIH = re.compile(r"^(\d{4})-(\d{2})-(\d{2})(?:T|$)")
+
+
+def _iso_tarih(deger) -> str | None:
+    """bedesten tarih alanı → 'YYYY-MM-DD'. Yalnız ISO biçimi ('YYYY-MM-DD' / 'YYYY-MM-DDThh:mm:ss[.f]')
+    kabul edilir; saat kısmı atılır (saat dilimi dönüşümü YOK — API yerel tarihi verir). Başka biçim,
+    geçersiz takvim günü veya str olmayan değer → None (tahmin yok)."""
+    if not isinstance(deger, str):
+        return None
+    m = _ISO_TARIH.match(deger.strip())
+    if not m:
+        return None
+    try:
+        return datetime.date(int(m.group(1)), int(m.group(2)), int(m.group(3))).isoformat()
+    except ValueError:
+        return None
+
+
+def _rg_sayisi(deger) -> str | None:
+    """bedesten 'resmiGazeteSayisi' → string ('29677'; kanun_no gibi str tutulur). int gelirse str'e
+    çevrilir; boş string / bool / başka tip → None."""
+    if isinstance(deger, bool):
+        return None
+    if isinstance(deger, int):
+        return str(deger)
+    if isinstance(deger, str):
+        return deger.strip() or None
+    return None
+
+
+def parse_liste_kaydi(kayit) -> dict:
+    """Ham liste kaydı (mevzuatList öğesi) → chunk metadata'sının kanun-düzeyi R.G. alanları.
+    Kayıt yok / alan eksik / değer bozuk → ilgili alan None. ASLA hata atmaz (build döngüsü kanun
+    başına hata yakalayıp kanunu ATLAR — burada patlamak chunk kaybı olurdu)."""
+    if not isinstance(kayit, dict):
+        kayit = {}
+    return {
+        "resmi_gazete_tarihi": _iso_tarih(kayit.get("resmiGazeteTarihi")),
+        "resmi_gazete_sayisi": _rg_sayisi(kayit.get("resmiGazeteSayisi")),
+    }
+
+
+def liste_cache_oku(cache_dir) -> dict:
+    """<cache_dir>/_kanun_liste.json → {mevzuatId: ham kayıt}. AĞA GİTMEZ (build bunu çağırır).
+    Dosya yoksa {} (R.G. alanları None olur). Okunamayan/bozuk/beklenmedik biçim → ValueError
+    (çağıran karar verir: build uyarıp None ile sürer, fetch yeniden çeker)."""
+    path = pathlib.Path(cache_dir) / LISTE_CACHE
+    if not path.exists():
+        return {}
+    try:
+        veri = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as e:
+        raise ValueError(f"{path}: okunamadı ({type(e).__name__})") from e
+    if not isinstance(veri, dict) or not all(isinstance(v, dict) for v in veri.values()):
+        raise ValueError(f"{path}: beklenen {{mevzuatId: kayıt}} sözlüğü değil")
+    return {str(k): v for k, v in veri.items()}
 
 
 # --- Rate-limit çekirdeği ---
@@ -197,6 +265,48 @@ class MevzuatFetcher:
             ids_path.write_text("\n".join(f"{n}\t{m}\t{a}" for n, m, a in uniq), encoding="utf-8")
         return uniq
 
+    async def fetch_kanun_liste(self, page_size: int = 20, use_cache: bool = True) -> dict:
+        """KANUN liste yanıtının HAM kayıtları {mevzuatId: kayıt} — R.G. tarihi/sayısı kaynağı.
+
+        Cache: <cache>/_kanun_liste.json (doluysa istek atılmaz; yok/boş/bozuksa yeniden çekilir).
+        '_kanun_ids.txt'ye DOKUNMAZ: canlı liste değişebilir (2026-10-18: canlı 917, ids cache 916)
+        ama build'in kanun seti/sırası ids cache'inden gelir; bu çekim onu değiştiremez.
+        Sessiz-hata kapısı: FMTY != SUCCESS → RuntimeError (sunucu ör. pageSize>20'de 200 + boş
+        liste döner); yarım/boş cache YAZILMAZ."""
+        path = self.cache / LISTE_CACHE
+        if use_cache:
+            try:
+                kayitlar = liste_cache_oku(self.cache)
+            except ValueError:
+                kayitlar = {}                      # bozuk cache → yeniden çek (üzerine yazılır)
+            if kayitlar:
+                return kayitlar
+        kayitlar, page, total, goruldu = {}, 1, None, 0
+        while page <= 200:   # sonsuz-döngü guard'ı (917 kanun / 20 ≈ 46 sayfa)
+            inner = {"phrase": "", "mevzuatTurList": ["KANUN"],
+                     "sortFields": ["RESMI_GAZETE_TARIHI"], "sortDirection": "desc"}
+            body = await _post_with_retry(self._client, "/searchDocuments",
+                                          _wrap_paging(inner, page, page_size), self._rate)
+            fmty = (body.get("metadata") or {}).get("FMTY")
+            if fmty != "SUCCESS":
+                raise RuntimeError(f"searchDocuments sayfa {page}: FMTY={fmty}")
+            data = body.get("data") or {}
+            docs = data.get("mevzuatList") or []
+            total = data.get("total", total)
+            if not docs:
+                break
+            goruldu += len(docs)
+            for d in docs:
+                mid = str(d.get("mevzuatId") or "")
+                if mid and mid not in kayitlar:    # ilk görülen kazanır (fetch_kanun_ids gibi)
+                    kayitlar[mid] = d
+            if len(docs) < page_size or (total and goruldu >= total):
+                break
+            page += 1
+        if kayitlar:
+            path.write_text(json.dumps(kayitlar, ensure_ascii=False), encoding="utf-8")
+        return kayitlar
+
     async def fetch_tree(self, mid: str, use_cache: bool = True) -> list:
         """Madde ağacı (TreeNode listesi). Ham API children JSON'unu diske cache'ler (devam-güvenli;
         tekrar-üretim ucuzlar). Boş gelirse gerçek 0-madde (Retry-After yutulmaz; boş cache YAZILMAZ
@@ -235,7 +345,8 @@ class MevzuatFetcher:
 
 
 async def _main():
-    """python -m kanun.fetch — id listesi + ilk N kanun HTML cache (CLI/docker giriş)."""
+    """python -m kanun.fetch — id listesi + liste kayıtları (R.G.) + ilk N kanun HTML cache
+    (CLI/docker giriş)."""
     import os
     limit = int(os.environ.get("FETCH_LIMIT", "0")) or None
     async with MevzuatFetcher() as f:
@@ -248,6 +359,10 @@ async def _main():
             ids = await f.fetch_kanun_ids()
             ids_path.write_text("\n".join(f"{n}\t{m}\t{a}" for n, m, a in ids), encoding="utf-8")
             print(f"[OK] {len(ids)} kanun id -> {ids_path}", flush=True)
+        # R.G. tarihi/sayısı kaynağı (build_corpus bunu ağsız okur); cache doluysa istek atılmaz.
+        liste = await f.fetch_kanun_liste()
+        print(f"[OK] {len(liste)} liste kaydı (R.G. tarihi/sayısı) -> {f.cache / LISTE_CACHE}",
+              flush=True)
         if limit:
             ids = ids[:limit]
         for i, (no, mid, ad) in enumerate(ids, 1):

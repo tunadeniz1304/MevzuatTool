@@ -84,7 +84,7 @@ class Bent:
 class Fikra:
     no: str | None
     text: str
-    bentler: list
+    bentler: list[Bent]
     yurutluk: str
 
 

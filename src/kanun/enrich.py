@@ -9,7 +9,6 @@ import re
 from dataclasses import dataclass, field
 
 from kanun.chunker import Article, extract_status
-from kanun.tree import TreeIndex
 from kanun.dipnot import Dipnot, split_dipnot_apendiksi, baglanan_dipnotlar
 from kanun.degisiklik import Degisiklik, parse_kunyeler, temizle_kunyeler
 from kanun.fikra import Fikra, parse_fikralar

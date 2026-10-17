@@ -37,14 +37,16 @@ def _ensure_utf8(html: str) -> str:
 async def main() -> None:
     os.makedirs(OUT_DIR, exist_ok=True)
     client = BedestenClient()
-    for label, mid in LAWS.items():
-        doc = await client.get_document_content(mid)
-        html = _ensure_utf8(doc.content or "")
-        path = os.path.join(OUT_DIR, f"html_{mid}.html")
-        with open(path, "w", encoding="utf-8") as f:
-            f.write(html)
-        print(f"[OK] {label} ({mid}): {len(html)} krk -> {path}")
-    await client.close()
+    try:
+        for label, mid in LAWS.items():
+            doc = await client.get_document_content(mid)
+            html = _ensure_utf8(doc.content or "")
+            path = os.path.join(OUT_DIR, f"html_{mid}.html")
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(html)
+            print(f"[OK] {label} ({mid}): {len(html)} krk -> {path}")
+    finally:
+        await client.close()   # bir doküman exception atsa da async client kapanır (leak yok)
 
 
 if __name__ == "__main__":
