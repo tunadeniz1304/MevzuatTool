@@ -2,8 +2,8 @@
 
 Modüler sınır (CLAUDE.md): bağımsız teslim edilebilir JSONL `{id, text, metadata}`.
   - text   = madde_baslik + body_temiz → embedding girdisi (anlamsal arama bunun üzerinde).
-  - metadata = hiyerarşi + yürürlük + kaynak + fıkra/bent ağacı + değişiklik künyeleri +
-               dipnot/tablo. Filtreleme (yürürlük), atıf (kanun_no+madde_no), gösterim için.
+  - metadata = tür (mevzuat_tur) + hiyerarşi + yürürlük + kaynak + fıkra/bent ağacı + değişiklik
+               künyeleri + dipnot/tablo. Filtreleme (yürürlük), atıf (kanun_no+madde_no), gösterim için.
 Boş-gövde maddeler (içeriksiz işlenmiş maddeler) korpusa GİRMEZ. Mülga DAHİL ama işaretli
 (tarihsel sorgu için; yurutluk='mülga' ile filtrelenebilir).
 """
@@ -11,6 +11,11 @@ import re
 from dataclasses import asdict
 
 from kanun.enrich import Madde
+
+# Tür etiketi: her chunk'ta açık (korpus tek-tür olsa da). Türler ileride tek Qdrant'ta birleşebilsin
+# diye (CLAUDE.md, ADR-0014) — tebliğ/yönetmelik kendi değerini yazar. Değer bedesten tür adıdır
+# (fetch.py liste isteğindeki mevzuatTurList ["KANUN"] / yanıttaki mevzuatTur.name ile aynı).
+MEVZUAT_TUR = "KANUN"
 
 # İçeriksiz yönlendirme notu: maddenin TÜM gövdesi '(... yerine işlenmiştir.)' veya
 # '(... ile ilgili olup ... işlenmiştir.)' gibi bir nottan ibaret — gerçek hüküm BAŞKA kanuna
@@ -174,6 +179,7 @@ def yonlendirme_chunk(m: Madde, kanun_ad: str, kanun_no: str) -> dict | None:
         "text": "",
         "metadata": {
             "mevzuat_id": mevzuat_id,
+            "mevzuat_tur": MEVZUAT_TUR,
             "kanun_no": kanun_no,
             "kanun_ad": kanun_ad,
             "madde_no": m.no,
@@ -220,6 +226,7 @@ def madde_to_chunk(m: Madde, kanun_ad: str, kanun_no: str) -> dict | None:
         "text": text,
         "metadata": {
             "mevzuat_id": mevzuat_id,
+            "mevzuat_tur": MEVZUAT_TUR,
             "kanun_no": kanun_no,
             "kanun_ad": kanun_ad,
             "madde_no": m.no,

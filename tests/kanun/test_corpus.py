@@ -351,3 +351,36 @@ def test_yonlendirme_chunk_hedefsiz_none():
     # Hedef kanunu ('NNNN sayılı') çıkarılamayan not → None (yönlendirilecek hedef yok).
     m = _madde("5", "(Mülga: 1/1/2020)")
     assert yonlendirme_chunk(m, kanun_ad="X", kanun_no="4842") is None
+
+
+# ── Metadata şeması: sabit alan kümesi (her chunk aynı alanları taşır; değer bazen None) ──
+# Alan eklemek/silmek/yeniden adlandırmak bilinçli olmalı → bu küme ile birlikte güncellenir.
+_MADDE_ALANLARI = {
+    "mevzuat_id", "mevzuat_tur", "kanun_no", "kanun_ad",
+    "madde_no", "madde_baslik", "madde_tipi", "yurutluk", "maddeId",
+    "kitap_no", "kitap_baslik", "kisim_no", "kisim_baslik",
+    "bolum_no", "bolum_baslik", "ayirim_no", "ayirim_baslik", "hiyerarsi_yolu",
+    "fikralar", "degisiklik_gecmisi", "dipnotlar", "tablolar",
+}
+_YONLENDIRME_ALANLARI = _MADDE_ALANLARI | {"yerine_islenmistir", "tasindigi_kanun"}
+_ISLENMIS_NOT = ("(25/10/1984 tarihli ve 3065 sayılı Katma Değer Vergisi Kanunu ile ilgili olup "
+                 "yerine işlenmiştir.)")
+
+
+def test_madde_chunk_metadata_semasi_sabit():
+    c = madde_to_chunk(_madde("11", "(1) Herkes başvurabilir."), kanun_ad="KVKK", kanun_no="6698")
+    assert set(c["metadata"]) == _MADDE_ALANLARI
+
+
+def test_yonlendirme_chunk_metadata_semasi_sabit():
+    c = yonlendirme_chunk(_madde("21", _ISLENMIS_NOT), kanun_ad="X", kanun_no="4842")
+    assert set(c["metadata"]) == _YONLENDIRME_ALANLARI
+
+
+def test_mevzuat_tur_her_chunkta_kanun():
+    # CLAUDE.md: türler ileride tek Qdrant'ta birleşebilsin diye metadata.mevzuat_tur açık taşınır
+    # (bedesten tür adı 'KANUN'); yönlendirme chunk'ı da kanun chunk'ıdır.
+    m = _madde("11", "(1) Herkes başvurabilir.")
+    assert madde_to_chunk(m, kanun_ad="KVKK", kanun_no="6698")["metadata"]["mevzuat_tur"] == "KANUN"
+    y = yonlendirme_chunk(_madde("21", _ISLENMIS_NOT), kanun_ad="X", kanun_no="4842")
+    assert y["metadata"]["mevzuat_tur"] == "KANUN"
