@@ -1,0 +1,49 @@
+# Varsayılan test paketi: pytest.ini addopts (-m "not model") geçerli; gerçek model/veri
+# gerektiren testler (-m model) CI'da koşmaz. data/ ve models/ repoda yok, paket onlarsız geçer.
+#
+# Job id `test`, GitHub'da check adı olarak görünür ve main branch protection'da zorunlu
+# tutulur (docs/commit_discipline.md §5.2). Job'u yeniden adlandırırsan ruleset'i de güncelle.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# Aynı ref'e (PR ya da main) yeni push gelince o ref'in süren eski koşusu iptal edilir.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"   # Dockerfile ile aynı (python:3.11-slim)
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      # PyPI'deki düz torch, Linux'ta CUDA'lı wheel ve GB'larca nvidia-*/triton bağımlılığı
+      # çeker. Önce aynı sürümün CPU wheel'i kurulur; sürüm requirements.txt'den okunur (tek
+      # kaynak). 2.5.1+cpu, "torch==2.5.1" pin'ini karşılar (PEP 440 yerel sürüm etiketi),
+      # bu yüzden ikinci komut torch'u yeniden indirmez.
+      - name: Bağımlılıkları kur
+        run: |
+          torch_pin="$(grep -oE '^torch==[^[:space:]#;]+' requirements.txt)"
+          python -m pip install "$torch_pin" --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install -r requirements.txt
+          python -m pip freeze
+
+      - name: Testleri koş
+        run: python -m pytest -q
