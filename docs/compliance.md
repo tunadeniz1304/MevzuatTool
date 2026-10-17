@@ -17,7 +17,7 @@ Bu dosya, yapılan her işin [`mevzuat-mvp-kapsam.md`](mevzuat-mvp-kapsam.md) il
 
 ### 1. Veri Çekme
 - [x] Kaynak yalnızca `mevzuat-mcp` **API sözleşmesi** (bedesten `searchDocuments` / `mevzuatMaddeTree` / `getDocumentContent`) — ⚠️ transport MCP client değil, saf `httpx` (ADR-0012 sapması; gerekçe: mevzuat-mcp client 429/`Retry-After`'ı yutuyordu — bkz. `arch.md` §6)
-- [x] Yalnızca **`KANUN`** türü çekiliyor (`mevzuatTurList: ["KANUN"]`, `fetch.py`); KHK/tüzük/yönetmelik/tebliğ ALINMIYOR
+- [x] Yalnızca **`KANUN`** türü çekiliyor (`mevzuatTurList: ["KANUN"]`, `src/kanun/fetch.py`); KHK/tüzük/yönetmelik/tebliğ MVP zincirine ALINMIYOR (park edilmiş deneysel `src/teblig/fetch.py` MVP dışı — ADR-0020)
 - [x] Kendi web scraper'ımız **yok** (resmî API endpoint'leri kullanılıyor, HTML kazıma yok)
 - [x] Yalnızca HTML içerik alınıyor; PDF'ler işlenmiyor
 - [x] Başlangıçta dar korpus (3-5 kanun) → sonra 916 kanuna ölçeklendi (ADR-0011 sırası korundu)
@@ -69,6 +69,7 @@ Aşağıdakilerden **herhangi biri** projede iş olarak yapılıyorsa, kapsam ih
 - [ ] 🚫 PDF / OCR işleme eklendi mi? → kapsam dışı
 - [ ] 🚫 İçtihat / özelge (`yargi-mcp`: Yargıtay, Danıştay, GİB) işleniyor mu? → bu MVP dışı
 - [ ] 🚫 Kanun dışı tür (KHK / tüzük / yönetmelik / tebliğ) işlendi mi? → bu MVP yalnız **KANUN** (ADR-0013)
+      *(Not: `src/teblig/`'de deneysel, **park edilmiş** kod var — çekici + chunker + yapı ölçümü, 53 test. Tebliğ korpusu, index'i, retrieval'ı YOK; MVP'ye girmiyor → ihlal değil, kayıtlı karar ADR-0020. Bu kodu geliştirmek bu kutuyu işaretler → önce kapsam kararı.)*
 - [ ] 🚫 Tüm mevzuatı baştan çekme denemesi mi yapılıyor? → önce dar korpus, sonra ölçekle
 
 > Yukarıdaki kutulardan biri işaretlenirse: **dur, gözden geçir.** Gerçekten gerekliyse `decisions.md`'ye kapsam değişikliği olarak kaydet.

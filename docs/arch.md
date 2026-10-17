@@ -11,7 +11,8 @@ Kararların **gerekçesi/tarihçesi**: [`decisions.md`](decisions.md). Kapsam: [
 ## 1. Gerçekleşen Mimari (uçtan uca, bugün)
 
 > **Tür izolasyonu:** Aşağıdaki zincir `src/kanun/` içindir. Tebliğ/yönetmelik eklenirse
-> **kendi kopyalarını** alır (`src/teblig/`, `src/yonetmelik/`) — kod paylaşımı YOK. §7'ye bak.
+> **kendi kopyalarını** alır (`src/teblig/`, `src/yonetmelik/`) — kod paylaşımı YOK. `src/teblig/`'deki
+> deneysel çekici + chunker **park edildi**, bu zincire bağlı değil (ADR-0020). §7'ye bak.
 
 ```
 ┌────────────────────── INGESTION (offline, çalışıyor) ───────────────────────┐
@@ -95,7 +96,7 @@ Arama tek yerde (`HybridArama`); `search_qdrant.py` CLI'ı, ölçüm script'leri
 |---|---|---|
 | Yaklaşım (RAG tipi) | vanilla RAG (graph/agentic değil) | ✅ karar |
 | Veri kaynağı | bedesten API (mevzuat-mcp sözleşmesi) | ✅ karar |
-| Kapsam (tür) | yalnız `KANUN` (ADR-0013) | ✅ karar |
+| Kapsam (tür) | yalnız `KANUN` (ADR-0013); tebliğ deneysel kodu park edildi (ADR-0020) | ✅ karar |
 | bedesten erişimi | saf `httpx` (ADR-0012 sapması, aşağıda §6) | ✅ uygulandı |
 | Dil/runtime | Python 3.10+ | ✅ uygulandı |
 | Embedding | **BGE-M3** (ADR-0007), dense=CLS pooling | ✅ uygulandı |
@@ -158,16 +159,20 @@ ortak soyutlama, `if tur == "KANUN"` dalı **yoktur.**
 
 ```
 src/kanun/       ✅ 15 modül + retrieval/     scripts/kanun/ + kanun/retrieval/   tests/kanun/
-src/teblig/      ⬜ iskelet                   scripts/teblig/                     tests/teblig/
+src/teblig/      ⏸ park (deneysel, MVP dışı) scripts/teblig/ (yapi_olc.py)       tests/teblig/
 src/yonetmelik/  ⬜ iskelet                   scripts/yonetmelik/                 tests/yonetmelik/
 
-data/kanun/{raw/, korpus.jsonl}   data/teblig/{...}   data/yonetmelik/{...}
+data/kanun/{raw/, korpus.jsonl}   data/teblig/{raw/; korpus YOK}   data/yonetmelik/{...}
 data/gold/                        altınset gold set (tür-bağımsız ölçüm verisi)
 ```
 
+**Tebliğ — park edildi (ADR-0020):** `fetch.py` (ölçülmüş rate-limit modeli, 3 paralel işçi) ve `chunker.py`
+(madde + numaralı bölüm hiyerarşisi, tebliğ-sonu ek kırpma) var, 53 testle kilitli; build script'i, korpus,
+`mevzuat_tur`, index ve retrieval entegrasyonu YOK. Kod olduğu gibi kalır, geliştirilmez; MVP yalnız `KANUN`.
+
 **Neden ortak soyutlama değil?** Türler yapısal olarak farklı ve bu fark parser'ın *özünde*:
-- Tebliğlerin `mevzuatMaddeTree`'si çoğu zaman **boş** döner; kanun parser'ı ağaca dayanıyor
-  (hiyerarşi, madde başlıkları, bleed-marker'ları).
+- Tebliğlerin bir kısmında (ölçümde ~1/3, ADR-0020) `mevzuatMaddeTree` **boş** döner; kanun parser'ı
+  ağaca dayanıyor (hiyerarşi, madde başlıkları, bleed-marker'ları).
 - Kanunun bleed-kırpma kuralları (`"...yürütür"` anchor'ı, kanun-sonu cetvel eki, E-tuzağı
   guard'ı) tebliğde **anlamsız — hatta zararlı.**
 - Ortak bir `chunker` bu farkları `if/else` ile taşısaydı, bir türde yapılan düzeltme diğerini
@@ -186,4 +191,4 @@ data/gold/                        altınset gold set (tür-bağımsız ölçüm 
 4. Veri yolun **kendi tür klasörün** olsun. `build_corpus.py` çıktıyı `"w"` modunda ezer —
    tür-kapsamlı yol sayesinde tebliğ build'i kanun korpusunu asla ezemez.
 
-Ayrıntı: `src/teblig/__init__.py`, `src/yonetmelik/__init__.py` (iskelet docstring'leri).
+Ayrıntı: `src/teblig/__init__.py` (park durumu, ADR-0020), `src/yonetmelik/__init__.py` (iskelet docstring'i).
