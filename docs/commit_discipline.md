@@ -113,12 +113,19 @@ GitHub repo ayarlarından `main` kilitlenmelidir:
 > **Settings → Branches → Add branch ruleset (veya Add rule)**, `main` için:
 > - ✅ **Require a pull request before merging** (doğrudan push'u engeller)
 >   - (opsiyonel) Require approvals: 1
-> - ✅ **Require status checks to pass before merging** (CI eklenince)
+> - ✅ **Require status checks to pass before merging** → zorunlu check: **`test`**
+>   - Kaynak: GitHub Actions, `.github/workflows/ci.yml` (workflow `CI`, job `test`); PR'da `CI / test (pull_request)` olarak görünür.
+>   - (opsiyonel) Require branches to be up to date before merging — PR'ın güncel `main` üzerinde test edilmesini garanti eder.
 > - ✅ **Require linear history** (atomik/temiz geçmiş için önerilir)
 > - ✅ **Do not allow bypassing the above settings** (admin dahil)
 > - ✅ **Block force pushes**
 
 Ayar yapılana kadar kural **manuel** uygulanır: kimse `git push origin main` çalıştırmaz.
+
+**CI (`test` check'i):** `main`'i hedefleyen her PR'da ve `main`'e her push'ta (merge) `ubuntu-latest` + Python 3.11 üzerinde CPU torch + `requirements.txt` kurulur ve varsayılan test paketi koşar: `python -m pytest -q` (`pytest.ini` gereği `-m model` testleri hariç). Yerelde aynı paket: `pytest -q`.
+- Check, ruleset listesinde ancak en az bir kez koştuktan sonra çıkar (ilk koşu CI'ı ekleyen PR'dadır); `test` diye aranır.
+- Job id'si (`test`) değişirse ruleset'teki check adı da güncellenmeli; yoksa PR'lar artık hiç raporlanmayan eski check'i bekleyip kilitlenir.
+- Workflow'a `paths` / `paths-ignore` filtresi **eklenmez**: zorunlu check'in koşmadığı PR'lar (ör. yalnız doküman) "Expected — Waiting for status to be reported" durumunda takılır.
 
 ### 5.3. (Opsiyonel) Yerel emniyet
 İsteğe bağlı olarak yerel bir `pre-push` hook ile `main`'e push engellenebilir. Bu repoda şimdilik politika + GitHub koruması yeterli kabul edilmiştir.
