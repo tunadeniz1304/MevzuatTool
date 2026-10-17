@@ -1,7 +1,7 @@
 # Mimari Durum (Architecture)
 
-**Son güncelleme:** 2026-09-28
-**Olgunluk:** 🟢 Ingestion + indexing + retrieval kütüphanesi + HTTP servisi çalışıyor. Korpus 31.419 chunk, 3-bacak R@10 = 0.6885 (bugünkü index). Eksik: atıf modu. Paketleme: docker-compose (qdrant + api + ingest profili).
+**Son güncelleme:** 2026-10-18
+**Olgunluk:** 🟢 Ingestion + indexing + retrieval kütüphanesi (doğal dil + atıf modu) + HTTP servisi çalışıyor. Korpus 31.419 chunk, 3-bacak R@10 = 0.6885 (bugünkü index). Atıf modu (ADR-0019) kodda, gerçek korpusta doğrulanmadı. Paketleme: docker-compose (qdrant + api + ingest profili). CI: GitHub Actions `test`.
 
 Bu dosya **güncel mimari durumu** tutar (bugün ne var, ne kararlaştırıldı, ne açık).
 Kararların **gerekçesi/tarihçesi**: [`decisions.md`](decisions.md). Kapsam: [`mevzuat-mvp-kapsam.md`](mevzuat-mvp-kapsam.md). İlerleme: [`status.md`](status.md).
@@ -19,6 +19,7 @@ Kararların **gerekçesi/tarihçesi**: [`decisions.md`](decisions.md). Kapsam: [
 │                                                                             │
 │  bedesten API ──► fetch.py ──────► data/kanun/raw/ (916 HTML + 912 tree)     │
 │  (httpx, 429/Retry-After)          html_<mid>.html · treejson_<mid>.json     │
+│                                    _kanun_liste.json (R.G. tarihi/sayısı)    │
 │                                     │                                        │
 │                strip_html (\x1f paragraf sınırı)                             │
 │                                     ▼                                        │
@@ -35,24 +36,32 @@ Kararların **gerekçesi/tarihçesi**: [`decisions.md`](decisions.md). Kapsam: [
 │  ingest_qdrant.py ──► Qdrant (dense + sparse + payload)                      │
 └─────────────────────────────────────┬───────────────────────────────────────┘
                                       │
-┌──────────── RETRIEVAL (online: src/kanun/retrieval/search.py) ┼─────────────┐
-│  HTTP ─► api/app.py (FastAPI: POST /ara, GET /saglik)  ✓ ADR-0017            │
-│           │                                                                  │
-│  sorgu ─► embed (BGE-M3: torch FP32 | ONNX FP32 | ONNX int8 ✓ ADR-0016)      │
-│           ├─► dense       (Qdrant)                                           │
-│           ├─► BGE-sparse  (Qdrant)                                           │
-│           └─► klasik BM25 (HizliBM25, korpus text)                           │
-│                    └─► 3-bacak WSUM füzyon + yürürlük filtresi               │
-│                    └─► (ops., istek başına) reranker ilk 20 aday  ✓ ADR-0015  │
-│                               ─► sıralı maddeler                             │
+┌──────────── RETRIEVAL (online: src/kanun/retrieval/ + api/) ┼───────────────┐
+│  HTTP ─► api/app.py (FastAPI: POST /ara {mod}, GET /saglik)  ✓ ADR-0017     │
+│           │                                                                 │
+│  sorgu ─► ayrıştır (atif.py) · mod: otomatik | atif | dogal (modlu_ara)     │
+│           ├─(atıf: kanun + madde)                                           │
+│           │     └─► atıf indeksi (korpus.jsonl, bayt ofseti)  ✓ ADR-0019    │
+│           │           └─► madde / fıkra / bent: kesin, skor 1.0             │
+│           │               (yürürlük filtresi ve reranker uygulanmaz)        │
+│           └─(değilse*)─► embed (BGE-M3: torch | ONNX FP32/int8 ✓ ADR-0016)  │
+│                          ├─► dense       (Qdrant)                           │
+│                          ├─► BGE-sparse  (Qdrant)                           │
+│                          └─► klasik BM25 (HizliBM25, korpus text)           │
+│                                └─► 3-bacak WSUM füzyon + yürürlük filtresi  │
+│                                └─► (ops.) reranker ilk 20 aday  ✓ ADR-0015  │
+│                                       ─► sıralı maddeler                    │
+│  * atıf değil, mod=dogal ya da atıf korpusta çözülemedi (doğal dile düşüş)  │
 └─────────────────────────────────────────────────────────────────────────────┘
                                       │
                      ⋯⋯ KAPSAM DIŞI: LLM / generation ⋯⋯
                      (en sonda config'le takılan swap'lanabilir endpoint)
 ```
 
-**Eksik ok:** `atıf modu` (kanun/madde/fıkra/bent → metadata filtresiyle kesin getirme) henüz yok.
-Arama tek yerde (`HybridArama`); `search_qdrant.py` CLI'ı, ölçüm script'leri ve servis onu çağırır.
+Doğal dil araması tek yerde (`HybridArama`); `search_qdrant.py` CLI'ı, ölçüm script'leri ve servis onu çağırır.
+Servis her sorguyu `atif_getir.modlu_ara` üzerinden geçirir: atıf ayrıştırılamayan sorguda doğal dil çağrısı
+`HybridArama.ara` ile birebir aynıdır. Atıf indeksi ve BM25 aynı `korpus.jsonl`'den servis açılışında bir kez
+kurulur; Qdrant ve embedder atıf modunda çağrılmaz.
 
 ---
 
@@ -60,21 +69,22 @@ Arama tek yerde (`HybridArama`); `search_qdrant.py` CLI'ı, ölçüm script'leri
 
 | Bileşen | Sorumluluk | Durum | Nerede |
 |---|---|---|---|
-| **Veri çekici** | bedesten API'den HTML + madde ağacı; 429/Retry-After uyumlu, cache'li | ✅ çalışıyor | `fetch.py` |
+| **Veri çekici** | bedesten API'den HTML + madde ağacı + liste kayıtları (R.G. tarihi/sayısı → `_kanun_liste.json`); 429/Retry-After uyumlu, cache'li | ✅ çalışıyor | `fetch.py` |
 | **Yapısal chunker** | madde bölme + bleed-kırpma + yürürlük tespiti | ✅ çalışıyor | `chunker.py` |
 | **Hiyerarşi index** | ağaç → kitap/kısım/bölüm/ayırım konumu | ✅ çalışıyor | `tree.py` |
 | **Fıkra/bent parser** | fıkra→bent→alt-bent ağacı + seviye yürürlüğü | ✅ çalışıyor | `fikra.py` |
 | **Metadata zenginleştirici** | dipnot, değişiklik künyesi, tablo, id birleştirme | ✅ çalışıyor | `enrich.py` |
-| **Korpus artifact** | JSONL `{id, text, metadata}` (modüler sınır) | ✅ 31.419 chunk | `corpus.py` |
+| **Korpus artifact** | JSONL `{id, text, metadata}` (modüler sınır); `mevzuat_tur` + R.G. tarihi/sayısı kodda (korpusa yeniden build ile girer) | ✅ 31.419 chunk | `corpus.py` |
 | **Embedder** | BGE-M3 dense (CLS pooling) + sparse | ✅ çalışıyor | `colab/`, `retrieval/embed.py` |
 | **Vektör store** | dense+sparse index + payload filtre | ✅ Qdrant (ADR-0008) | `ingest_qdrant.py` |
 | **Sparse/BM25** | hybrid lexical bacak (BGE-sparse + klasik BM25) | ✅ 3-bacak WSUM (ADR-0010) | `retrieval/search.py` |
 | **Retrieval — NL modu** | doğal dil → hybrid semantik + yürürlük filtresi | ✅ kütüphane | `retrieval/search.py` (`HybridArama`) |
 | **Çıkarım backend'i** | sorgu embed + reranker: torch / ONNX FP32 / ONNX int8 | ✅ ADR-0016 | `retrieval/embed_onnx.py`, `fabrika.py` |
-| **Retrieval — atıf modu** | kanun/madde/fıkra/bent → metadata filtresi | ⬜ **kod yok** | — |
+| **Retrieval — atıf modu** | atıf ayrıştır → korpus indeksinde kesin getirme (madde/fıkra/bent; fıkra→bent toleransı, `coklu_mevzuat`) | ✅ ADR-0019 (gerçek korpusta doğrulanmadı) | `retrieval/atif.py`, `retrieval/atif_getir.py` |
 | **Reranker** | ilk 20 adayı yeniden sıralama (`bge-reranker-v2-m3`) | ✅ entegre, varsayılan kapalı (ADR-0015) | `retrieval/rerank.py` |
-| **Servis / API** | HTTP arayüzü (`/ara`, `/saglik`) | ✅ FastAPI (ADR-0017) | `src/kanun/api/app.py` |
+| **Servis / API** | HTTP arayüzü (`/ara` + `mod`, `/saglik` + `atif_indeks`) | ✅ FastAPI (ADR-0017/0019) | `src/kanun/api/app.py` |
 | **Docker compose** | Qdrant + ingestion + retrieval orkestrasyonu | ✅ ADR-0018, torch'suz imaj | `docker-compose.yml`, `Dockerfile` |
+| **CI** | her PR'da ve `main`'e push'ta varsayılan test paketi (`pytest -q`) | ✅ GitHub Actions, check `test` | `.github/workflows/ci.yml` |
 | **LLM/generation** | cevap üretimi | ⛔ **kapsam dışı** (config endpoint) | — |
 
 ---
@@ -83,7 +93,7 @@ Arama tek yerde (`HybridArama`); `search_qdrant.py` CLI'ı, ölçüm script'leri
 1. **Retrieval'da biter.** Generation kapsam dışı; yalnızca config'le takılan, OpenAI-uyumlu, swap'lanabilir endpoint.
 2. **Modüler sınır.** Korpus artifact bağımsız teslim edilebilir; ingestion ↔ retrieval gevşek bağlı.
    *(Kanıt: `handoff/` klasörü — build zinciri ana repodan bağımsız çalıştırıldı, birebir aynı korpusu üretti.)*
-3. **Yürürlük durumu birinci sınıf.** Mülga/yürürlükte ayrımı metadata'da taşınır ve filtrelenebilir. Mülga chunk'lar korpusta KALIR (tarihsel sorgu), retrieval'da filtrelenir.
+3. **Yürürlük durumu birinci sınıf.** Mülga/yürürlükte ayrımı metadata'da taşınır ve filtrelenebilir. Mülga chunk'lar korpusta KALIR (tarihsel sorgu), doğal dil retrieval'ında filtrelenir; atıf modu kesin atfı gizlemez, mülga maddeyi `yurutluk` + uyarıyla döndürür (ADR-0019).
 4. **Yapı korunur.** Madde/fıkra hiyerarşisi chunk ve metadata boyunca kaybolmaz; naive chunking yok.
 5. **Önce çalıştır, sonra ölçekle.** Dar korpusla uçtan uca çalış, sonra genişlet. *(3 kanun → 916 kanun)*
 6. **Vanilla RAG.** Yaklaşım kasıtlı olarak vanilla RAG'tır; graph/agentic/advanced değil. İleri teknikler future work.
@@ -103,10 +113,12 @@ Arama tek yerde (`HybridArama`); `search_qdrant.py` CLI'ı, ölçüm script'leri
 | Vektör store | **Qdrant** (ADR-0008) | ✅ uygulandı |
 | Arama | 3-bacak hybrid: dense + BGE-sparse + klasik BM25, WSUM (ADR-0010) | ✅ uygulandı |
 | Reranker | `bge-reranker-v2-m3` (ADR-0009/0015) | ✅ istek başına, varsayılan kapalı |
+| Atıf modu | deterministik regex ayrıştırıcı + bellek içi korpus indeksi (ADR-0019) | ✅ uygulandı |
 | Çıkarım | ONNX Runtime CPU, dinamik int8 (ADR-0016) | ✅ uygulandı |
 | Servis | FastAPI + uvicorn (ADR-0017) | ✅ uygulandı |
 | Korpus formatı | JSONL `{id, text, metadata}` | ✅ uygulandı |
 | Paketleme | docker-compose (qdrant + api + ingest profili) | ✅ uygulandı |
+| CI | GitHub Actions `test` (ubuntu-latest, Python 3.11, `pytest -q`) | ✅ uygulandı |
 
 > Detaylı gerekçeler ve açık kararlar: [`decisions.md`](decisions.md).
 
@@ -126,7 +138,8 @@ Bunlar bozulursa korpus sessizce bozulur — değişiklik sonrası mutlaka doğr
 | Mülga maddeyi eleme | `corpus.py` | Tarihsel sorgu için gerekli maddeler kaybolur |
 | Chunk id = `mid` tabanlı (kanun_no değil) | `ids.py`, `build_corpus.py` | Aynı kanun_no'lu iki kanun çakışır (ör. 6551) |
 
-**Doğrulama refleksi:** `python scripts/kanun/build_corpus.py` → 916 kanun / 31.419 chunk; `k193 m7` = 2 fıkra, 7 bent.
+**Doğrulama refleksi:** `python scripts/kanun/build_corpus.py` → 916 kanun / 31.419 chunk; `k193 m7` = 2 fıkra, 7 bent;
+`[R.G.] X/Y kanunda R.G. tarihi var` ve `R.G. tarihi dolu chunk: N/M` satırları (liste cache'i yoksa 0 — alanlar null).
 
 ---
 
@@ -139,16 +152,24 @@ backoff başarısız oluyordu. Aynı API, aynı sözleşme, aynı veri; yalnız 
 pydantic/ABI kırılganlığından muaf. (Kaynak: `fetch.py` modül docstring'i.)
 
 **Bilinen sınırlar:**
-1. **Atıf modu yok** — metadata hazır (kanun_no + madde_no + fıkra/bent ağacı), kod yazılmadı.
-2. **R.G. tarihi** chunk metadata'sında taşınmıyor (bedesten liste yanıtında var).
-3. **Reranker CPU'da pahalı ve R@1'i düşürüyor** (ADR-0015) — istek başına açık, varsayılan kapalı.
-   **Qdrant index'i korpusun gerisinde** (1.678 maddede yürürlük uyuşmazlığı) → taban 0.700 → 0.6885.
-4. **Sıralama darboğazı:** R@100 = 0.809 >> R@10 = 0.700 → doğru madde getiriliyor, sıralanamıyor.
+1. **R.G. tarihi/sayısı + `mevzuat_tur`** kodda (kaynak: bedesten liste kaydı, `_kanun_liste.json`) ama
+   diskteki korpusa ve Qdrant payload'ına yansıması yeniden build + Colab embed + ingest ister. **Kabul tarihi
+   liste yanıtında yok** — taşınmıyor (HTML başlığındaki "Kabul Tarihi" ayrıştırılmıyor).
+2. **Reranker CPU'da pahalı ve R@1'i düşürüyor** (ADR-0015) — istek başına açık, varsayılan kapalı.
+   **Qdrant index'i korpusun gerisinde** (1.678 maddede yürürlük uyuşmazlığı) → taban 0.700 → 0.6885; yeni
+   payload alanları da yeniden embed + ingest ile gelir.
+3. **Sıralama darboğazı:** R@100 = 0.809 >> R@10 = 0.700 → doğru madde getiriliyor, sıralanamıyor.
    Aynı-KANUN toleransıyla R@10 = 0.889 → darboğaz **madde ayrımı**, kanun ayrımı değil.
-5. **Çok-versiyonlu kanun artefaktı:** 6111/6736/7143/7326/7440 aynı konuyu farklı no ile düzenler;
+4. **Çok-versiyonlu kanun artefaktı:** 6111/6736/7143/7326/7440 aynı konuyu farklı no ile düzenler;
    gold "6111" derken sistem "7326" getirince haksız 0 alır.
-6. **Fıkra↔bent terminoloji toleransı** yalnız ölçüm script'inde vardı; canlı retrieval'a taşınmadı
-   (bkz. `status.md` dürüstlük notu).
+5. **Atıf modu gerçek korpusta doğrulanmadı** (ADR-0019): atıf bulunabilirliği (`unique_atiflar.json`, 8.290
+   atıf), açılıştaki ikinci korpus taraması ve indeks belleği ölçülmedi.
+6. **Atıf ayrıştırıcı sınırları:** alt-bent okunmaz ('359/a-1'in '1'i); aralık açılmaz ('TCK m. 141-145' yalnız
+   141'i getirir); 'TMK' → 4721 eşlenir (ceza hukukunda 3713 için de kullanılır).
+7. **Doğal dil modunda (kanun_no, madde_no) anahtarı:** `BM25Index` sözlükleri ve WSUM füzyonu bu anahtarla
+   çalışır → çakışan kanun_no'larda (ör. 6551) iki kanunun aynı numaralı maddesi tek adaya çöker, `metin` / ad
+   yanlış kanundan gelebilir; yalnız BM25'ten gelen adaya sentetik payload verilir. Çözüm yönü: `madde_id`
+   anahtarı / payload'a `mevzuat_id`. (Atıf modu bu sorunu taşımaz: indeks `mevzuat_id`'yi tutar.)
 
 ---
 
@@ -186,8 +207,8 @@ data/gold/                        altınset gold set (tür-bağımsız ölçüm 
    madde ağacı geliyor mu? Madde işareti nasıl? Fıkra/bent var mı?
 2. `src/kanun/` modüllerini **oku ve KOPYALA** — `import` etme. Kopyayı türe özgü hale getir.
 3. Çıktı şeması `{id, text, metadata}` **aynı kalsın** — tek "sözleşme" budur; ileride üç korpus
-   tek Qdrant'ta birleşebilir. `metadata.mevzuat_tur` ekle (kanun korpusunda bu alan yok, tek-tür
-   olduğu için örtük).
+   tek Qdrant'ta birleşebilir. `metadata.mevzuat_tur` ekle (kanun korpusu `"KANUN"` yazar —
+   `corpus.MEVZUAT_TUR`).
 4. Veri yolun **kendi tür klasörün** olsun. `build_corpus.py` çıktıyı `"w"` modunda ezer —
    tür-kapsamlı yol sayesinde tebliğ build'i kanun korpusunu asla ezemez.
 
