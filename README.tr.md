@@ -9,11 +9,11 @@
 Bir doğal dil sorusuna ya da atfa karşılık, **yürürlükteki ilgili kanun maddelerini** getirir.
 mevzuat.gov.tr kanunlarını madde-seviyesinde chunk'lar, zengin metadata çıkarır, hybrid arama ile getirir.
 
-[![Durum](https://img.shields.io/badge/durum-Faz%205--6%20çalışır-brightgreen)](docs/status.md)
+[![Durum](https://img.shields.io/badge/durum-Faz%201--7%20tamam-brightgreen)](docs/status.md)
 [![Kapsam](https://img.shields.io/badge/kapsam-yalnız%20KANUN-blue)](docs/mevzuat-mvp-kapsam.md)
 [![Yaklaşım](https://img.shields.io/badge/yaklaşım-vanilla%20RAG-orange)](CLAUDE.md)
 [![Korpus](https://img.shields.io/badge/korpus-31.4k%20madde-informational)](#-korpus)
-[![R@10](https://img.shields.io/badge/R%4010-0.700-success)](#-metrikler)
+[![R@10](https://img.shields.io/badge/R%4010-0.689-success)](#-metrikler)
 [![Lisans](https://img.shields.io/badge/lisans-LICENSE-lightgrey)](LICENSE)
 
 </div>
@@ -99,7 +99,7 @@ Türk mevzuatı aranırken klasik zorluklar:
 
 **Teknoloji:** Python · [`saidsurucu/mevzuat-mcp`](https://github.com/saidsurucu/mevzuat-mcp) ·
 [BGE-M3](https://huggingface.co/BAAI/bge-m3) embedding · [Qdrant](https://qdrant.tech) vektör store ·
-`rank_bm25` · hybrid arama (dense + sparse + BM25) · Docker Compose (hedef).
+`rank_bm25` · hybrid arama (dense + sparse + BM25) · ONNX Runtime int8 · FastAPI · Docker Compose.
 
 ---
 
@@ -114,15 +114,20 @@ Detay: [`docs/retrieval-metrikleri.md`](docs/retrieval-metrikleri.md).
 |---|---|---|---|---|
 | RRF hybrid (baseline) | 0.436 | 0.667 | 0.507 | 0.545 |
 | WSUM_050 (2-bacak) | 0.447 | 0.669 | 0.520 | 0.556 |
-| **3-bacak EŞİT + klasik BM25 ← uygulanan** | **0.491** | **0.700** | **0.562** | **0.596** |
-| + reranker (`bge-reranker-v2-m3`, ölçüldü) | – | 0.706 | – | – |
+| **3-bacak EŞİT + klasik BM25 ← uygulanan** (2026-07) | **0.491** | **0.700** | **0.562** | **0.596** |
+| 3-bacak, **bugünkü Qdrant index'i** (2026-09) ¹ | 0.481 | 0.689 | 0.552 | 0.585 |
+| + reranker `bge-reranker-v2-m3`, 20 aday (istek başına) | 0.465 | **0.711** | 0.550 | 0.589 |
+| 3-bacak, ONNX **int8** sorgu embed'i (CPU) | 0.480 | 0.688 | 0.551 | 0.584 |
 
 Fine-tune / GPU olmadan, yalnızca **füzyon + klasik BM25** ile baseline'dan **R@1 +0.055, R@10 +0.033.**
-Reranker ölçüldü ama henüz kalıcı entegre değil.
+¹ Qdrant index'i (eski Colab embed'i) güncel korpusla 1.678 maddede yürürlük uyuşmazlığı taşıyor → −0.012.
+Reranker **entegre** ama varsayılan **kapalı**: R@10'u artırıyor, R@1'i düşürüyor ve CPU'da sorgu başına ~15 sn
+(ADR-0015). int8 sorgu embed'i kaliteyi korurken embed gecikmesini ~3× düşürür (ADR-0016). Gecikme tablosu:
+[`docs/retrieval-metrikleri.md`](docs/retrieval-metrikleri.md).
 
 **Erişim vs ayrım (darboğaz teşhisi):** R@100 = 0.809 >> R@10 = 0.700 → doğru madde **getiriliyor**, ama
 sıralanamıyor. Aynı-**kanun** toleransıyla R@10 = **0.889** → sistem doğru kanunu buluyor; darboğaz aynı
-kanun içinde **madde ayrımı**. (Sıradaki: reranker entegrasyonu / fine-tune.)
+kanun içinde **madde ayrımı**. (Sıradaki: index'i yeniden embed, reranker skor füzyonu, fine-tune — future.)
 
 ---
 
@@ -139,7 +144,24 @@ kanun içinde **madde ayrımı**. (Sıradaki: reranker entegrasyonu / fine-tune.
 
 ## 🚀 Kurulum
 
-> ⏳ Tam dockerize hedefi **Faz 7.** Şu an bileşenler ayrı çalışır.
+### Hızlı başlangıç — Docker Compose (Faz 7, ADR-0018)
+
+Ön koşullar (compose üretmez, host'ta hazır olmalı): `colab/outputs/` (Colab korpus embed'i:
+`colab/bge_m3_embed.ipynb`), `models/onnx/` (`onnx_export.py hepsi` + `onnx_quantize.py hepsi`),
+`data/kanun/korpus.jsonl` (`build_corpus.py`).
+
+```bash
+docker compose build                                   # torch'suz imaj (~630 MB)
+docker compose up -d qdrant                            # Qdrant v1.18.0
+docker compose --profile ingest run --rm ingest        # vektörleri yükle (ilk kurulumda bir kez)
+docker compose up -d api                               # retrieval servisi
+curl -s localhost:8000/saglik
+curl -s -X POST localhost:8000/ara -H 'Content-Type: application/json' -d '{"sorgu": "kira artışı", "top_k": 5}'
+```
+
+Port doluysa: `API_PORT=8001 QDRANT_PORT=6334 docker compose ...`. Reranker'ı yüklememek için `RERANK_BACKEND=kapali`.
+
+### Yerel geliştirme (venv)
 
 ```bash
 # 1. Depoyu klonla
@@ -174,6 +196,20 @@ python scripts/kanun/retrieval/search_qdrant.py
 
 Çıktı: yürürlükteki en ilgili top-10 madde, füzyon skoru + kanun/madde bilgisiyle sıralı.
 
+**HTTP servisi** (FastAPI, ADR-0017):
+
+```bash
+# int8 ONNX modelleri bir kez üret (models/onnx/, commit edilmez)
+python scripts/kanun/retrieval/onnx_export.py hepsi
+python scripts/kanun/retrieval/onnx_quantize.py hepsi
+
+# servis (ayarlar ortam değişkeninden: EMBED_BACKEND, RERANK_BACKEND, RERANK_VARSAYILAN, QDRANT_URL ...)
+EMBED_BACKEND=onnx-int8 RERANK_BACKEND=onnx-int8 uvicorn kanun.api.app:app --app-dir src --port 8000
+
+curl localhost:8000/saglik
+curl -X POST localhost:8000/ara -H 'Content-Type: application/json'      -d '{"sorgu": "kira artışı nasıl belirlenir", "top_k": 10, "rerank": false}'
+```
+
 ---
 
 ## 📂 Proje yapısı
@@ -189,7 +225,8 @@ MevzuatTool/
 │   │   ├── fetch.py              #   bedesten çekici (429/Retry-After uyumlu, cache'li)
 │   │   ├── chunker.py fikra.py   #   madde bölme · fıkra/bent ağacı
 │   │   ├── enrich.py corpus.py   #   metadata birleştirme · chunk üretimi
-│   │   └── retrieval/embed.py    #   BGE-M3 sorgu embed (dense + sparse)
+│   │   ├── retrieval/            #   search.py (HybridArama) · embed(_onnx).py · rerank.py · config.py
+│   │   └── api/app.py            #   FastAPI: POST /ara, GET /saglik
 │   ├── teblig/                   # ⬜ iskelet (sıfırdan yazılacak)
 │   └── yonetmelik/               # ⬜ iskelet
 ├── scripts/
@@ -198,10 +235,11 @@ MevzuatTool/
 │   │   ├── eval_*.py             # Parser doğruluk ölçümleri
 │   │   └── retrieval/
 │   │       ├── ingest_qdrant.py  #   Korpus vektörlerini Qdrant'a yükle
-│   │       ├── search_qdrant.py  #   3-bacak hybrid arama (ana giriş)
+│   │       ├── search_qdrant.py  #   Arama CLI (kütüphane sarmalayıcısı)
+│   │       ├── onnx_export.py · onnx_quantize.py  # ONNX FP32 export · dinamik int8
 │   │       └── metrik_*.py       #   Retrieval değerlendirme ölçümleri
 │   ├── teblig/ · yonetmelik/     # ⬜ boş
-├── tests/kanun/                  # 17 dosya, 285 test
+├── tests/kanun/                  # 23 dosya, 381 test (+3 gerçek-model: pytest -m model)
 ├── colab/
 │   ├── bge_m3_embed.ipynb        # Korpus embed (GPU)
 │   └── rerank_olc.ipynb          # Reranker ölçümü (T4)
@@ -227,9 +265,9 @@ MevzuatTool/
 | 4 | Temiz Korpus Artifact (JSONL) | ✅ |
 | 5 | Embedding + Indexleme (BGE-M3 + Qdrant) | ✅ |
 | 6 | Sorgu + Retrieval (3-bacak hybrid) | ✅ |
-| 7 | Dockerize (`docker compose up`) | ⬜ |
+| 7 | Dockerize (`docker compose up`) | ✅ |
 
-Sıradaki iyileştirmeler: reranker entegrasyonu (kanıtlı +0.04), yapısal-sadakat düzeltmeleri.
+Sıradaki iyileştirmeler: atıf modu, Qdrant index'ini güncel korpusla yeniden embed.
 Detay: [`docs/status.md`](docs/status.md) · [`docs/roadmap.md`](docs/roadmap.md).
 
 ---

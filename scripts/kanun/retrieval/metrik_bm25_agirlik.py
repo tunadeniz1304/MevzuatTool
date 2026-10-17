@@ -17,7 +17,7 @@ Ağırlıklar (d=dense, s=BGE-sparse, b=BM25), skorlar min-max normalize:
 Ayrıca WSUM_050 (iki-bacak, mevcut sistem) referans olarak.
 
 Reranker YOK, tek embed modeli. Aynı seed → aynı sorgu seti.
-Çalıştır: .venv/Scripts/python.exe scripts/metrik_bm25_agirlik.py [N]   (vars. 2000)
+Çalıştır: .venv/Scripts/python.exe scripts/kanun/retrieval/metrik_bm25_agirlik.py [N]   (vars. 2000)
 """
 import re
 import sys

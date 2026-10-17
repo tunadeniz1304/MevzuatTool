@@ -8,7 +8,7 @@ WSUM: skorları min-max normalize et, 0.5*dense + 0.5*sparse, sırala.
 (RRF sadece sırayı kullanır; WSUM gerçek skoru → sıralama bilgisi korunur.)
 
 Reranker YOK, tek model. Baseline ile aynı seed → aynı sorgu seti.
-Çalıştır: .venv/Scripts/python.exe scripts/metrik_wsum.py [N]   (vars. 2000)
+Çalıştır: .venv/Scripts/python.exe scripts/kanun/retrieval/metrik_wsum.py [N]   (vars. 2000)
 """
 import sys
 import json

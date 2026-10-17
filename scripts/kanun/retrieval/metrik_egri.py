@@ -5,7 +5,7 @@ Amaç: doğru madde nerede "yakalanıyor"? R@100 yüksek + R@10 düşükse ->
 doğru madde GETİRİLİYOR ama SIRALAMA kötü (reranker işe yarar).
 R@100 da düşükse -> doğru madde HİÇ getirilmiyor (embedding/gold sorunu).
 
-Çalıştır: .venv/Scripts/python.exe scripts/metrik_egri.py [N]   (vars. 2000)
+Çalıştır: .venv/Scripts/python.exe scripts/kanun/retrieval/metrik_egri.py [N]   (vars. 2000)
 """
 import sys
 import json

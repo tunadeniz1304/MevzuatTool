@@ -13,7 +13,7 @@ Tek-aşama (mevcut, filtresiz) ile yan yana. T büyüdükçe iki-aşama → tek-
 T=1 en agresif (Aşama-1 %73 doğru kanun → tavanı o). Kazanç varsa ORTA T'de.
 
 Füzyon = 3-bacak EŞİT (search_qdrant.py ile aynı). Sadece ölçüm, mimari değişikliği YOK.
-Çalıştır: .venv/Scripts/python.exe scripts/metrik_iki_asama.py [N]   (vars. 2000)
+Çalıştır: .venv/Scripts/python.exe scripts/kanun/retrieval/metrik_iki_asama.py [N]   (vars. 2000)
 """
 import re
 import sys

@@ -10,7 +10,7 @@ Gold "6111" derken sistem "7326" getirir → katı eşleşme haksız 0 verir.
   - AYNI_KANUN: sadece aynı kanun (madde farkı da tolere) — en gevşek
 
 Reranker YOK, tek model. Baseline ile aynı seed → aynı sorgu seti.
-Çalıştır: .venv/Scripts/python.exe scripts/metrik_tolerans.py [N]   (vars. 2000)
+Çalıştır: .venv/Scripts/python.exe scripts/kanun/retrieval/metrik_tolerans.py [N]   (vars. 2000)
 """
 import sys
 import json

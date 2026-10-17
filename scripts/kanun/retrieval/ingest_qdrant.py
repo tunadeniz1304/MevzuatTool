@@ -9,13 +9,15 @@ Girdi (colab/outputs/):
 Çıktı: Qdrant'ta 'mevzuat' collection'ı, N point (her madde: dense+sparse+payload).
 
 Qdrant çalışıyor olmalı: docker run -p 6333:6333 qdrant/qdrant
-Çalıştır: .venv/Scripts/python.exe scripts/ingest_qdrant.py
+Çalıştır: .venv/Scripts/python.exe scripts/kanun/retrieval/ingest_qdrant.py
+          (Qdrant adresi: QDRANT_URL ortam değişkeni, varsayılan http://localhost:6333 — compose: http://qdrant:6333)
 """
+import os
 import json
 import numpy as np
 from qdrant_client import QdrantClient, models
 
-QDRANT_URL = "http://localhost:6333"
+QDRANT_URL = os.environ.get("QDRANT_URL", "http://localhost:6333")
 COLLECTION = "mevzuat"
 DENSE_YOL = "colab/outputs/dense.npy"
 SPARSE_YOL = "colab/outputs/sparse.json"
@@ -53,7 +55,11 @@ def main():
             "sparse": models.SparseVectorParams(),
         },
     )
-    print(f"  '{COLLECTION}' collection oluşturuldu (dense + sparse)")
+    # yürürlük filtresi her aramada çalışır → keyword payload index'i (sonuç aynı, filtre kontrolü
+    # diskteki payload yerine bellekteki index'ten: dense p95 ~208 → ~15 ms, ADR-0016)
+    client.create_payload_index(COLLECTION, field_name="yurutluk",
+                                field_schema=models.PayloadSchemaType.KEYWORD)
+    print(f"  '{COLLECTION}' collection oluşturuldu (dense + sparse + yurutluk index)")
 
     # 3) Point'leri batch'ler halinde yükle
     print("Point'ler yükleniyor...")

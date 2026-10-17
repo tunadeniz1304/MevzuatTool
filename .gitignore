@@ -124,3 +124,7 @@ colab/*.jsonl
 colab/*.npy
 colab/*.json
 colab/outputs/
+
+# ---- ONNX model dosyaları (models/ zaten ignored; başka yere düşerse de commit edilmesin) ----
+*.onnx
+*.onnx.data

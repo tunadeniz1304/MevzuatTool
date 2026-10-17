@@ -1,0 +1,68 @@
+# MevzuatTool — Qdrant + retrieval API (+ tek seferlik ingest) (ADR-0018)
+#
+# Ön koşullar (compose ÜRETMEZ, host'ta hazır olmalı):
+#   colab/outputs/{dense.npy,sparse.json,meta.json}  ← colab/bge_m3_embed.ipynb (korpus embed)
+#   models/onnx/{bge-m3,bge-reranker-v2-m3}/         ← scripts/kanun/retrieval/onnx_export.py + onnx_quantize.py
+#   data/kanun/korpus.jsonl                          ← scripts/kanun/build_corpus.py
+#
+# Kullanım:
+#   docker compose up -d qdrant api
+#   docker compose --profile ingest run --rm ingest     (ilk kurulumda bir kez)
+#   curl -s localhost:8000/saglik
+# Host portları doluysa: API_PORT=8001 QDRANT_PORT=6334 docker compose up -d qdrant api
+
+services:
+  qdrant:
+    image: qdrant/qdrant:v1.18.0          # qdrant-client 1.18.0 ile eşleşik sabit tag
+    ports:
+      - "${QDRANT_PORT:-6333}:6333"
+    volumes:
+      - qdrant_storage:/qdrant/storage
+    healthcheck:                           # imajda curl yok → bash /dev/tcp ile port kontrolü
+      test: ["CMD-SHELL", "bash -c ':> /dev/tcp/127.0.0.1/6333' || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build: .
+    image: mevzuattool-api:latest
+    depends_on:
+      qdrant:
+        condition: service_healthy
+    environment:
+      QDRANT_URL: http://qdrant:6333
+      EMBED_BACKEND: ${EMBED_BACKEND:-onnx-int8}
+      RERANK_BACKEND: ${RERANK_BACKEND:-onnx-int8}
+      RERANK_ADAY: ${RERANK_ADAY:-20}
+      RERANK_MAX_LEN: ${RERANK_MAX_LEN:-512}
+      RERANK_VARSAYILAN: ${RERANK_VARSAYILAN:-0}
+      ORT_THREADS: ${ORT_THREADS:-4}
+    volumes:
+      - ./models/onnx:/app/models/onnx:ro
+      - ./data/kanun/korpus.jsonl:/app/data/kanun/korpus.jsonl:ro
+    ports:
+      - "${API_PORT:-8000}:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/saglik', timeout=5).status == 200 else 1)"]
+      interval: 10s
+      timeout: 6s
+      retries: 30
+      start_period: 60s
+
+  ingest:
+    image: mevzuattool-api:latest
+    build: .
+    profiles: ["ingest"]
+    depends_on:
+      qdrant:
+        condition: service_healthy
+    environment:
+      QDRANT_URL: http://qdrant:6333
+      PYTHONIOENCODING: utf-8
+    volumes:
+      - ./colab/outputs:/app/colab/outputs:ro
+    command: ["python", "scripts/kanun/retrieval/ingest_qdrant.py"]
+
+volumes:
+  qdrant_storage:
