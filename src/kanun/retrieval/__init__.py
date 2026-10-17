@@ -5,6 +5,7 @@
 - embed_onnx.py : aynı embed, ONNX Runtime ile (FP32 / dinamik int8, torch'suz)
 - search.py     : HybridArama — dense + BGE-sparse (Qdrant) + klasik BM25 -> WSUM füzyon (+ reranker)
 - rerank.py     : cross-encoder reranker (bge-reranker-v2-m3; torch ve ONNX)
+- atif.py       : atıf ayrıştırıcı — '5237 s. K. m. 141/2-a' -> kanun/madde/fıkra/bent (regex + tablo, ADR-0019)
 - fabrika.py    : ayarlar -> çalışan HybridArama (backend seçimi, geç importlar)
 - olcum.py      : ölçüm protokolü (gold seti SEED 4721, R@k, MRR@10, nDCG@10)
 
