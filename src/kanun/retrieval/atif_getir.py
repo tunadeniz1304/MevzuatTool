@@ -15,9 +15,11 @@ Getirme yolu = BELLEK İÇİ korpus indeksi (Qdrant payload filtresi DEĞİL):
   - Aynı kanun_no altında birden çok mevzuat_id (tertip çakışması) maddeyi taşıyorsa: sorgudaki kanun adı
     ipucu tek bir kanunu açıkça seçiyorsa o; yoksa HEPSİ döner ve `coklu_mevzuat=True` (sessizce
     birini seçmek yanlış kanunu "kesin" diye sunardı). Madde yalnız birinde varsa doğal olarak o döner.
-  - Fıkra '(N)' numarasıyla aranır (numarasız tek fıkrada sıra). Fıkra→bent toleransı: atıf 'fıkra N'
-    diyor, maddede N. fıkra yok ama 'N.' işaretli bent varsa o bent döner, `tolerans='fikra->bent'`
-    (Türk hukuk dilinde numaralı bende 'fıkra' denir — status.md dürüstlük notu).
+  - Fıkra '(N)' numarasıyla aranır (hiç numaralı fıkra yoksa sırayla). Fıkra→bent toleransı: atıf
+    'fıkra N' diyor, maddede '(N)' fıkrası yok ama 'N.' işaretli bent varsa o bent döner,
+    `tolerans='fikra->bent'` (Türk hukuk dilinde numaralı bende 'fıkra' denir — status.md dürüstlük notu).
+    Numaralı fıkrası hiç olmayan eski stil maddede ('giriş: 1. ... 2. ...', GVK m.40) 'N.' bendi konumsal
+    fıkradan önce gelir; '(N)' fıkrası bulunup ayrıca 'N.' bendi de varsa uyarıyla belirtilir.
   - Yürürlük FİLTRELENMEZ: atıf edilen madde mülgaysa da döner; `yurutluk` + uyarı taşır (kesin atfı
     "bulunamadı" diye gizlemek yanıltıcı olurdu). Doğal dil modunun yürürlük filtresi değişmez.
   - Belirsiz slash eki ('359/a', '166/I'): birincil yorum (harfli madde) madde düzeyinde bulunursa
@@ -30,6 +32,7 @@ import json
 import logging
 import re
 import time
+from collections import Counter
 from dataclasses import dataclass, field
 
 from .atif import SON_FIKRA, ayristir, kanun_no_norm, katla, madde_anahtari, tr_kucuk
@@ -195,17 +198,24 @@ def alt_parca_bul(fikralar, fikra=None, bent=None):
     hedef = None
     if fikra is not None:
         hedef = _fikra_sec(fikralar, fikra)
+        numarali_fikra = any(_fikra_int(f.get("no")) is not None for f in fikralar)
+        # fıkra→bent toleransı: maddede '(N)' fıkrası yok (hiç numaralı fıkra yoksa konumsal fıkra da
+        # sayılmaz — eski stil 'giriş: 1. ... 2. ...' maddede '40/1' = 1 numaralı bent) ama 'N.' bendi var
+        if fikra != SON_FIKRA and (hedef is None or not numarali_fikra):
+            fk, b = _bent_ara(fikralar, str(fikra), yalniz_numarali=True)
+            if b is not None:
+                uyari = [f"maddede ({fikra}) numaralı fıkra yok; '{fikra}.' bendi döndü "
+                         "(numaralı bende fıkra denmesi)"]
+                if bent is not None:
+                    uyari.append(f"({bent}) bendi aranmadı")
+                return _parca(fk, b, "fikra->bent"), bent is None, uyari
         if hedef is None:
-            if fikra != SON_FIKRA:
-                fk, b = _bent_ara(fikralar, str(fikra), yalniz_numarali=True)
-                if b is not None:
-                    uyari = [f"maddede {fikra}. fıkra yok; '{fikra}.' bendi döndü (numaralı bende fıkra denmesi)"]
-                    if bent is not None:
-                        uyari.append(f"({bent}) bendi aranmadı")
-                    return _parca(fk, b, "fikra->bent"), bent is None, uyari
             return None, False, [f"{_fikra_etiket(fikra)} bulunamadı"]
         if bent is None:
-            return _parca(hedef), True, []
+            uyari = []
+            if fikra != SON_FIKRA and _bent_ara(fikralar, str(fikra), yalniz_numarali=True)[1] is not None:
+                uyari.append(f"maddede '{fikra}.' işaretli bent de var (bende fıkra denmiş olabilir)")
+            return _parca(hedef), True, uyari
     fk, b = _bent_ara([hedef] if hedef is not None else fikralar, bent)
     if b is not None:
         return _parca(fk, b), True, []
@@ -278,7 +288,7 @@ def atif_coz(atif, indeks):
         if not kayitlar:
             continue
         kayitlar, coklu = _cakisma_ayikla(sorted(kayitlar, key=lambda k: k.sira), atif.kanun_ipucu)
-        ayni_no = len(kayitlar) - len({k.mevzuat_id for k in kayitlar})
+        ayni_kanunda = Counter(k.mevzuat_id for k in kayitlar)
         eslesmeler = []
         for k in kayitlar:
             chunk = indeks.chunk(k)
@@ -295,13 +305,14 @@ def atif_coz(atif, indeks):
                 uyarilar.append("madde mülga (yürürlükte değil) — atıf modunda yürürlük filtresi uygulanmaz")
             if md.get("tasindigi_kanun"):
                 uyarilar.append(f"yönlendirme kaydı: hüküm {md['tasindigi_kanun']} sayılı kanuna işlenmiş")
-            if ayni_no:
+            if ayni_kanunda[k.mevzuat_id] > 1:
                 uyarilar.append("bu kanunda aynı numaralı birden çok madde var")
             eslesmeler.append(AtifEslesme(k, chunk, parca, uyarilar, tam))
         if i > 0:                                               # alternatif yorum: yalnız TAM çözülenler
             eslesmeler = [e for e in eslesmeler if e.tam]
             if not eslesmeler:
                 continue
+            coklu = coklu and len({e.kayit.mevzuat_id for e in eslesmeler}) > 1
         aciklama = None
         if coklu:
             adaylar = ", ".join(f"{k.kanun_no} '{k.kanun_ad}' (mevzuat_id {k.mevzuat_id})"

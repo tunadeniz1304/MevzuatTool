@@ -332,6 +332,17 @@ KORPUS = [
     _chunk("950", "3194", "32", "İMAR KANUNU", [_f(None, "Bu Kanuna aykırı yapılan yapılar ...")]),
     _chunk("951", "854", "5", "DENİZ İŞ KANUNU"),
     _chunk("952", "4857", "5", "İŞ KANUNU"),
+    # numaralı fıkra (2) VE (1) içinde '2.' bendi: '29/2' fıkra (2)'ye gider, bent ipucu uyarısı
+    _chunk("310", "3065", "29", "KATMA DEĞER VERGİSİ KANUNU",
+           [_f("(1)", "(1) indirim: 1. ... 2. ...", [_b("1.", "1. birinci bent"), _b("2.", "2. ikinci bent")]),
+            _f("(2)", "(2) ikinci fıkra")]),
+    # çakışma + aynı kanunda tekrar karışık: 6552 m.8 iki kanunda, biri iki kez
+    _chunk("402", "6552", "8", "ÖRNEK ALFA KANUNU"),
+    _chunk("403", "6552", "8", "ÖRNEK BETA KANUNU"),
+    _chunk("403", "6552", "8", "ÖRNEK BETA KANUNU", id_ek="-2"),
+    # çakışma + alternatif yorum: '12/a' → yalnız (a) bendi olan kanun kalır
+    _chunk("404", "6553", "12", "ÖRNEK GAMA KANUNU", [_f(None, "giriş", [_b("a)", "a) gama bendi")])]),
+    _chunk("405", "6553", "12", "ÖRNEK DELTA KANUNU", [_f(None, "bentsiz")]),
 ]
 
 
@@ -398,14 +409,22 @@ def test_fikra_bent_toleransi(indeks):
     e = _coz("GVK m. 40 fıkra 7", indeks).eslesmeler[0]
     assert (e.alt_parca.bent, e.alt_parca.metin, e.alt_parca.tolerans) == (
         "7.", "7. İşle ilgili zararlar ...", "fikra->bent")
-    assert any("7. fıkra yok" in u for u in e.uyarilar)
+    assert any("(7) numaralı fıkra yok" in u for u in e.uyarilar)
     e2 = _coz("193 sayılı Kanunun 40. maddesinin 2. fıkrası", indeks).eslesmeler[0]
     assert (e2.alt_parca.bent, e2.alt_parca.tolerans) == ("2.", "fikra->bent")
 
 
-def test_numarasiz_tek_fikra_birinci_fikradir(indeks):
-    p = _coz("GVK 40/1", indeks).eslesmeler[0].alt_parca     # tek numarasız fıkra = 1. fıkra (tolerans yok)
-    assert p.fikra is None and p.bent is None and p.tolerans is None and p.metin.startswith("Safi")
+def test_numarali_fikrasiz_eski_stilde_bent_konumsal_fikradan_once(indeks):
+    p = _coz("GVK 40/1", indeks).eslesmeler[0].alt_parca     # tek numarasız fıkra + '1.' bendi → bent
+    assert (p.bent, p.tolerans) == ("1.", "fikra->bent")
+    p2 = _coz("3194 sayılı Kanun m. 32/1", indeks).eslesmeler[0].alt_parca   # bentsiz: konumsal 1. fıkra
+    assert p2.fikra is None and p2.bent is None and p2.tolerans is None and p2.metin.startswith("Bu Kanuna")
+
+
+def test_fikra_bulununca_ayni_numarali_bent_uyarisi(indeks):
+    e = _coz("KDVK 29/2", indeks).eslesmeler[0]
+    assert (e.alt_parca.fikra, e.alt_parca.bent, e.alt_parca.tolerans) == ("(2)", None, None)
+    assert e.uyarilar == ["maddede '2.' işaretli bent de var (bende fıkra denmiş olabilir)"]
 
 
 def test_fikra_bulunamazsa_madde_yine_doner(indeks):
@@ -469,6 +488,19 @@ def test_ayni_kanunda_ayni_numarali_iki_madde(indeks):
     c = _coz("6111 sayılı Kanun geçici madde 1", indeks)
     assert _idler(c) == ["500-Gecici1-1", "500-Gecici1-2"] and not c.coklu_mevzuat
     assert all("aynı numaralı" in u for e in c.eslesmeler for u in e.uyarilar)
+
+
+def test_cakisma_ve_tekrar_karisik_uyari_yalniz_tekrarlilarda(indeks):
+    c = _coz("6552 sayılı Kanun m. 8", indeks)
+    assert _idler(c) == ["402-8", "403-8", "403-8-2"] and c.coklu_mevzuat
+    tekrar = {e.kayit.madde_id: any("aynı numaralı" in u for u in e.uyarilar) for e in c.eslesmeler}
+    assert tekrar == {"402-8": False, "403-8": True, "403-8-2": True}
+
+
+def test_alternatif_yorum_cakismayi_daraltirsa_coklu_dusmez(indeks):
+    c = _coz("6553 sayılı Kanun m. 12/a", indeks)              # 12/A yok; (a) bendi yalnız 404'te
+    assert c.yorum.aciklama == "harf->bent" and _idler(c) == ["404-12"]
+    assert not c.coklu_mevzuat and c.aciklama is None
 
 
 # ---- belirsiz slash eki ------------------------------------------------------------------------
