@@ -21,10 +21,13 @@ Tanınan biçimler — büyük/küçük harf, İ/I/ı/i ve Türkçe karakter duy
 
 ATIF = KANUN + MADDE (ikisi birden şart). Yalnız kanun ('5237 sayılı Kanun') ya da yalnız madde
 ('madde 5') atıf DEĞİLDİR → doğal dil modu. Yanlış-pozitif kapıları (doğal dil sorgusu atıf sanılmasın):
-  - 'N madde' / 'N maddede' (sıra eki YOK) bir SAYIMDIR ('TCK'daki 5 madde değişti') → madde sayılmaz;
-    sıra eki ('141. madde', '141 inci'), harf eki ('48/A maddesi') ya da iyelik ('141 maddesi') şart.
-  - Numaradan hemen sonra birim/miktar sözcüğü ('2 yıl', '3 ay', '5 gün', 'madde 3 ton', '%') ya da başka
-    bir belge numarası ('5 sayılı', '2/3/2024', '1.5') gelirse madde değildir.
+  - 'N madde' / 'N maddede' / 'ek 3 madde' (sıra eki YOK) bir SAYIMDIR ('TCK'daki 5 madde değişti') →
+    madde sayılmaz; sıra eki ('141. madde', '141 inci'), harf eki ('48/A maddesi') ya da iyelik
+    ('141 maddesi') şart.
+  - Numaradan hemen sonra başka bir belge numarası ('5 sayılı', '2/3/2024', '1.5', '%') gelirse madde
+    değildir; yalın numarada ('TCK 2') ve önekli numarada ('ek 3') süre/sayım sözcüğü de ('2 yıl', '3 ay',
+    '4 çocuk'), 'madde 3' biçiminde fiziksel miktar da ('3 ton') madde numarasını düşürür. Açık 'm.' /
+    'md.' kısaltması güçlü sinyaldir: 'İş K. m. 53 yıllık izin' atıftır (`_MADDE_DEGIL_SONRA`).
   - 'NNNN sayılı' ardından KHK / Cumhurbaşkanlığı Kararnamesi / karar / yönetmelik / tebliğ / liste /
     cetvel / Resmî Gazete gelirse kanun değildir ('375 sayılı KHK', '2023/15 sayılı karar').
   - 'Anayasa Mahkemesi', 'anayasal' kanun sayılmaz; 'AY' yalnız büyük harfle yazılmışsa Anayasa'dır
@@ -225,18 +228,29 @@ _B_SAYI = re.compile(r"(?<![0-9/.,a-z])(?P<h>[0-9]{1,2})(?![0-9])(?:" + _ORD
                      + r"|\s?(?:numarali|nolu|no'?lu))\s?ben[dt][a-z]*")
 _B_ONCE = re.compile(r"(?<![a-z])(?:bent|bendi|bnt\.?|b\.)\s?\(?\s?(?P<h>[a-z]|[0-9]{1,2})(?![a-z0-9])\s?\)?")
 
-# Numaradan hemen sonra gelince "bu bir madde numarası değil" diyen kapı: birim/miktar sözcüğü ('2 yıl',
-# '3 aylık', 'madde 3 ton', '%'), başka bir belge numarası ('5 sayılı', '5 s. K.'), ondalık/tarih devamı
-# ('1.5', '2/3/2024'). Birimler AÇIK çekim listesiyle yazıldı: önek eşleşmesi 'güncel' / 'kişisel' /
-# 'yasa' sözcüklerini birim sanıp gerçek atfı düşürürdü.
-_BIRIM = (r"(?:yil(?:a|i|in|ina|inda|da|dan|lik|lar[a-z]*)?|sene(?:si|ye|de|den|lik)?"
-          r"|gun(?:u|un|e|de|den|luk|ler[a-z]*)?|hafta(?:si|ya|da|dan|lik)?|saat(?:i|e|te|ten|lik)?"
-          r"|dakika(?:si|ya|da|dan|lik)?|saniye(?:si|ye|de|den|lik)?|ay(?:a|da|dan|i|in|lik)?"
-          r"|lira(?:si|ya|lik)?|tl|kurus|kez|defa|kat|kati|kisi(?:ye|nin|den|de|lik|ler[a-z]*)?"
-          r"|adet|metre|km|kg|ton|gram|yas(?:i|ini|inda|indan|ina)?|bin|milyon|milyar|puan|derece"
-          r"|yuzde|sayfa)(?![a-z])")
-_MADDE_DEGIL_SONRA = re.compile(r"\s?(?:%|" + _BIRIM
-                                + r"|sayili|sy\.|s\s?\.\s?k|numarali|nolu|no\s?'?\s?lu)|[.,/][0-9]")
+# Numaradan hemen sonra gelince "bu bir madde numarası değil" diyen kapı — biçimin GÜCÜNE göre kademeli:
+#   guclu ('m. 53', 'md. 53', 'mad. 53'): yalnız başka bir belge numarası ('5 sayılı', '5 s. K.', '%') ya da
+#         ondalık/tarih devamı ('1.5', '2/3/2024'). Süre birimi kontrol EDİLMEZ: 'İş K. m. 53 yıllık izin'
+#         gerçek atıftır (53. madde tam da yıllık izin).
+#   madde ('madde 3' — 'madde' aynı zamanda 'cisim' demek): + fiziksel miktar ('madde 3 ton', '5 kg').
+#   zayif (kanundan sonra yalın numara 'TCK 2', önekli 'ek 3'): + süre/sayım sözcükleri ('TCK'da 2 yıl',
+#         'ek 3 ay', 'TMK 4 çocuk', 'TCK 18 yaşından').
+# Sözcükler AÇIK çekim listesiyle yazıldı: önek eşleşmesi 'güncel' / 'kişisel' / 'evlilik' gibi sözcükleri
+# birim sanıp gerçek atfı düşürürdü ('TMK 24 kişilik hakkı' atıftır, 'kişilik' listede yok).
+_BELGE_DEVAMI = r"%|sayili|sy\.|s\s?\.\s?k|numarali|nolu|no\s?'?\s?lu"
+_FIZIKSEL = r"tl|lira(?:si|ya|lik)?|kurus|adet|metre|km|kg|ton|gram|litre|yuzde|bin|milyon|milyar"
+_SURE_SAYIM = (r"yil(?:a|i|in|ina|inda|da|dan|lik|lar[a-z]*)?|sene(?:si|ye|de|den|lik)?"
+               r"|gun(?:u|un|e|de|den|luk|ler[a-z]*)?|hafta(?:si|ya|da|dan|lik)?|saat(?:i|e|te|ten|lik)?"
+               r"|dakika(?:si|ya|da|dan|lik)?|saniye(?:si|ye|de|den|lik)?|ay(?:a|da|dan|i|in|lik)?"
+               r"|kez|defa|kere|kat|kati|tane|kisi(?:ye|nin|den|de|ler[a-z]*)?|cocuk(?:lu|u|un|a|lar[a-z]*)?"
+               r"|kardes(?:i|ler[a-z]*)?|isci(?:ye|nin|den|ler[a-z]*)?|taksit(?:le|li|te)?|donem(?:de|lik)?"
+               r"|yas(?:i|ini|inda|indan|ina)?|puan|derece|sayfa")
+_MADDE_DEGIL_SONRA = {
+    "guclu": re.compile(r"\s?(?:" + _BELGE_DEVAMI + r")|[.,/][0-9]"),
+    "madde": re.compile(r"\s?(?:" + _BELGE_DEVAMI + r"|(?:" + _FIZIKSEL + r")(?![a-z]))|[.,/][0-9]"),
+    "zayif": re.compile(r"\s?(?:" + _BELGE_DEVAMI + r"|(?:" + _FIZIKSEL + "|" + _SURE_SAYIM
+                        + r")(?![a-z]))|[.,/][0-9]"),
+}
 _MADDE_SOZU = re.compile(r"\s?madde")
 _KELIME = re.compile(r"[a-z0-9'][a-z0-9']*\.?")
 # 'NNNN sayılı' ardından gelen İLK sözcük bunlardansa kanun DEĞİL: KHK, CB kararnamesi, karar,
@@ -477,8 +491,8 @@ def _slash_uygula(m, sorgu, tok):
     return True
 
 
-def _madde_degil(k, son):
-    return bool(_MADDE_DEGIL_SONRA.match(k, son))
+def _madde_degil(k, son, guc):
+    return bool(_MADDE_DEGIL_SONRA[guc].match(k, son))
 
 
 def _madde_tokenleri(k, sorgu, kanunlar):
@@ -487,14 +501,18 @@ def _madde_tokenleri(k, sorgu, kanunlar):
         kw = m.group("kw")
         if kw == "m" and m.start("no") == m.end("kw"):          # 'm2', 'm3' (metrekare/küp) madde değil
             continue
+        guc = "madde" if kw in ("madde", "maddesi", "m") else "guclu"
         t = _MaddeTok(m.start(), m.end(), _tip(m.group("tip")), m.group("no"))
-        if _slash_uygula(m, sorgu, t) and not _madde_degil(k, m.end()):
+        if _slash_uygula(m, sorgu, t) and not _madde_degil(k, m.end(), guc):
             adaylar.append(t)
     for m in _M_ONEK.finditer(k):
+        kw = (m.group("kw") or "").strip()
+        if kw and not (m.group("ord") or kw.startswith("maddesi")):
+            continue                                            # 'Kanuna ek 3 madde eklendi' = sayım
         t = _MaddeTok(m.start(), m.end(), _tip(m.group("tip")), m.group("no"))
         if not _slash_uygula(m, sorgu, t):
             continue
-        if m.group("kw") is None and _madde_degil(k, m.end()):  # 'ek 3 ay', 'ek 1 sayılı liste'
+        if not kw and _madde_degil(k, m.end(), "zayif"):         # 'ek 3 ay', 'ek 1 sayılı liste'
             continue
         adaylar.append(t)
     for m in _M_SONRA.finditer(k):
@@ -511,7 +529,7 @@ def _madde_tokenleri(k, sorgu, kanunlar):
         m = _M_YALIN.match(k, kt.son)
         if m is None or _cakisir(_Tok(m.start("no"), m.end(), None), secilen + kanunlar):
             continue
-        if _MADDE_SOZU.match(k, m.end("no")) or _madde_degil(k, m.end()) or int(m.group("no")) == 0:
+        if _MADDE_SOZU.match(k, m.end("no")) or _madde_degil(k, m.end(), "zayif") or int(m.group("no")) == 0:
             continue
         t = _MaddeTok(m.start("no"), m.end(), "asil", m.group("no"))
         if _slash_uygula(m, sorgu, t):

@@ -218,6 +218,18 @@ def test_tarih_madde_sonrasinda_atifi_bozmaz():
     assert _ozet(_tek("TCK 141, 2/3/2024 tarihli")) == (("5237",), "141", None, None)
 
 
+@pytest.mark.parametrize("sorgu, madde_no", [
+    ("4857 sayılı İş Kanunu m. 53 yıllık ücretli izin", "53"),     # açık 'm.': süre sözcüğü kapı değil
+    ("İş Kanunu madde 63 haftalık çalışma süresi", "63"),         # 'madde N' yalnız fiziksel miktarla düşer
+    ("TMK m. 24 kişilik hakları", "24"),
+    ("TMK 24 kişilik hakkının korunması", "24"),                  # 'kişilik' sayım sözcüğü değil
+    ("TMK 166 evlilik birliğinin sarsılması", "166"),
+    ("TCK md. 2 yıl", "2"),
+])
+def test_konu_sozcugu_birim_sanilmaz(sorgu, madde_no):
+    assert _tek(sorgu).madde_no == madde_no
+
+
 # ---- yanlış-pozitif: doğal dil sorgusu atıf SANILMAMALI ------------------------------------------
 @pytest.mark.parametrize("sorgu", [
     "kira artışı nasıl belirlenir",
@@ -255,6 +267,12 @@ def test_tarih_madde_sonrasinda_atifi_bozmaz():
     "bu ay 5. madde",
     "kdv oranı yüzde 18",
     "50 m2 daire TCK",
+    "TMK 4 çocuk velayet",
+    "İş K. 50 işçi çalıştıran işyeri",
+    "TCK 18 yaşından küçükler",
+    "TCK'ya ek 3 madde eklendi",
+    "geçici 3 aylık görevlendirme TCK",
+    "TCK 5 bin lira adli para cezası",
 ])
 def test_dogal_dil_atif_sanilmaz(sorgu):
     assert atif_ayristir(sorgu) == []
