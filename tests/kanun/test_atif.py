@@ -1,9 +1,20 @@
 # -*- coding: utf-8 -*-
-"""Atıf modu — ayrıştırıcı (kanun.retrieval.atif). Veri/model/ağ yok."""
+"""Atıf modu — ayrıştırıcı (kanun.retrieval.atif) + kesin getirme (kanun.retrieval.atif_getir).
+
+Veri/model/ağ yok: korpus satırları aşağıda elle kurulur (çakışan kanun_no, aynı numaralı iki madde,
+mülga madde, numaralı bentli eski stil madde, yönlendirme kaydı ...); dosya ofsetli indeks tmp_path'e
+yazılan küçük bir JSONL ile sınanır.
+"""
+import json
+
 import pytest
 
+from kanun.ids import slug
 from kanun.retrieval.atif import (
     SON_FIKRA, Atif, Yorum, atif_ayristir, ayristir, katla, madde_anahtari, madde_no_goster,
+)
+from kanun.retrieval.atif_getir import (
+    AtifIndeks, KorpusDegisti, alt_parca_bul, atif_coz, atif_indeks_kur,
 )
 
 
@@ -255,3 +266,273 @@ def test_tani_neden_atif_olmadigini_soyler():
 def test_etiket():
     assert _tek("TCK 102/2-a").etiket() == "5237 s. K. m. 102 f. 2 b. a"
     assert _tek("TCK m. 141 son fıkrası").etiket() == "5237 s. K. m. 141 son f."
+
+
+# =================================================================================================
+# Kesin getirme — sahte korpus (gerçek korpus şeması: {id, text, metadata{..., fikralar[]}})
+# =================================================================================================
+def _f(no, text, bentler=(), yurutluk="yürürlükte"):
+    return {"no": no, "text": text, "bentler": list(bentler), "yurutluk": yurutluk}
+
+
+def _b(isaret, text, yurutluk="yürürlükte"):
+    return {"isaret": isaret, "text": text, "yurutluk": yurutluk, "alt_bentler": []}
+
+
+def _chunk(mid, kanun_no, madde_no, kanun_ad, fikralar=(), yurutluk="yürürlükte", text=None, id_ek="",
+           **metadata):
+    meta = {"mevzuat_id": mid, "kanun_no": kanun_no, "kanun_ad": kanun_ad, "madde_no": madde_no,
+            "madde_baslik": f"Başlık {madde_no}", "madde_tipi": madde_anahtari(madde_no)[0],
+            "yurutluk": yurutluk, "fikralar": list(fikralar)}
+    meta.update(metadata)
+    return {"id": f"{mid}-{slug(madde_no)}{id_ek}",
+            "text": f"{kanun_ad} {madde_no} metni" if text is None else text, "metadata": meta}
+
+
+TCK, KVKK, GVK, VUK, TMK = ("TÜRK CEZA KANUNU", "KİŞİSEL VERİLERİN KORUNMASI KANUNU",
+                            "GELİR VERGİSİ KANUNU", "VERGİ USUL KANUNU", "TÜRK MEDENİ KANUNU")
+KORPUS = [
+    _chunk("100", "5237", "141", TCK, [_f("(1)", "(1) Zilyedinin rızası olmadan ..."),
+                                       _f("(2)", "(2) Değeri az olan ...")]),
+    _chunk("100", "5237", "142", TCK, [_f("(1)", "(1) Hırsızlık suçunun; a) ... b) ... işlenmesi hâlinde",
+                                          [_b("a)", "a) Kime ait olursa olsun kamu kurum ..."),
+                                           _b("b)", "b) Halkın yararlanmasına mahsus ...")])]),
+    _chunk("100", "5237", "143", TCK, [_f(None, "(Mülga: 1/1/2020-9999/1 md.)", yurutluk="mülga")],
+           yurutluk="mülga"),
+    _chunk("200", "6698", "11", KVKK, [_f("(1)", "(1) Herkes, veri sorumlusuna başvurarak ...",
+                                          [_b("a)", "a) Kişisel veri işlenip işlenmediğini öğrenme,"),
+                                           _b("b)", "b) Bilgi talep etme,"),
+                                           _b("ç)", "ç) Aktarıldığı üçüncü kişileri bilme,")])]),
+    # eski stil: numarasız tek fıkra + numaralı bentler (GVK m.40 deseni) → 'fıkra N' = 'N.' bendi
+    _chunk("300", "193", "40", GVK, [_f(None, "Safi kazancın tespiti için ...: 1. ... 2. ... 7. ...",
+                                        [_b("1.", "1. Ticari kazancın elde edilmesi ..."),
+                                         _b("2.", "2. Hasılatın elde edilmesi ..."),
+                                         _b("7.", "7. İşle ilgili zararlar ...")])]),
+    # tertip çakışması: aynı kanun_no (6551) altında iki ayrı kanun (iki mevzuat_id)
+    _chunk("400", "6551", "5", "ÖRNEK MAHALLİ İDARELER KANUNU"),
+    _chunk("401", "6551", "5", "ÖRNEK ENERJİ PİYASASI KANUNU"),
+    _chunk("400", "6551", "9", "ÖRNEK MAHALLİ İDARELER KANUNU"),
+    # aynı kanunda aynı numaralı iki madde (ids.py: -1 / -2)
+    _chunk("500", "6111", "Geçici 1", "ÖRNEK YAPILANDIRMA KANUNU", id_ek="-1"),
+    _chunk("500", "6111", "Geçici 1", "ÖRNEK YAPILANDIRMA KANUNU", id_ek="-2"),
+    _chunk("600", "6183", "48", "AMME ALACAKLARININ TAHSİL USULÜ HAKKINDA KANUN"),
+    _chunk("600", "6183", "48/A", "AMME ALACAKLARININ TAHSİL USULÜ HAKKINDA KANUN"),
+    _chunk("700", "213", "359", VUK, [_f(None, "Aşağıda yazılı fiilleri ...",
+                                         [_b("a)", "a) Vergi kaçakçılığı ..."), _b("b)", "b) ...")])]),
+    _chunk("700", "213", "Mükerrer 298", VUK),
+    _chunk("800", "4721", "166", TMK, [_f(f"({i})", f"({i}) TMK 166 fıkra {i}") for i in range(1, 5)]),
+    _chunk("810", "7000", "5", "ÖRNEK DENEME KANUNU", [_f("(1)", "(1) deneme")]),
+    _chunk("810", "7000", "5/I", "ÖRNEK DENEME KANUNU"),
+    _chunk("900", "5000", "7", "ÖRNEK YÖNLENDİRME KANUNU", text="", madde_tipi="islenmistir_yonlendirme",
+           tasindigi_kanun="5237", yerine_islenmistir=True),
+    _chunk("950", "3194", "32", "İMAR KANUNU", [_f(None, "Bu Kanuna aykırı yapılan yapılar ...")]),
+    _chunk("951", "854", "5", "DENİZ İŞ KANUNU"),
+    _chunk("952", "4857", "5", "İŞ KANUNU"),
+]
+
+
+@pytest.fixture(scope="module")
+def indeks():
+    return AtifIndeks.bellekten(KORPUS)
+
+
+def _coz(sorgu, indeks):
+    atiflar = atif_ayristir(sorgu, kanun_adlari=indeks.kanun_adlari)
+    assert len(atiflar) == 1, f"{sorgu!r} → {atiflar}"
+    return atif_coz(atiflar[0], indeks)
+
+
+def _idler(cozum):
+    return [e.kayit.madde_id for e in cozum.eslesmeler]
+
+
+# ---- indeks ------------------------------------------------------------------------------------
+def test_indeks_anahtarlari(indeks):
+    assert len(indeks) == len(KORPUS)
+    assert indeks.kanun_var("5237") and indeks.kanun_var("05237") and not indeks.kanun_var("9999")
+    assert [k.madde_id for k in indeks.bul("5237", "asil", "141")] == ["100-141"]
+    assert [k.madde_id for k in indeks.bul("6111", "gecici", "1")] == ["500-Gecici1-1", "500-Gecici1-2"]
+    assert indeks.bul("5237", "gecici", "141") == []            # tip anahtarın parçası
+
+
+def test_indeks_kanun_adlari_uzun_once(indeks):
+    adlar = dict(indeks.kanun_adlari)
+    assert adlar["turk ceza kanunu"] == ("5237",) and adlar["deniz is kanunu"] == ("854",)
+    uzunluklar = [len(a) for a, _ in indeks.kanun_adlari]
+    assert uzunluklar == sorted(uzunluklar, reverse=True)
+
+
+# ---- madde / fıkra / bent ----------------------------------------------------------------------
+def test_kesin_madde(indeks):
+    c = _coz("TCK m. 141", indeks)
+    assert c.durum == "eslesti" and _idler(c) == ["100-141"] and not c.coklu_mevzuat
+    e = c.eslesmeler[0]
+    assert e.alt_parca is None and e.metin == "TÜRK CEZA KANUNU 141 metni" and e.uyarilar == []
+
+
+def test_fikra_alt_parcasi(indeks):
+    p = _coz("TCK 141/2", indeks).eslesmeler[0].alt_parca
+    assert (p.fikra, p.bent, p.metin, p.yurutluk, p.tolerans) == (
+        "(2)", None, "(2) Değeri az olan ...", "yürürlükte", None)
+
+
+def test_fikrasiz_bent(indeks):
+    p = _coz("TCK m. 142 (b) bendi", indeks).eslesmeler[0].alt_parca
+    assert (p.fikra, p.bent, p.metin) == ("(1)", "b)", "b) Halkın yararlanmasına mahsus ...")
+
+
+def test_fikra_ve_bent_turkce_harf(indeks):
+    p = _coz("KVKK 11/1-ç", indeks).eslesmeler[0].alt_parca
+    assert (p.fikra, p.bent, p.metin) == ("(1)", "ç)", "ç) Aktarıldığı üçüncü kişileri bilme,")
+
+
+def test_son_fikra(indeks):
+    assert _coz("TCK m. 141 son fıkrası", indeks).eslesmeler[0].alt_parca.fikra == "(2)"
+
+
+def test_fikra_bent_toleransi(indeks):
+    e = _coz("GVK m. 40 fıkra 7", indeks).eslesmeler[0]
+    assert (e.alt_parca.bent, e.alt_parca.metin, e.alt_parca.tolerans) == (
+        "7.", "7. İşle ilgili zararlar ...", "fikra->bent")
+    assert any("7. fıkra yok" in u for u in e.uyarilar)
+    e2 = _coz("193 sayılı Kanunun 40. maddesinin 2. fıkrası", indeks).eslesmeler[0]
+    assert (e2.alt_parca.bent, e2.alt_parca.tolerans) == ("2.", "fikra->bent")
+
+
+def test_numarasiz_tek_fikra_birinci_fikradir(indeks):
+    p = _coz("GVK 40/1", indeks).eslesmeler[0].alt_parca     # tek numarasız fıkra = 1. fıkra (tolerans yok)
+    assert p.fikra is None and p.bent is None and p.tolerans is None and p.metin.startswith("Safi")
+
+
+def test_fikra_bulunamazsa_madde_yine_doner(indeks):
+    c = _coz("TCK 141/5", indeks)
+    assert c.durum == "eslesti" and c.eslesmeler[0].alt_parca is None
+    assert c.eslesmeler[0].uyarilar == ["5. fıkra bulunamadı"]
+
+
+def test_bent_bulunamazsa_fikra_doner(indeks):
+    e = _coz("TCK m. 141/2-z", indeks).eslesmeler[0]
+    assert (e.alt_parca.fikra, e.alt_parca.bent) == ("(2)", None)
+    assert e.uyarilar == ["(z) bendi bulunamadı; fıkra döndü"]
+
+
+@pytest.mark.parametrize("fikra, bent, beklenen", [
+    (None, None, (None, True)),
+    (1, None, ("(1)", True)),
+    (9, None, (None, False)),
+])
+def test_alt_parca_bul_dogrudan(fikra, bent, beklenen):
+    p, tam, _ = alt_parca_bul([_f("(1)", "(1) x")], fikra, bent)
+    assert ((p.fikra if p else None), tam) == beklenen
+
+
+# ---- yürürlük / eşleşmeme ----------------------------------------------------------------------
+def test_mulga_madde_yururluk_bilgisiyle_doner(indeks):
+    e = _coz("TCK m. 143", indeks).eslesmeler[0]
+    assert e.kayit.yurutluk == "mülga" and e.metadata["yurutluk"] == "mülga"
+    assert any("mülga" in u for u in e.uyarilar)
+
+
+def test_olmayan_madde(indeks):
+    c = _coz("TCK m. 999", indeks)
+    assert (c.durum, c.eslesmeler) == ("madde_yok", []) and "999" in c.aciklama
+
+
+def test_bilinmeyen_kanun(indeks):
+    c = _coz("9999 sayılı Kanun m. 1", indeks)
+    assert c.durum == "kanun_yok" and "9999" in c.aciklama
+
+
+# ---- kanun_no çakışması / aynı numara ----------------------------------------------------------
+def test_kanun_no_cakismasi_ipucusuz_hepsi_doner(indeks):
+    c = _coz("6551 sayılı Kanun m. 5", indeks)
+    assert c.durum == "eslesti" and c.coklu_mevzuat
+    assert {e.kayit.mevzuat_id for e in c.eslesmeler} == {"400", "401"}
+    assert "ÖRNEK ENERJİ PİYASASI KANUNU" in c.aciklama and "mevzuat_id 400" in c.aciklama
+
+
+def test_kanun_no_cakismasi_ad_ipucuyla_cozulur(indeks):
+    c = _coz("6551 sayılı Örnek Enerji Piyasası Kanununun 5. maddesi", indeks)
+    assert _idler(c) == ["401-5"] and not c.coklu_mevzuat and c.aciklama is None
+
+
+def test_kanun_no_cakismasi_madde_tek_kanundaysa_o_doner(indeks):
+    c = _coz("6551 sayılı Kanun m. 9", indeks)
+    assert _idler(c) == ["400-9"] and not c.coklu_mevzuat
+
+
+def test_ayni_kanunda_ayni_numarali_iki_madde(indeks):
+    c = _coz("6111 sayılı Kanun geçici madde 1", indeks)
+    assert _idler(c) == ["500-Gecici1-1", "500-Gecici1-2"] and not c.coklu_mevzuat
+    assert all("aynı numaralı" in u for e in c.eslesmeler for u in e.uyarilar)
+
+
+# ---- belirsiz slash eki ------------------------------------------------------------------------
+def test_harfli_madde(indeks):
+    assert _idler(_coz("6183 sayılı Kanun m. 48/A", indeks)) == ["600-48A"]
+
+
+def test_harf_eki_harfli_madde_yoksa_bent_olur(indeks):
+    c = _coz("VUK 359/a", indeks)
+    assert c.yorum.aciklama == "harf->bent" and _idler(c) == ["700-359"]
+    assert c.eslesmeler[0].alt_parca.bent == "a)" and "harfli maddesi yok" in c.eslesmeler[0].uyarilar[0]
+
+
+def test_harf_eki_alternatifi_tam_bulunmazsa_kabul_edilmez(indeks):
+    assert _coz("VUK 359/c", indeks).durum == "madde_yok"     # ne 359/C ne de 359'un (c) bendi var
+
+
+def test_roma_fikra(indeks):
+    assert _coz("TMK 166/II", indeks).eslesmeler[0].alt_parca.fikra == "(2)"
+    c = _coz("TMK 166/I", indeks)                              # 166/I harfli maddesi yok → 1. fıkra
+    assert c.yorum.aciklama == "roma->fikra" and c.eslesmeler[0].alt_parca.fikra == "(1)"
+
+
+def test_tek_harf_roma_harfli_madde_varsa_harfli_kazanir(indeks):
+    c = _coz("7000 sayılı Kanun m. 5/I", indeks)
+    assert _idler(c) == ["810-5I"] and c.yorum.aciklama is None
+
+
+def test_mukerrer_madde(indeks):
+    assert _idler(_coz("VUK mükerrer 298", indeks)) == ["700-Mukerrer298"]
+
+
+def test_yonlendirme_kaydi(indeks):
+    e = _coz("5000 sayılı Kanun m. 7", indeks).eslesmeler[0]
+    assert e.metin == "" and any("5237 sayılı kanuna işlenmiş" in u for u in e.uyarilar)
+
+
+# ---- korpus adlarıyla tanıma -------------------------------------------------------------------
+def test_korpus_adiyla_cozum(indeks):
+    assert _idler(_coz("İmar Kanunu 32. madde", indeks)) == ["950-32"]
+    assert _idler(_coz("Deniz İş Kanunu m. 5", indeks)) == ["951-5"]       # İş Kanunu (952) değil
+    assert _idler(_coz("İş Kanunu m. 5", indeks)) == ["952-5"]
+
+
+# ---- dosya ofsetli indeks (servis yolu) --------------------------------------------------------
+def _korpus_yaz(yol, satirlar):
+    with open(yol, "w", encoding="utf-8", newline="\n") as f:
+        for r in satirlar:
+            f.write(json.dumps(r, ensure_ascii=False) + "\n")
+            f.write("\n")                                       # boş satırlar atlanmalı
+
+
+def test_dosyadan_indeks_ofsetle_okur(tmp_path):
+    yol = tmp_path / "korpus.jsonl"
+    _korpus_yaz(yol, KORPUS)
+    ix = atif_indeks_kur(str(yol))
+    assert len(ix) == len(KORPUS)
+    kayit = ix.bul("6698", "asil", "11")[0]
+    assert kayit.chunk is None and isinstance(kayit.ofset, int)   # tam satır bellekte tutulmaz
+    c = atif_coz(atif_ayristir("KVKK 11/1-ç")[0], ix)
+    assert c.eslesmeler[0].alt_parca.metin == "ç) Aktarıldığı üçüncü kişileri bilme,"
+    assert ix.chunk(kayit) == KORPUS[3]
+
+
+def test_dosya_degisirse_korpus_degisti(tmp_path):
+    yol = tmp_path / "korpus.jsonl"
+    _korpus_yaz(yol, KORPUS)
+    ix = atif_indeks_kur(str(yol))
+    _korpus_yaz(yol, list(reversed(KORPUS)))                   # ofsetler artık başka satırları gösterir
+    with pytest.raises(KorpusDegisti):
+        ix.chunk(ix.bul("5237", "asil", "141")[0])
