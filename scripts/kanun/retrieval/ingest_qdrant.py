@@ -4,7 +4,12 @@
 Girdi (colab/outputs/):
   - dense.npy   : (N, 1024) float
   - sparse.json : N adet {token-id: ağırlık}
-  - meta.json   : {ids: [...], payloadlar: [{kanun_no, kanun_ad, madde_no, yurutluk}]}
+  - meta.json   : {ids: [...], payloadlar: [{kanun_no, kanun_ad, madde_no, yurutluk,
+                   mevzuat_tur, resmi_gazete_tarihi, resmi_gazete_sayisi}]}
+
+Payload alan SEÇİMİ burada değil, colab/bge_m3_embed.ipynb'deki `payloadlar` hücresinde yapılır;
+bu script her point'e `madde_id` + meta.json'daki payload'ı AYNEN yazar. Eski meta.json (alan
+seçimi genişlemeden önceki embed) yeni alanları taşımaz → güncel korpusla yeniden embed + ingest.
 
 Çıktı: Qdrant'ta 'mevzuat' collection'ı, N point (her madde: dense+sparse+payload).
 
@@ -80,7 +85,7 @@ def main():
                     },
                     payload={
                         "madde_id": ids[i],           # "103907-9"
-                        **payloadlar[i],              # kanun_no, kanun_ad, madde_no, yurutluk
+                        **payloadlar[i],              # meta.json'daki tüm alanlar (seçim notebook'ta)
                     },
                 )
             )
