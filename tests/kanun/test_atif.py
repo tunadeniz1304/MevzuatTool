@@ -6,16 +6,20 @@ mülga madde, numaralı bentli eski stil madde, yönlendirme kaydı ...); dosya 
 yazılan küçük bir JSONL ile sınanır.
 """
 import json
+from types import SimpleNamespace
 
+import numpy as np
 import pytest
 
 from kanun.ids import slug
+from kanun.retrieval import atif_getir
 from kanun.retrieval.atif import (
     SON_FIKRA, Atif, Yorum, atif_ayristir, ayristir, katla, madde_anahtari, madde_no_goster,
 )
 from kanun.retrieval.atif_getir import (
-    AtifIndeks, KorpusDegisti, alt_parca_bul, atif_coz, atif_indeks_kur,
+    MODLAR, AtifIndeks, KorpusDegisti, alt_parca_bul, atif_coz, atif_indeks_kur, modlu_ara,
 )
+from kanun.retrieval.search import AramaSonucu, BM25Index, HybridArama, Sonuc
 
 
 def _tek(sorgu, **kw):
@@ -536,3 +540,155 @@ def test_dosya_degisirse_korpus_degisti(tmp_path):
     _korpus_yaz(yol, list(reversed(KORPUS)))                   # ofsetler artık başka satırları gösterir
     with pytest.raises(KorpusDegisti):
         ix.chunk(ix.bul("5237", "asil", "141")[0])
+
+
+# =================================================================================================
+# Mod seçimi — otomatik / atif / dogal
+# =================================================================================================
+class SahteDogal:
+    """HybridArama.ara arayüzü; çağrıları kaydeder."""
+
+    def __init__(self):
+        self.cagrilar = []
+
+    def ara(self, sorgu, top_k=10, yururlukte_only=True, rerank=None):
+        self.cagrilar.append({"sorgu": sorgu, "top_k": top_k, "yururlukte_only": yururlukte_only,
+                              "rerank": rerank})
+        return AramaSonucu([Sonuc("x-1", "1", "K", "1", 0.5)], sure_ms={"toplam": 1.0})
+
+
+def _satirlar(s):
+    return [(i, e.kayit.madde_id) for i, e in s.satirlar]
+
+
+def test_mod_dogal_ayristirma_yapmaz(indeks):
+    d = SahteDogal()
+    s = modlu_ara(d, indeks, "TCK m. 141", mod="dogal", top_k=3)
+    assert (s.mod, s.istenen_mod, s.durum, s.dusus, s.atiflar) == ("dogal", "dogal", None, False, [])
+    assert d.cagrilar == [{"sorgu": "TCK m. 141", "top_k": 3, "yururlukte_only": True, "rerank": None}]
+
+
+def test_otomatik_dogal_dil_sorgusu_aynen_dogal_aramaya_gider(indeks):
+    d = SahteDogal()
+    s = modlu_ara(d, indeks, "kira artışı nasıl belirlenir", top_k=5, yururlukte_only=False, rerank=True)
+    assert (s.mod, s.durum, s.aciklama, s.dusus) == ("dogal", None, None, False)
+    assert d.cagrilar == [{"sorgu": "kira artışı nasıl belirlenir", "top_k": 5, "yururlukte_only": False,
+                           "rerank": True}]
+    assert s.sure_ms == {"toplam": 1.0}                         # doğal dil süreleri dokunulmadan
+
+
+def test_otomatik_atif_sorgusu_kesin_getirir(indeks):
+    d = SahteDogal()
+    s = modlu_ara(d, indeks, "TCK 141/2")
+    assert (s.mod, s.durum) == ("atif", "eslesti") and d.cagrilar == []     # doğal dil hiç çağrılmaz
+    assert _satirlar(s) == [(1, "100-141")]
+    assert set(s.sure_ms) == {"ayristirma", "getirme", "toplam"}
+
+
+def test_mod_atif_atif_sorgusu(indeks):
+    s = modlu_ara(SahteDogal(), indeks, "KVKK 11/1-ç", mod="atif")
+    assert (s.mod, s.istenen_mod) == ("atif", "atif") and s.satirlar[0][1].alt_parca.bent == "ç)"
+
+
+def test_eslesmeyen_atif_dogal_dile_duser(indeks):
+    d = SahteDogal()
+    s = modlu_ara(d, indeks, "TCK m. 999")
+    assert (s.mod, s.durum, s.dusus) == ("dogal", "eslesme_yok", True)
+    assert "999" in s.aciklama and "doğal dil" in s.aciklama
+    assert len(d.cagrilar) == 1 and s.cozumler[0].durum == "madde_yok" and s.dogal is not None
+
+
+def test_bilinmeyen_kanun_dogal_dile_duser(indeks):
+    s = modlu_ara(SahteDogal(), indeks, "9999 sayılı Kanun m. 1")
+    assert (s.mod, s.durum) == ("dogal", "eslesme_yok") and "9999" in s.aciklama
+
+
+def test_mod_atif_ayristirilamazsa_dogal_dile_duser(indeks):
+    s = modlu_ara(SahteDogal(), indeks, "kira artışı", mod="atif")
+    assert (s.mod, s.durum, s.aciklama) == ("dogal", "ayristirilamadi", "sorguda kanun + madde atfı bulunamadı")
+    assert "kanun tanındı (5237)" in modlu_ara(SahteDogal(), indeks, "5237 sayılı kanun", mod="atif").aciklama
+
+
+def test_otomatik_kismi_atif_aciklamasiz_dogal_dil(indeks):
+    s = modlu_ara(SahteDogal(), indeks, "5237 sayılı kanun")      # yalnız kanun: otomatikte sessiz doğal dil
+    assert (s.mod, s.durum, s.aciklama) == ("dogal", None, None)
+
+
+def test_indeks_yoksa_dogal_dile_duser():
+    s = modlu_ara(SahteDogal(), None, "TCK m. 141")
+    assert (s.mod, s.durum) == ("dogal", "indeks_yok") and len(s.atiflar) == 1
+
+
+def test_kismi_eslesme(indeks):
+    s = modlu_ara(SahteDogal(), indeks, "TCK m. 141 ve TCK m. 999")
+    assert (s.mod, s.durum) == ("atif", "kismi")
+    assert _satirlar(s) == [(1, "100-141")] and "999" in s.aciklama
+
+
+def test_coklu_atif_sirasi_ve_top_k(indeks):
+    s = modlu_ara(SahteDogal(), indeks, "6551 sayılı Kanun m. 5 ve TCK m. 141")
+    assert _satirlar(s) == [(1, "400-5"), (1, "401-5"), (2, "100-141")]
+    assert "birden çok kanunda" in s.aciklama
+    assert _satirlar(modlu_ara(SahteDogal(), indeks, "6551 sayılı Kanun m. 5 ve TCK m. 141", top_k=2)) == [
+        (1, "400-5"), (1, "401-5")]
+
+
+def test_ayni_madde_iki_kez_donmez(indeks):
+    s = modlu_ara(SahteDogal(), indeks, "TCK m. 141 ve 5237 sayılı Kanun m. 141/2")
+    assert len(s.atiflar) == 2 and _satirlar(s) == [(1, "100-141")]
+
+
+def test_atif_modunda_yururluk_filtresi_uygulanmaz(indeks):
+    s = modlu_ara(SahteDogal(), indeks, "TCK m. 143", yururlukte_only=True)
+    assert s.mod == "atif" and s.satirlar[0][1].kayit.yurutluk == "mülga"
+
+
+def test_gecersiz_mod():
+    assert MODLAR == ("otomatik", "atif", "dogal")
+    with pytest.raises(ValueError):
+        modlu_ara(SahteDogal(), None, "x", mod="hepsi")
+
+
+def test_ayristirici_hatasi_dogal_dili_bozmaz(indeks, monkeypatch):
+    def patla(*a, **k):
+        raise RuntimeError("bozuk")
+    monkeypatch.setattr(atif_getir, "ayristir", patla)
+    d = SahteDogal()
+    s = modlu_ara(d, indeks, "kira artışı")
+    assert (s.mod, s.durum) == ("dogal", None) and len(d.cagrilar) == 1
+    assert modlu_ara(SahteDogal(), indeks, "TCK m. 141", mod="atif").durum == "ayristirilamadi"
+
+
+# ---- doğal dil yolu HybridArama ile BİREBİR aynı (sahte Qdrant + sahte BM25) -------------------
+def _nokta(kn, mn, skor):
+    return SimpleNamespace(score=skor, payload={"kanun_no": kn, "madde_no": mn, "madde_id": f"{kn}-{mn}",
+                                                 "kanun_ad": "K"})
+
+
+class _SahteQdrant:
+    def query_points(self, collection_name, query, using, limit, query_filter, with_payload):
+        noktalar = {"dense": [_nokta("1", "1", 0.9), _nokta("1", "2", 0.5), _nokta("2", "1", 0.1)],
+                    "sparse": [_nokta("1", "2", 12.0), _nokta("2", "1", 2.0)]}[using]
+        return SimpleNamespace(points=noktalar[:limit])
+
+
+class _SahteBM25:
+    def get_scores(self, tokenler):
+        return np.asarray([4.0, 0.0, 1.0])
+
+
+def _hybrid():
+    bm25 = BM25Index(_SahteBM25(), [("1", "1", "m11"), ("3", "7", "m37"), ("2", "1", "m21")])
+    return HybridArama(lambda s: ([0.1] * 4, {"5": 0.3}), _SahteQdrant(), bm25)
+
+
+@pytest.mark.parametrize("sorgu", ["kira artışı nasıl belirlenir", "memurun disiplin cezası",
+                                   "5237 sayılı kanun", "TCK'da 2 yıl hapis cezası"])
+def test_dogal_dil_sonucu_hybrid_arama_ile_birebir(indeks, sorgu):
+    arama = _hybrid()
+    beklenen = arama.ara(sorgu, top_k=3)
+    s = modlu_ara(arama, indeks, sorgu, top_k=3)
+    assert s.mod == "dogal" and isinstance(s.dogal, AramaSonucu)
+    assert [(r.madde_id, r.anahtar, r.skor, r.rerank_skor) for r in s.dogal] == [
+        (r.madde_id, r.anahtar, r.skor, r.rerank_skor) for r in beklenen]
+    assert set(s.dogal.sure_ms) == set(beklenen.sure_ms) and s.dogal.rerank == beklenen.rerank

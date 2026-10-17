@@ -22,13 +22,21 @@ Getirme yolu = BELLEK İÇİ korpus indeksi (Qdrant payload filtresi DEĞİL):
     "bulunamadı" diye gizlemek yanıltıcı olurdu). Doğal dil modunun yürürlük filtresi değişmez.
   - Belirsiz slash eki ('359/a', '166/I'): birincil yorum (harfli madde) madde düzeyinde bulunursa
     kabul; değilse alternatif yorum yalnız istenen alt-parça TAM bulunursa kabul edilir.
+
+Mod seçimi (`modlu_ara`): 'otomatik' (atıf ayrıştırılıp çözülürse atıf, değilse doğal dil), 'atif',
+'dogal'. Atıf ayrıştırılamayan sorguda doğal dil çağrısı HybridArama.ara ile birebir aynıdır.
 """
 import json
+import logging
 import re
+import time
 from dataclasses import dataclass, field
 
-from .atif import SON_FIKRA, kanun_no_norm, katla, madde_anahtari, tr_kucuk
+from .atif import SON_FIKRA, ayristir, kanun_no_norm, katla, madde_anahtari, tr_kucuk
 
+log = logging.getLogger(__name__)
+
+MODLAR = ("otomatik", "atif", "dogal")
 MULGA = "mülga"
 
 
@@ -303,3 +311,81 @@ def atif_coz(atif, indeks):
         return AtifCozum(atif, "eslesti", eslesmeler, yorum, coklu, aciklama)
     return AtifCozum(atif, "madde_yok",
                      aciklama=f"{kanun_etiket} sayılı kanunda {atif.yorum.madde_no}. madde yok")
+
+
+# ---- mod seçimi -------------------------------------------------------------------------------
+@dataclass
+class ModluSonuc:
+    """modlu_ara çıktısı. mod: kullanılan mod ('atif' | 'dogal').
+    durum: None (atıf denenmedi / ayrıştırılmadı) | 'eslesti' | 'kismi' | 'eslesme_yok' |
+           'ayristirilamadi' (mod='atif' ama atıf yok) | 'indeks_yok'. mod='dogal' + durum dolu = düşüş."""
+    mod: str
+    istenen_mod: str
+    dogal: object = None              # doğal dil yolunda HybridArama.ara çıktısı (AramaSonucu), dokunulmadan
+    satirlar: list = field(default_factory=list)    # atıf modunda [(atif_sira 1-tabanlı, AtifEslesme)]
+    atiflar: list = field(default_factory=list)
+    cozumler: list = field(default_factory=list)
+    durum: str | None = None
+    aciklama: str | None = None
+    sure_ms: dict = field(default_factory=dict)
+
+    @property
+    def dusus(self):
+        """Atıf denendi ama doğal dil moduna düşüldü mü?"""
+        return self.mod == "dogal" and self.durum is not None
+
+
+def _ms(t0):
+    return (time.perf_counter() - t0) * 1000.0
+
+
+def modlu_ara(dogal, indeks, sorgu, mod="otomatik", top_k=10, yururlukte_only=True, rerank=None):
+    """Sorgu → ModluSonuc.
+
+    dogal  : `ara(sorgu, top_k, yururlukte_only, rerank)` sunan nesne (HybridArama)
+    indeks : AtifIndeks ya da None (yüklü değilse atıf denemesi doğal dile düşer)
+    Doğal dil yolu her zaman `dogal.ara(sorgu, top_k=, yururlukte_only=, rerank=)` çağrısıdır — atıf
+    ayrıştırılamayan sorgunun sonucu HybridArama.ara ile birebir aynıdır. Atıf modunda top_k kesilir,
+    yururlukte_only ve rerank uygulanmaz (kesin getirme; sıra = atıfların sorgudaki sırası)."""
+    if mod not in MODLAR:
+        raise ValueError(f"mod={mod!r} — geçerli: {MODLAR}")
+
+    def dogal_dil(durum=None, aciklama=None, atiflar=(), cozumler=()):
+        sonuc = dogal.ara(sorgu, top_k=top_k, yururlukte_only=yururlukte_only, rerank=rerank)
+        return ModluSonuc("dogal", mod, dogal=sonuc, atiflar=list(atiflar), cozumler=list(cozumler),
+                          durum=durum, aciklama=aciklama, sure_ms=getattr(sonuc, "sure_ms", {}))
+
+    if mod == "dogal":
+        return dogal_dil()
+    t0 = time.perf_counter()
+    try:
+        ayr = ayristir(sorgu, kanun_adlari=indeks.kanun_adlari if indeks is not None else None)
+    except Exception:                                           # ayrıştırıcı hatası doğal dili bozmasın
+        log.exception("atıf ayrıştırıcı hatası — doğal dil moduna düşülüyor")
+        return dogal_dil("ayristirilamadi", "atıf ayrıştırıcı hatası") if mod == "atif" else dogal_dil()
+    t_ayr = _ms(t0)
+    if not ayr.atiflar:
+        return dogal_dil("ayristirilamadi", ayr.tani()) if mod == "atif" else dogal_dil()
+    if indeks is None:
+        return dogal_dil("indeks_yok", "atıf ayrıştırıldı ama atıf indeksi yüklü değil → doğal dil",
+                         ayr.atiflar)
+
+    t1 = time.perf_counter()
+    cozumler = [atif_coz(a, indeks) for a in ayr.atiflar]
+    t_getir = _ms(t1)
+    eslesen = [c for c in cozumler if c.eslesmeler]
+    if not eslesen:
+        neden = "; ".join(c.aciklama for c in cozumler if c.aciklama)
+        return dogal_dil("eslesme_yok", f"{neden} → doğal dil moduna düşüldü", ayr.atiflar, cozumler)
+
+    satirlar, gorulen = [], set()
+    for i, c in enumerate(cozumler, 1):
+        for e in c.eslesmeler:
+            if e.kayit.madde_id not in gorulen:
+                gorulen.add(e.kayit.madde_id)
+                satirlar.append((i, e))
+    notlar = [c.aciklama for c in cozumler if c.aciklama]
+    return ModluSonuc("atif", mod, satirlar=satirlar[:top_k], atiflar=ayr.atiflar, cozumler=cozumler,
+                      durum="eslesti" if len(eslesen) == len(cozumler) else "kismi",
+                      aciklama="; ".join(notlar) or None,
+                      sure_ms={"ayristirma": t_ayr, "getirme": t_getir, "toplam": _ms(t0)})
