@@ -4,6 +4,8 @@ text = madde_baslik + body_temiz (embedding girdisi). metadata zengin: hiyerarş
 fıkra/bent ağacı + değişiklik künyeleri + dipnot/tablo. Boş-gövde maddeler filtrelenir
 (içeriksiz işlenmiş maddeler — RAG'a gitmez). Mülga DAHİL ama yurutluk ile işaretli.
 """
+import pytest
+
 from kanun.corpus import madde_to_chunk, maddeler_to_chunks
 from kanun.enrich import enrich, Madde
 from kanun.chunker import Article
@@ -357,6 +359,7 @@ def test_yonlendirme_chunk_hedefsiz_none():
 # Alan eklemek/silmek/yeniden adlandırmak bilinçli olmalı → bu küme ile birlikte güncellenir.
 _MADDE_ALANLARI = {
     "mevzuat_id", "mevzuat_tur", "kanun_no", "kanun_ad",
+    "resmi_gazete_tarihi", "resmi_gazete_sayisi",
     "madde_no", "madde_baslik", "madde_tipi", "yurutluk", "maddeId",
     "kitap_no", "kitap_baslik", "kisim_no", "kisim_baslik",
     "bolum_no", "bolum_baslik", "ayirim_no", "ayirim_baslik", "hiyerarsi_yolu",
@@ -384,3 +387,70 @@ def test_mevzuat_tur_her_chunkta_kanun():
     assert madde_to_chunk(m, kanun_ad="KVKK", kanun_no="6698")["metadata"]["mevzuat_tur"] == "KANUN"
     y = yonlendirme_chunk(_madde("21", _ISLENMIS_NOT), kanun_ad="X", kanun_no="4842")
     assert y["metadata"]["mevzuat_tur"] == "KANUN"
+
+
+# ── R.G. tarihi/sayısı: kanun düzeyi, bedesten liste yanıtından (build katmanı verir) ──
+_RG = {"resmi_gazete_tarihi": "2016-04-07", "resmi_gazete_sayisi": "29677"}
+
+
+def _rg_haric(md):
+    return {k: v for k, v in md.items() if not k.startswith("resmi_gazete_")}
+
+
+def test_rg_verilmezse_alan_durur_none():
+    # Liste cache'i yoksa build R.G. veremez → alanlar None ama şemada DURUR (filtre tutarlılığı).
+    c = madde_to_chunk(_madde("11", "(1) Herkes başvurabilir."), kanun_ad="KVKK", kanun_no="6698")
+    assert c["metadata"]["resmi_gazete_tarihi"] is None
+    assert c["metadata"]["resmi_gazete_sayisi"] is None
+
+
+def test_rg_alanlari_metadata_ya_tasinir():
+    c = madde_to_chunk(_madde("11", "(1) Herkes başvurabilir."), kanun_ad="KVKK", kanun_no="6698",
+                       **_RG)
+    assert c["metadata"]["resmi_gazete_tarihi"] == "2016-04-07"
+    assert c["metadata"]["resmi_gazete_sayisi"] == "29677"
+
+
+def test_rg_yalniz_eklemeli_mevcut_alanlar_degismez():
+    # KORUMA: R.G. yalnız metadata'ya EKLENİR — id, text ve diğer tüm alanlar birebir aynı kalır.
+    body = "(Değişik: 2/3/2024-7499/33 md.) (1) Herkes, şu haklara sahiptir:\na) öğrenme,\nb) düzeltme."
+    m = _madde("11", body)
+    a = madde_to_chunk(m, kanun_ad="KVKK", kanun_no="6698")
+    b = madde_to_chunk(m, kanun_ad="KVKK", kanun_no="6698", **_RG)
+    assert (a["id"], a["text"]) == (b["id"], b["text"])
+    assert _rg_haric(a["metadata"]) == _rg_haric(b["metadata"])
+
+
+def test_maddeler_to_chunks_rg_her_chunka_chunk_sayisi_ayni():
+    arts = [Article(no="11", body="(1) Dolu madde."), Article(no="12", body="   "),
+            Article(no="Geçici 1", body="(1) Geçici hüküm uygulanır.")]
+    maddeler, _ = enrich(arts, TREE, MID)
+    eski = maddeler_to_chunks(maddeler, kanun_ad="KVKK", kanun_no="6698")
+    yeni = maddeler_to_chunks(maddeler, kanun_ad="KVKK", kanun_no="6698", **_RG)
+    assert [c["id"] for c in yeni] == [c["id"] for c in eski]          # boş 12 yine elenir
+    assert all(c["metadata"]["resmi_gazete_tarihi"] == "2016-04-07" for c in yeni)
+    assert all(c["metadata"]["resmi_gazete_sayisi"] == "29677" for c in yeni)
+    assert [_rg_haric(c["metadata"]) for c in yeni] == [_rg_haric(c["metadata"]) for c in eski]
+
+
+def test_yonlendirme_chunk_rg_tasir():
+    m = _madde("21", _ISLENMIS_NOT)
+    c = yonlendirme_chunk(m, kanun_ad="X", kanun_no="4842", **_RG)
+    assert c["metadata"]["resmi_gazete_tarihi"] == "2016-04-07"
+    assert c["metadata"]["resmi_gazete_sayisi"] == "29677"
+    rg_siz = yonlendirme_chunk(m, kanun_ad="X", kanun_no="4842")
+    assert _rg_haric(c["metadata"]) == _rg_haric(rg_siz["metadata"])
+
+
+def test_rg_parametreleri_yalniz_anahtar_kelimeyle():
+    # Tarih/sayı yer değiştirmesin diye keyword-only (konumsal verilirse TypeError).
+    m = _madde("11", "(1) Herkes başvurabilir.")
+    with pytest.raises(TypeError):
+        madde_to_chunk(m, "KVKK", "6698", "2016-04-07", "29677")
+
+
+def test_rg_none_chunk_json_serilesir():
+    import json
+    c = madde_to_chunk(_madde("11", "(1) Herkes başvurabilir."), kanun_ad="KVKK", kanun_no="6698")
+    s = json.dumps(c, ensure_ascii=False)
+    assert '"resmi_gazete_tarihi": null' in s and '"mevzuat_tur": "KANUN"' in s
