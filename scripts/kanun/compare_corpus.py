@@ -8,6 +8,8 @@ Kullanım:
   python scripts/compare_corpus.py OLD.jsonl NEW.jsonl --kanun 4721,6098,6102,5846,2709
   python scripts/compare_corpus.py OLD.jsonl NEW.jsonl --flips        # status-flip id listesi
   python scripts/compare_corpus.py OLD.jsonl NEW.jsonl --gate         # kritik kapı → exit 1
+  python scripts/compare_corpus.py OLD.jsonl NEW.jsonl \
+      --yoksay mevzuat_tur,resmi_gazete_tarihi,resmi_gazete_sayisi    # yalnız-eklemeli alan kontrolü
 
 Üretilen metrikler (master plan faz kapılarını besler):
   1. Özet sayım: chunk sayısı, ortak/yalnız-OLD/yalnız-NEW id (madde ekleme/silme)
@@ -73,9 +75,20 @@ def _kanun_no(chunk):
     return chunk["metadata"].get("kanun_no")
 
 
-def _degisti(a, b):
-    """text VEYA metadata farklı mı?"""
-    return a.get("text") != b.get("text") or a.get("metadata") != b.get("metadata")
+def _degisti(a, b, yoksay=frozenset()):
+    """text VEYA metadata farklı mı? yoksay: karşılaştırma dışı metadata alanları (yalnız-eklemeli
+    yeni alan kontrolü için; ör. mevzuat_tur, resmi_gazete_*). Boşsa davranış birebir eskisi gibi."""
+    if not yoksay:
+        return a.get("text") != b.get("text") or a.get("metadata") != b.get("metadata")
+
+    def _suz(md):
+        return {k: v for k, v in (md or {}).items() if k not in yoksay}
+    return a.get("text") != b.get("text") or _suz(a.get("metadata")) != _suz(b.get("metadata"))
+
+
+def _alanlar(d):
+    """Korpustaki tüm metadata alan adları (birleşim)."""
+    return set().union(*((c.get("metadata") or {}).keys() for c in d.values())) if d else set()
 
 
 def _dagilim(vals):
@@ -98,6 +111,9 @@ def main():
     ap.add_argument("--kanun", default="", help="virgülle kanun_no listesi (etkilenen-madde süzgeci)")
     ap.add_argument("--flips", action="store_true", help="status-flip id listesini dök")
     ap.add_argument("--gate", action="store_true", help="kritik kapı ihlalinde exit 1")
+    ap.add_argument("--yoksay", default="",
+                    help="virgülle metadata alan listesi — etkilenen-madde karşılaştırmasında yok "
+                         "sayılır (yalnız-eklemeli alan değişikliğini doğrulamak için)")
     args = ap.parse_args()
 
     OLD = yukle(args.old)
@@ -107,6 +123,7 @@ def main():
     yalniz_old = old_ids - new_ids
     yalniz_new = new_ids - old_ids
     kanun_suzgec = {k.strip() for k in args.kanun.split(",") if k.strip()}
+    yoksay = frozenset(k.strip() for k in args.yoksay.split(",") if k.strip())
 
     _baslik(f"KORPUS DIFF — OLD={len(OLD)} chunk  NEW={len(NEW)} chunk")
     print(f"  Ortak id: {len(ortak)}  |  Yalnız-OLD (silinen): {len(yalniz_old)}  "
@@ -115,6 +132,10 @@ def main():
         print(f"    silinen örnek: {sorted(yalniz_old)[:8]}")
     if yalniz_new:
         print(f"    eklenen örnek: {sorted(yalniz_new)[:8]}")
+    # Şema: metadata alan kümesi farkı (eklemeli değişiklikte 'silinen alan' boş kalmalı)
+    alan_old, alan_new = _alanlar(OLD), _alanlar(NEW)
+    print(f"  Metadata alanı: eklenen {sorted(alan_new - alan_old)}  |  "
+          f"silinen {sorted(alan_old - alan_new)}")
 
     # 2. Status-flip (yalnız ortak id'lerde)
     flip_to_mulga, flip_to_yur = [], []
@@ -160,9 +181,11 @@ def main():
           f"NEW fıkra: ort={dn['ort']:.2f} med={dn['med']} maks={dn['maks']}")
 
     # 6. Etkilenen-madde (ortak id'lerde text/metadata farkı)
-    etkilenen = [i for i in ortak if _degisti(OLD[i], NEW[i])]
+    etkilenen = [i for i in ortak if _degisti(OLD[i], NEW[i], yoksay)]
     print()
     _baslik("ETKİLENEN MADDE (text/metadata değişti) — FAZ 3 KRİTİK KAPISI")
+    if yoksay:
+        print(f"  (karşılaştırma dışı metadata alanları: {sorted(yoksay)})")
     print(f"  Toplam etkilenen: {len(etkilenen)} / {len(ortak)} ortak")
     kanun_ihlali = 0
     if kanun_suzgec:
