@@ -3,8 +3,8 @@
 Fazlar: [`roadmap.md`](roadmap.md) · Kapsam uygunluğu: [`compliance.md`](compliance.md) · Mimari: [`arch.md`](arch.md)
 Yapısal düzeltme fazları: [`yapisal-sadakat-master-plan.md`](yapisal-sadakat-master-plan.md) · Retrieval ölçümleri: [`retrieval-metrikleri.md`](retrieval-metrikleri.md)
 
-**Son güncelleme:** 2026-09-28
-**Genel durum:** 🟢 Faz 1-6 tamam. Korpus üretiliyor (31.419 chunk / 916 kanun), embed+index kurulu (BGE-M3 + Qdrant), arama kütüphanede (`HybridArama`) + FastAPI servisi (`/ara`, `/saglik`). 3-bacak taban R@10 = **0.6885** (index/korpus yürürlük uyuşmazlığı, bkz. ADR-0015); +reranker (istek başına, 20/512) 0.711 ama R@1 düşer → varsayılan kapalı. ONNX int8 sorgu embed'i kaliteyi korur (0.688), embed gecikmesini ~3× düşürür. Faz 7: docker-compose (qdrant + api + ingest profili) çalışıyor, torch'suz imaj. Kalan: atıf modu.
+**Son güncelleme:** 2026-10-18
+**Genel durum:** 🟢 Faz 1-7 tamam; atıf modu kodda (ADR-0019). Korpus üretiliyor (31.419 chunk / 916 kanun), embed+index kurulu (BGE-M3 + Qdrant), arama kütüphanede (`HybridArama` + atıf modu) + FastAPI servisi (`/ara` + `mod`, `/saglik`). 3-bacak taban R@10 = **0.6885** (index/korpus yürürlük uyuşmazlığı, bkz. ADR-0015); +reranker (istek başına, 20/512) 0.711 ama R@1 düşer → varsayılan kapalı. ONNX int8 sorgu embed'i kaliteyi korur (0.688), embed gecikmesini ~3× düşürür. Faz 7: docker-compose (qdrant + api + ingest profili) çalışıyor, torch'suz imaj. CI: GitHub Actions `test` check'i (her PR + `main` push). Chunk metadata'sına `mevzuat_tur` + R.G. tarihi/sayısı eklendi (kod; korpus ve Qdrant'a yansıması yeniden build + embed/ingest ister). Açık: atıf modunun gerçek korpusta ölçümü, Qdrant'ın güncel korpusla yeniden embed'i.
 
 İşaretler: ✅ tamam · 🟡 devam ediyor · ⬜ başlamadı · ⛔ engelli
 
@@ -14,16 +14,16 @@ Yapısal düzeltme fazları: [`yapisal-sadakat-master-plan.md`](yapisal-sadakat-
 
 | Faz | Ad | Durum | Kanıt |
 |---|---|---|---|
-| 0 | Kurulum & Yönetişim | ✅ | Yönetişim dokümanları + branch disiplini |
+| 0 | Kurulum & Yönetişim | ✅ | Yönetişim dokümanları + branch disiplini + CI (`test`) |
 | 1 | Veri Çekme | ✅ | `fetch.py` — 916 kanun HTML+tree cache'li |
 | 2 | Yapısal Chunking | ✅ | `chunker.py` + `fikra.py` — madde/fıkra/bent ağacı |
-| 3 | Metadata | ✅ | `enrich.py` — hiyerarşi, yürürlük, künye, dipnot, tablo |
+| 3 | Metadata | ✅ | `enrich.py` + `corpus.py` — hiyerarşi, yürürlük, künye, dipnot, tablo, tür, R.G. tarihi/sayısı |
 | 4 | Temiz Korpus Artifact | ✅ | `korpus.jsonl` — 31.419 chunk `{id,text,metadata}` |
 | 5 | Embedding + Indexleme | ✅ | BGE-M3 (Colab) → Qdrant (dense+sparse) |
-| 6 | Sorgu + Retrieval | ✅ | `HybridArama` + reranker (ops.) + ONNX int8 + FastAPI servisi (ADR-0015/16/17) |
+| 6 | Sorgu + Retrieval | ✅ | `HybridArama` + atıf modu (ADR-0019) + reranker (ops.) + ONNX int8 + FastAPI servisi (ADR-0015/16/17) |
 | 7 | Dockerize | ✅ | `docker-compose.yml` + `Dockerfile` (ADR-0018); compose üzerinden `/ara` R@10 = in-process |
 
-**Test durumu:** 381 test geçiyor (`pytest -q`): `tests/kanun/` 22 dosya 328 test + `tests/teblig/` 2 dosya 53 test; 3 gerçek-model parity testi `pytest -m model` ile ayrı (ağ/model indirmez varsayılan koşu).
+**Test durumu:** 636 test geçiyor (`pytest -q`): `tests/kanun/` 24 dosya 583 test + `tests/teblig/` 2 dosya 53 test; 3 gerçek-model parity testi `pytest -m model` ile ayrı (ağ/model indirmez varsayılan koşu). CI: her PR'da ve `main`'e push'ta GitHub Actions `test` check'i aynı paketi koşar (ubuntu-latest, Python 3.11).
 
 ---
 
@@ -41,6 +41,8 @@ Yapısal düzeltme fazları: [`yapisal-sadakat-master-plan.md`](yapisal-sadakat-
 | Bent | 29.428 |
 
 > Yönlendirme chunk'ları (48) yalnız `unique_atiflar.json` varsa üretilir; dosya yoksa korpus 31.371 chunk olur ve başka hiçbir şey değişmez.
+>
+> Tablo PR #33 öncesi build'indir. Yeni alanlar (`mevzuat_tur`, `resmi_gazete_tarihi`, `resmi_gazete_sayisi`) yalnız eklemelidir (chunk seti, `id`, `text` değişmez — testlerle kilitli); diskteki korpusa yeniden build ile girer.
 
 ---
 
@@ -49,11 +51,13 @@ Yapısal düzeltme fazları: [`yapisal-sadakat-master-plan.md`](yapisal-sadakat-
 - [x] `README.md`, `.gitignore`, `CLAUDE.md`
 - [x] Python iskeleti — venv + `src/kanun/` + `requirements.txt` + `pytest.ini`
 - [x] Tür-izolasyonlu klasör yapısı (`src/{kanun,teblig,yonetmelik}/`) — 2026-07-10
-- [ ] GitHub `main` branch protection ayarı (UI'dan — bkz. commit_discipline.md §5.2)
+- [x] CI — GitHub Actions `.github/workflows/ci.yml` (workflow `CI`, job/check `test`): her PR'da ve `main`'e push'ta ubuntu-latest + Python 3.11, önce CPU torch sonra `requirements.txt`, `python -m pytest -q`
+- [ ] GitHub `main` branch protection ayarı (bkz. commit_discipline.md §5.2) — **uygulanamıyor:** repo private + GitHub Free plan → API 403 ("Upgrade to GitHub Pro or make this repository public"). Kural elle uygulanıyor (kimse `main`'e doğrudan push etmez); açılınca zorunlu check `test`. Kullanıcı kararı bekleniyor (Pro'ya geçmek ya da repoyu public yapmak).
 
 ## Faz 1 — Veri Çekme ✅
 - [x] `fetch.py` — bedesten API'sinden 429/Retry-After uyumlu, cache'li, devam-edilebilir çekim
 - [x] 916 KANUN listesi + HTML + madde-ağacı cache'li (`data/kanun/raw/`)
+- [x] Liste yanıtı cache'i `data/kanun/raw/_kanun_liste.json` (R.G. tarihi/sayısı kaynağı; `PYTHONPATH=src python -m kanun.fetch` doldurur). `_kanun_ids.txt`'den bağımsız: build'in kanun seti ve sırası ids cache'inden gelir
 - [x] Yalnız `KANUN` türü (ADR-0013); KHK/tüzük/yönetmelik/tebliğ kapsam dışı (deneysel `src/teblig/` kodu park edildi, MVP zincirinde değil — ADR-0020)
 - [x] Yalnız HTML içerik; PDF yok
 - [x] Kendi scraper'ı yok — `saidsurucu/mevzuat-mcp` API sözleşmesi kullanılıyor
@@ -69,11 +73,11 @@ Yapısal düzeltme fazları: [`yapisal-sadakat-master-plan.md`](yapisal-sadakat-
 - [x] Naive sabit-boy token chunking **yapılmadı**
 
 ## Faz 3 — Metadata ✅
-- [x] Alanlar: `mevzuat_id`, `kanun_no`, `kanun_ad`, `madde_no`, `madde_baslik`, `madde_tipi`, hiyerarşi (kitap/kısım/bölüm/ayırım + `hiyerarsi_yolu`), `maddeId`
+- [x] Alanlar: `mevzuat_id`, `mevzuat_tur` (`"KANUN"`), `kanun_no`, `kanun_ad`, `resmi_gazete_tarihi` (ISO), `resmi_gazete_sayisi` (str), `madde_no`, `madde_baslik`, `madde_tipi`, hiyerarşi (kitap/kısım/bölüm/ayırım + `hiyerarsi_yolu`), `maddeId`
 - [x] **Yürürlük durumu** her chunk'ta (`yurutluk`); mülga chunk'lar korpusta KALIR ve işaretlidir (tarihsel sorgu)
 - [x] Fıkra/bent/alt-bent ağacı (`fikralar[]`) — her seviyenin kendi yürürlüğü
 - [x] Değişiklik künyeleri yapısal (`degisiklik_gecmisi[]`), dipnotlar (`dipnotlar[]`), tablolar (`tablolar[]`)
-- [ ] R.G. tarihi — chunk metadata'sında **yok** (bedesten liste yanıtında var, korpusa taşınmadı)
+- [x] R.G. tarihi/sayısı + `mevzuat_tur` — **kod hazır, yeniden build bekliyor** (PR #33): kanun düzeyi, kaynak bedesten liste kaydı (`_kanun_liste.json`); cache yoksa alanlar null. Kabul tarihi liste yanıtında yok (taşınmıyor). Qdrant payload'ına ayrıca Colab embed + ingest ile girer (alan seçimi `colab/bge_m3_embed.ipynb` `payloadlar` hücresinde)
 
 ## Faz 4 — Temiz Korpus Artifact ✅
 - [x] JSONL şeması `{id, text, metadata}` — `corpus.py`
@@ -93,8 +97,8 @@ Yapısal düzeltme fazları: [`yapisal-sadakat-master-plan.md`](yapisal-sadakat-
 - [x] Ölçüm altyapısı: altınset gold (21.737 sızıntısız sorgu), R@k/MRR/nDCG (`scripts/kanun/retrieval/metrik_*.py`, `src/kanun/retrieval/olcum.py`)
 - [x] Reranker (`bge-reranker-v2-m3`) **entegre** (ADR-0015): 3-bacak üstünde yeniden ölçüldü; varsayılan kapalı, istek başına açık (önerilen 20 aday / 512 token)
 - [x] ONNX Runtime + dinamik int8 (ADR-0016): parity + 2000 sorgu kalite + p50/p95/p99 gecikme tablosu
-- [x] Servis katmanı: FastAPI `POST /ara`, `GET /saglik` (ADR-0017)
-- [ ] **Atıf modu** (kanun/madde/fıkra/bent → metadata filtresiyle kesin getirme) — kod olarak YOK (bu fazın kapsamı dışı bırakıldı)
+- [x] Servis katmanı: FastAPI `POST /ara`, `GET /saglik` (ADR-0017); `/ara` `mod` alanı, `/saglik` `atif_indeks` (ADR-0019)
+- [x] **Atıf modu** (ADR-0019): `src/kanun/retrieval/atif.py` (deterministik ayrıştırıcı) + `atif_getir.py` (korpus üzerinde bayt-ofsetli bellek içi indeks, kesin getirme). `POST /ara` `mod`: `otomatik` (varsayılan) | `atif` | `dogal`; doğal dil yanıtı eski şemayla aynı. Atıf modunda skor 1.0, yürürlük filtresi ve reranker uygulanmaz (mülga madde uyarıyla döner); kanun_no çakışmasında `coklu_mevzuat`; fıkra→bent toleransı canlıda; eşleşme yoksa doğal dile düşer. Gerçek korpusla **doğrulanmadı**
 
 ### Ölçülmüş retrieval performansı (2000 sorgu, altınset)
 | Konfigürasyon | R@1 | R@10 | MRR |
@@ -110,7 +114,7 @@ Yapısal düzeltme fazları: [`yapisal-sadakat-master-plan.md`](yapisal-sadakat-
 ## Faz 7 — Dockerize ✅
 - [x] `docker-compose.yml`: `qdrant` (v1.18.0, healthcheck) + `api` (FastAPI, onnx-int8) + `ingest` (profil) — ADR-0018
 - [x] `Dockerfile`: python:3.11-slim, non-root, `requirements-servis.txt` (**torch yok**), imaj 629 MB; modeller/korpus read-only volume
-- [x] `docker compose up` ile uçtan uca: ingest 31.416 point, `/saglik` 200, `/ara` 200 sorguda R@10 0.610 = in-process
+- [x] `docker compose up` ile uçtan uca: ingest 31.416 point, `/saglik` 200, `/ara` 200 sorguda R@10 0.610 = in-process (2026-09-28, atıf modu öncesi)
 - [ ] Ön koşul artifact'leri (Colab embed, ONNX modelleri, korpus) compose dışında üretiliyor
 
 ---
@@ -138,6 +142,10 @@ Oturum başı ~%59.7 → **%75.3**. Kırılım: kanun %98 · madde %86 · fıkra
 > korpustaki "N." bent ile eşleştirme — Türk hukuk dilinde bent'e "fıkra" denir). Toleranslar
 > **build kodunda değil**, ayrı karşılaştırma script'indeydi. Yani %75.3 bir **ölçüm üst-sınırıdır**;
 > canlı retrieval'ın aynı toleransı uygulaması gerekir.
+>
+> **Güncelleme (2026-10-18):** canlı retrieval artık bu toleransı uyguluyor — atıf modu "fıkra N"
+> atfını, maddede `(N)` fıkrası yoksa `N.` bendine çözer (`tolerans="fikra->bent"`, ADR-0019).
+> Atıf modunun aynı 8.290 atıf üzerindeki gerçek başarısı henüz ölçülmedi (Açık Konular).
 
 ---
 
@@ -151,12 +159,22 @@ Oturum başı ~%59.7 → **%75.3**. Kırılım: kanun %98 · madde %86 · fıkra
 
 ## Açık Konular / Engeller
 
-1. **Atıf modu yok.** Roadmap Faz 6 "atıf modu (metadata filtreli kesin getirme)" diyor; korpus
-   metadata'sı buna hazır (kanun_no + madde_no + fıkra/bent ağacı) ama **kod yazılmadı.**
-2. **Reranker CPU'da yavaş + R@1'i düşürüyor** (ADR-0015): istek başına açık, varsayılan kapalı. Skor füzyonu / GPU servisi future.
-3. **R.G. tarihi metadata'da yok** — kapsam listesinde var, chunk'a taşınmadı.
-4. **Fıkra→bent terminoloji toleransı** retrieval tarafına taşınmalı (yukarıdaki dürüstlük notu).
-5. **Dockerize ön koşulları compose dışında:** Colab embed + ONNX export/quantize elle.
-6. **Çok-versiyonlu kanun artefaktı:** 6111/6736/7143/7326/7440 gibi yapılandırma kanunları aynı
+1. **Reranker CPU'da yavaş + R@1'i düşürüyor** (ADR-0015): istek başına açık, varsayılan kapalı. Skor füzyonu / GPU servisi future.
+2. **R.G. tarihi/sayısı (+ `mevzuat_tur`): kod hazır, yeniden build/embed/ingest bekliyor** (PR #33). Diskteki
+   korpus ve Qdrant payload'ı yeni alanları henüz taşımıyor. Sıra: `PYTHONPATH=src python -m kanun.fetch`
+   (liste cache'i) → `build_corpus.py` → Colab embed → `ingest_qdrant.py`.
+3. **Dockerize ön koşulları compose dışında:** Colab embed + ONNX export/quantize elle.
+4. **Çok-versiyonlu kanun artefaktı:** 6111/6736/7143/7326/7440 gibi yapılandırma kanunları aynı
    konuyu farklı no ile düzenliyor → gold "6111" derken sistem "7326" getirince haksız 0 alıyor.
-7. **Qdrant index'i korpusun gerisinde:** eski Colab embed'i 1.678 maddede yürürlük uyuşmazlığı taşıyor → taban 0.700 → 0.6885. Yeniden embed gerekiyor.
+5. **Qdrant index'i korpusun gerisinde:** eski Colab embed'i 1.678 maddede yürürlük uyuşmazlığı taşıyor → taban 0.700 → 0.6885. Yeniden embed gerekiyor; yeni payload alanları (`mevzuat_tur`, R.G. tarihi/sayısı) da yeniden embed + ingest ile gelir.
+6. **Atıf modu gerçek korpusta ölçülmedi** (ADR-0019; geliştirme makinesinde `data/` yoktu): atıf
+   bulunabilirliği `unique_atiflar.json` (8.290 atıf) üzerinden ölçülmeli. Servis açılışındaki ikinci
+   korpus taraması (atıf indeksi, BM25 kurulumuna ek) ve indeks belleği de ölçülmedi.
+7. **Doğal dil modunda (kanun_no, madde_no) anahtar çakışması:** `BM25Index` sözlükleri (`metinler`,
+   `kanun_adlari`) bu anahtarla tutuluyor → çakışan kanun_no'larda (14 kanun_no, ör. 6551) `metin` ve kanun
+   adı yanlış kanundan gelebilir. `adaylar()` yalnız BM25'ten gelen adaylara sentetik payload veriyor (`kanun_ad`
+   boş, `yurutluk` alanı yok); WSUM füzyonu da aynı anahtarla birleştirdiği için iki kanunun aynı numaralı maddesi tek
+   adaya çöker. Çözüm yönü: anahtarı `madde_id`'ye geçirmek / payload'a `mevzuat_id` eklemek.
+8. **Atıf modu sınırları** (ADR-0019): alt-bent okunmaz ('359/a-1'in '1'i); aralık açılmaz ('TCK m. 141-145'
+   yalnız 141'i, '141-145. maddeleri' yalnız 141 ve 145'i getirir); 'TMK' → 4721 (Medeni Kanun) eşlenir —
+   ceza hukukunda 3713 (Terörle Mücadele K.) için de kullanıldığından karışabilir.
