@@ -408,6 +408,67 @@ Güncel mimari görünümü: [`arch.md`](arch.md). Kapsam: [`mevzuat-mvp-kapsam.
   - Reddedilen alternatifler: (a) ortak `chunker` + tür dalları, (b) ortak saf-metin yardımcıları
     (`normalize`, `ids`) — ikincisi cazipti ama "sıfır ortak" sınırını bulanıklaştırırdı.
 
+## ADR-0020 — Tebliğ deneysel kodu: park edildi
+- **Durum:** Kabul edildi (2026-10-18)
+- **Bağlam:** 2026-07-10'da (commit'ler `8fa7684`, `259fadb`, `fbd9f0e`, `e615c11`) tebliğ için deneysel kod
+  yazıldı — ADR-0014'e uygun olarak `src/kanun/`'dan kopya, import yok; "önce ölç, sonra yaz" yönergesiyle canlı
+  bedesten ve gerçek tebliğ HTML'leri üzerinde ölçülerek. Bu işi hiçbir ADR kaydetmedi: ADR-0013 tebliği kapsam
+  dışı sayıyor; CLAUDE.md, `arch.md`, `status.md`, README'ler ve `src/teblig/__init__.py` ise paketi hâlâ
+  "iskelet / boş / HENÜZ YAZILMADI" diye tanıtıyordu. Kod ile dokümanlar çelişiyordu, kodun neden durduğu belirsizdi.
+  - **Ne var** (`main`'de):
+    - `src/teblig/fetch.py` — bedesten tebliğ çekici (`mevzuatTurList: ["TEBLIGLER"]`, cache `data/teblig/raw/`):
+      ölçülmüş rate-limit modeli (pencere başına 9 istek + 31 sn; 429'da `Retry-After` kadar bekle, partiyi
+      küçült), 3 paralel işçi (ölçülen tepe), ağaçsız tebliğ desteği (`_agacsiz.txt`), `pageSize > 20` sessiz-hata
+      kapısı. Ölçüm: [`bedesten-rate-limit-olcumu.md`](bedesten-rate-limit-olcumu.md).
+    - `src/teblig/chunker.py` — `split_birimler`: önce tebliğ-sonu ek/cetvel kuyruğu kırpılır; `MADDE N` varsa
+      madde birimleri, yoksa numaralı bölüm hiyerarşisi (roma `I-`/`1-`, ondalık `2.1.1.`; yaprak-düğüm kuralı,
+      üst zincir `Birim.ust`'te). Çıktı `Birim` listesidir — `{id, text, metadata}` chunk'ı değil.
+    - `scripts/teblig/yapi_olc.py` — cache'teki tebliğlerin yapı ölçümü (`data/teblig/_yapi_raporu.json`).
+    - `tests/teblig/` — 53 test (`test_fetch.py` 17 · `test_chunker.py` 36); ağsız, varsayılan `pytest -q` koşusunda.
+  - **Ne yok:** tebliğ build script'i (`scripts/kanun/build_corpus.py` karşılığı) ve korpusu
+    (`data/teblig/korpus.jsonl`); fıkra/bent ayrıştırma, yürürlük/mülga tespiti, metadata zenginleştirme ve chunk
+    id (kanundaki `fikra.py`, `extract_status`, `enrich.py`, `ids.py`, `corpus.py` karşılıkları; `metadata.mevzuat_tur`
+    dahil); embed, Qdrant index'i, retrieval ve servis entegrasyonu. `data/` git-ignored — repo'da tebliğ verisi yok.
+- **Karar:** Tebliğ kodu **park edilir.**
+  1. Kod **olduğu gibi kalır** — silinmez, geliştirilmez. `tests/teblig/` varsayılan test koşusunda kalır.
+  2. MVP kapsamı **değişmez:** yalnız `KANUN` (ADR-0013). Tebliğ korpusu üretilmez, index'lenmez, servise bağlanmaz.
+  3. Dokümanlar gerçeğe uydurulur: `src/teblig/` "iskelet/boş" değil **"deneysel — park edildi"** olarak anılır;
+     test sayıları türe göre ayrılır (`pytest -q` 381 = kanun 328 + tebliğ 53; ayrıca 3 test `-m model`).
+- **ADR-0013 ve ADR-0014 ile ilişki:**
+  - **ADR-0013 değişmez.** Park edilmiş kod MVP'ye girmez ve kapsam ihlali sayılmaz: korpus → index → retrieval →
+    servis zinciri yalnız KANUN işler; `compliance.md` B'deki "kanun dışı tür işlendi mi?" kutusu işaretsiz kalır.
+    Kod, ADR-0013'ün "future work" dediği işin ölçüm/keşif ön çalışmasıdır.
+  - **ADR-0014'ün uygulanmış örneği; o da değişmez.** Kanun tarafı hiç değişmedi — ölçülen rate-limit modeli bile
+    `src/kanun/fetch.py`'ye taşınmadı (rate-limit raporu §8). ADR-0014 bağlamındaki "tebliğ ağacı çoğu zaman boş"
+    varsayımı ölçümde zayıfladı (örneklemde tebliğlerin ~1/3'ü ağaçsız); izolasyon gerekçesi başka farklarla
+    ayakta: tebliğ-sonu yürütme anchor'ı farklı (`Bu Tebliğ hükümlerini ... Bakanı yürütür`), `MADDE` taşımayan
+    belgeler numaralı bölüm hiyerarşisi kullanıyor.
+- **Sonuç:**
+  - ✅ Kod–doküman çelişkisi kapandı; `src/teblig/`'in durumu tek yerde (bu ADR) kayıtlı.
+  - ✅ Ölçüm emeği korunur: rate-limit modeli ve chunker kapıları testlerle kilitli; yeniden açılışta sıfırdan
+    başlanmaz.
+  - ❌ **Bedel:** `pytest -q`'nun 381 testinin 53'ü MVP dışı koda ait; test sayısı okunurken tür ayrımı gözetilmeli.
+    Koşu maliyeti ihmal edilebilir (53 test ~0.2 sn, ağsız).
+  - ⚠️ Ölçüm sayıları docstring ve commit'lerde farklı örneklem boyutlarıyla geçer (924 / 1283 / 1694 tebliğ; ağaç
+    oranı 9 ve 40 örnekle) — çekim sürerken büyüyen cache'in anlık görüntüleri. Park süresince düzeltilmez;
+    yeniden açılışta tam cache üzerinde yeniden ölçülür.
+- **Yeniden açılırsa (ilk adımlar, sırayla):**
+  1. **Kapsam kararı:** tebliğ MVP'yi genişletir → önce bu ADR'nin yerini alan ve ADR-0013'ü güncelleyen yeni ADR;
+     `mevzuat-mvp-kapsam.md` ve `compliance.md` "Kapsam Dışı" listesi buna göre güncellenir.
+  2. **Veri + yeniden ölçüm:** `data/teblig/raw/` cache'ini kur (`PYTHONPATH=src python -m teblig.fetch`,
+     devam-güvenli; 4990 tebliğ × HTML+ağaç tek işçiyle ~9 saat, 3 işçiyle ölçülen gerçek kazanç 1.25× —
+     rate-limit raporu §6-§7), sonra `scripts/teblig/yapi_olc.py` ve chunker ölçümlerini tam cache'te tekrarla.
+  3. **Tebliğ build script'i:** `scripts/teblig/build_corpus.py` — kanun zincirinin (normalize → fıkra/bent →
+     yürürlük → enrich → ids → corpus) tebliğe **kopyası** (ADR-0014), girişte `split_birimler`; çıktı **yalnız**
+     `data/teblig/korpus.jsonl` (kanun korpusunu asla ezmez).
+  4. **Korpus şeması:** `{id, text, metadata}` aynen + `metadata.mevzuat_tur = "TEBLIGLER"`; chunk id kanundaki
+     gibi `mevzuatId` tabanlı.
+  5. **Index kararı (ayrı ADR):** ayrı Qdrant collection mı (arama tarafı `MEVZUAT_COLLECTION` ile seçer; kanun
+     index'i ve R@10 0.6885 dokunulmadan kalır), birleşik şema mı (tek collection + `mevzuat_tur` payload
+     filtresi)? Birleşik şemada değişenler: `ingest_qdrant.py` (`mevzuat` collection'ını silip yalnız kanun
+     vektörleriyle yeniden kurar; payload alanları kanuna özgü: `kanun_no`, `kanun_ad`), BM25 bacağı (`KORPUS_YOL`
+     tek korpus; IDF tüm korpusa göre değişir → kanun metrikleri yeniden ölçülmeli) ve `/ara` (tür parametresi yok).
+
 ---
 
 ## Karar Şablonu (yeni ADR için kopyala)

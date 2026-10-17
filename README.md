@@ -233,7 +233,7 @@ MevzuatTool/
 │   │   ├── enrich.py corpus.py   #   metadata merging · chunk generation
 │   │   ├── retrieval/            #   search.py (HybridArama) · embed(_onnx).py · rerank.py · config.py
 │   │   └── api/app.py            #   FastAPI: POST /ara, GET /saglik
-│   ├── teblig/                   # ⬜ skeleton (to be written from scratch)
+│   ├── teblig/                   # ⏸ PARKED, not in the MVP — experimental fetcher + chunker (ADR-0020)
 │   └── yonetmelik/               # ⬜ skeleton
 ├── scripts/
 │   ├── kanun/
@@ -244,14 +244,18 @@ MevzuatTool/
 │   │       ├── search_qdrant.py  #   Search CLI (library wrapper)
 │   │       ├── onnx_export.py · onnx_quantize.py  # ONNX FP32 export · dynamic int8
 │   │       └── metrik_*.py       #   Retrieval evaluation measurements
-│   ├── teblig/ · yonetmelik/     # ⬜ empty
-├── tests/kanun/                  # 23 files, 381 tests (+3 real-model: pytest -m model)
+│   ├── teblig/                   # ⏸ yapi_olc.py (structure measurement); no build script
+│   └── yonetmelik/               # ⬜ empty
+├── tests/
+│   ├── kanun/                    # 22 files, 328 tests (+3 real-model: pytest -m model)
+│   ├── teblig/                   # 2 files, 53 tests (lock the parked code)
+│   └── yonetmelik/               # ⬜ empty
 ├── colab/
 │   ├── bge_m3_embed.ipynb        # Corpus embedding (GPU)
 │   └── rerank_olc.ipynb          # Reranker measurement (T4)
 ├── data/
 │   ├── kanun/                    # raw/ (HTML cache) · korpus.jsonl
-│   ├── teblig/ · yonetmelik/     # ⬜ empty
+│   ├── teblig/ · yonetmelik/     # ⬜ no corpus
 │   └── gold/                     # altınset gold set (type-agnostic)
 ├── docs/                         # All project documentation
 ├── CLAUDE.md                     # AI agent / contributor memory

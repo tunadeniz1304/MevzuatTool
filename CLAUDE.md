@@ -13,7 +13,7 @@ mevzuat.gov.tr **kanunlarını** (yalnız `KANUN` türü) `mevzuat-mcp` ile çek
 ## En kritik sınır — UNUTMA
 - **Pipeline retrieval'da BİTER.** LLM / cevap üretme (generation) **KAPSAM DIŞI.** Generation, en sonda config'le takılan, OpenAI-uyumlu, swap'lanabilir bir endpoint olarak bırakılır — build buna bağımlı değildir.
 - **Yaklaşım = vanilla RAG.** Graph/agentic/advanced RAG **YAPMA** (future work). Bu MVP, vanilla RAG'ın retrieval yarısı. Doğru vanilla = madde-seviyesi yapısal chunking + hybrid (dense+BM25); bunlar "advanced" değil.
-- **MVP kapsamı yalnız `KANUN` türü** (ADR-0013). Tebliğ/yönetmelik MVP'ye dahil **değil** — ama repo yapısı bunlara hazır (`src/teblig/`, `src/yonetmelik/` iskeletleri). Yeni tür eklemek MVP'yi genişletmektir; önce `decisions.md`'ye kapsam kararı yaz.
+- **MVP kapsamı yalnız `KANUN` türü** (ADR-0013). Tebliğ/yönetmelik MVP'ye dahil **değil.** `src/yonetmelik/` boş iskelet; `src/teblig/`'de ise **deneysel, park edilmiş** kod var (çekici + chunker + yapı ölçümü, 53 test; build script'i ve korpusu YOK — ADR-0020): olduğu gibi kalır, geliştirilmez. Park edilmiş kodu geliştirmek ya da yeni tür eklemek MVP'yi genişletmektir; önce `decisions.md`'ye kapsam kararı yaz.
 - Yeni bir özellik eklemeden önce **mutlaka** [`compliance.md`](docs/compliance.md) "Kapsam Dışı" listesine bak. Listeye takılıyorsa **yapma**.
 
 ## Değişmez mimari ilkeler
@@ -55,23 +55,25 @@ Kanun tarafında bir kural değiştirmek başka türü **asla** bozamaz.
 
 ```
 src/kanun/        ← ÇALIŞIYOR (15 modül + retrieval/ + api/)
-src/teblig/       ← iskelet (boş; sıfırdan yazılacak)
+src/teblig/       ← PARK EDİLDİ, MVP dışı (ADR-0020): fetch.py · chunker.py — deneysel, geliştirilmez
 src/yonetmelik/   ← iskelet (boş; sıfırdan yazılacak)
 
 scripts/kanun/            build_corpus.py · eval_*.py · fetch_*.py
 scripts/kanun/retrieval/  ingest_qdrant · search_qdrant · metrik_* · onnx_export/quantize · esdeger_kontrol
-scripts/teblig/           (boş) · scripts/yonetmelik/ (boş)
+scripts/teblig/           yapi_olc.py (park; build script'i YOK) · scripts/yonetmelik/ (boş)
 
-tests/kanun/      23 dosya, 381 test (+3 `-m model`)    tests/teblig/ · tests/yonetmelik/ (boş)
+tests/kanun/      22 dosya, 328 test (+3 `-m model`)
+tests/teblig/     2 dosya, 53 test (park edilmiş kodu kilitler)    · tests/yonetmelik/ (boş)
 
 data/kanun/       raw/ (cache) · korpus.jsonl · unique_atiflar.json
-data/teblig/ · data/yonetmelik/   (boş)
+data/teblig/      korpus YOK (`fetch.py` yalnız raw/ cache'i yazar) · data/yonetmelik/ (boş)
 data/gold/        altınset gold set (tür-bağımsız, retrieval ölçümü)
 ```
 
 **Yeni tür eklerken:** `src/kanun/` modüllerini **oku ve KOPYALA** — `import` etme.
 Çıktı şeması `{id, text, metadata}` kalsın (ileride tek Qdrant'ta birleşebilsin),
-`metadata.mevzuat_tur` ekle. Ayrıntı: `src/teblig/__init__.py`.
+`metadata.mevzuat_tur` ekle. Ayrıntı: `src/teblig/__init__.py` (park durumu + yönergeler);
+tebliği yeniden açmanın ilk adımları: `decisions.md` ADR-0020.
 
 ## Bugünkü durum (2026-09-28)
 **Faz 1-7 çalışıyor** (kütüphane + HTTP servisi + docker-compose, yalnız KANUN türü). Ayrıntı → [`docs/status.md`](docs/status.md).
@@ -79,7 +81,7 @@ data/gold/        altınset gold set (tür-bağımsız, retrieval ölçümü)
 - **Korpus:** `data/kanun/korpus.jsonl` — 31.419 chunk / 916 kanun. `python scripts/kanun/build_corpus.py` ile cache'ten (`data/kanun/raw/`) ~75 sn'de **deterministik** üretilir. (89.745 fıkra, 29.428 bent, 1.718 mülga.)
 - **Retrieval:** kütüphane `src/kanun/retrieval/search.py` (`HybridArama`), BGE-M3 + Qdrant, 3-bacak hybrid. **R@10 = 0.6885** (bugünkü index; eski 0.700 index/korpus yürürlük uyuşmazlığından düştü — ADR-0015). +reranker 20/512 (istek başına) R@10 0.711 ama R@1 0.481→0.465 → varsayılan kapalı. ONNX int8 sorgu embed'i R@10 0.688, embed gecikmesi ~3× düşük. (Eski "+reranker 0.706" 2-bacak RRF tabanındaydı.)
 - **Servis:** FastAPI `POST /ara`, `GET /saglik` (`src/kanun/api/app.py`); ayarlar ortam değişkeninden (`config.py`).
-- **Testler:** 381 test geçiyor (`pytest -q`); gerçek-model parity testleri `pytest -m model`.
+- **Testler:** 381 test geçiyor (`pytest -q`: `tests/kanun/` 328 + `tests/teblig/` 53); 3 gerçek-model parity testi ayrıca `pytest -m model`.
 - **Docker:** `docker compose up -d qdrant api` + `--profile ingest run --rm ingest` (ön koşul: `colab/outputs/`, `models/onnx/`, korpus).
 - **Eksik:** atıf modu (metadata hazır, kod yok) · Qdrant index'inin güncel korpusla yeniden embed'i.
 

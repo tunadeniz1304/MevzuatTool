@@ -23,7 +23,7 @@ Yapısal düzeltme fazları: [`yapisal-sadakat-master-plan.md`](yapisal-sadakat-
 | 6 | Sorgu + Retrieval | ✅ | `HybridArama` + reranker (ops.) + ONNX int8 + FastAPI servisi (ADR-0015/16/17) |
 | 7 | Dockerize | ✅ | `docker-compose.yml` + `Dockerfile` (ADR-0018); compose üzerinden `/ara` R@10 = in-process |
 
-**Test durumu:** 381 test geçiyor (`pytest -q`); 3 gerçek-model parity testi `pytest -m model` ile ayrı (ağ/model indirmez varsayılan koşu).
+**Test durumu:** 381 test geçiyor (`pytest -q`): `tests/kanun/` 22 dosya 328 test + `tests/teblig/` 2 dosya 53 test; 3 gerçek-model parity testi `pytest -m model` ile ayrı (ağ/model indirmez varsayılan koşu).
 
 ---
 
@@ -54,7 +54,7 @@ Yapısal düzeltme fazları: [`yapisal-sadakat-master-plan.md`](yapisal-sadakat-
 ## Faz 1 — Veri Çekme ✅
 - [x] `fetch.py` — bedesten API'sinden 429/Retry-After uyumlu, cache'li, devam-edilebilir çekim
 - [x] 916 KANUN listesi + HTML + madde-ağacı cache'li (`data/kanun/raw/`)
-- [x] Yalnız `KANUN` türü (ADR-0013); KHK/tüzük/yönetmelik/tebliğ kapsam dışı
+- [x] Yalnız `KANUN` türü (ADR-0013); KHK/tüzük/yönetmelik/tebliğ kapsam dışı (deneysel `src/teblig/` kodu park edildi, MVP zincirinde değil — ADR-0020)
 - [x] Yalnız HTML içerik; PDF yok
 - [x] Kendi scraper'ı yok — `saidsurucu/mevzuat-mcp` API sözleşmesi kullanılıyor
 
@@ -138,6 +138,14 @@ Oturum başı ~%59.7 → **%75.3**. Kırılım: kanun %98 · madde %86 · fıkra
 > korpustaki "N." bent ile eşleştirme — Türk hukuk dilinde bent'e "fıkra" denir). Toleranslar
 > **build kodunda değil**, ayrı karşılaştırma script'indeydi. Yani %75.3 bir **ölçüm üst-sınırıdır**;
 > canlı retrieval'ın aynı toleransı uygulaması gerekir.
+
+---
+
+## Park edilmiş iş — Tebliğ (ADR-0020)
+
+`src/teblig/` deneysel kodu (2026-07-10) **park edildi** (2026-10-18): olduğu gibi kalır, geliştirilmez; MVP yalnız `KANUN` (ADR-0013).
+- **Var:** `fetch.py` (ölçülmüş rate-limit modeli, 3 paralel işçi) · `chunker.py` (madde + numaralı bölüm hiyerarşisi, tebliğ-sonu ek kırpma) · `scripts/teblig/yapi_olc.py` · `tests/teblig/` 53 test.
+- **Yok:** tebliğ build script'i, korpus, `mevzuat_tur`, index / retrieval / servis entegrasyonu. Yeniden açılırsa ilk adımlar ADR-0020'de.
 
 ---
 

@@ -227,7 +227,7 @@ MevzuatTool/
 │   │   ├── enrich.py corpus.py   #   metadata birleştirme · chunk üretimi
 │   │   ├── retrieval/            #   search.py (HybridArama) · embed(_onnx).py · rerank.py · config.py
 │   │   └── api/app.py            #   FastAPI: POST /ara, GET /saglik
-│   ├── teblig/                   # ⬜ iskelet (sıfırdan yazılacak)
+│   ├── teblig/                   # ⏸ PARK EDİLDİ, MVP dışı — deneysel çekici + chunker (ADR-0020)
 │   └── yonetmelik/               # ⬜ iskelet
 ├── scripts/
 │   ├── kanun/
@@ -238,14 +238,18 @@ MevzuatTool/
 │   │       ├── search_qdrant.py  #   Arama CLI (kütüphane sarmalayıcısı)
 │   │       ├── onnx_export.py · onnx_quantize.py  # ONNX FP32 export · dinamik int8
 │   │       └── metrik_*.py       #   Retrieval değerlendirme ölçümleri
-│   ├── teblig/ · yonetmelik/     # ⬜ boş
-├── tests/kanun/                  # 23 dosya, 381 test (+3 gerçek-model: pytest -m model)
+│   ├── teblig/                   # ⏸ yapi_olc.py (yapı ölçümü); build script'i yok
+│   └── yonetmelik/               # ⬜ boş
+├── tests/
+│   ├── kanun/                    # 22 dosya, 328 test (+3 gerçek-model: pytest -m model)
+│   ├── teblig/                   # 2 dosya, 53 test (park edilmiş kodu kilitler)
+│   └── yonetmelik/               # ⬜ boş
 ├── colab/
 │   ├── bge_m3_embed.ipynb        # Korpus embed (GPU)
 │   └── rerank_olc.ipynb          # Reranker ölçümü (T4)
 ├── data/
 │   ├── kanun/                    # raw/ (HTML cache) · korpus.jsonl
-│   ├── teblig/ · yonetmelik/     # ⬜ boş
+│   ├── teblig/ · yonetmelik/     # ⬜ korpus yok
 │   └── gold/                     # altınset gold set (tür-bağımsız)
 ├── docs/                         # Tüm proje dokümanları
 ├── CLAUDE.md                     # AI ajan / katkı sağlayıcı hafızası
