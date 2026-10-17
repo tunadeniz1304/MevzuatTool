@@ -375,6 +375,112 @@ Güncel mimari görünümü: [`arch.md`](arch.md). Kapsam: [`mevzuat-mvp-kapsam.
   - **MANTIK:** `depends_on: condition: service_healthy` yalnız "konteyner başladı" değil "healthcheck geçti"yi
     bekler → api, Qdrant portu açılmadan bağlanmaya çalışmaz.
 
+## ADR-0019 — Atıf modu: deterministik ayrıştırıcı + bellek içi korpus indeksiyle kesin getirme
+- **Durum:** ✅ Kabul + uygulandı (2026-10-18) — roadmap Faz 6'nın eksik parçası ("atıf modu: kanun/madde/
+  fıkra/bent → metadata filtresiyle kesin getirme"); MVP DoD'nin "atıf veya doğal dil" yarısı.
+- **Bağlam:** Yalnız doğal dil modu vardı (3-bacak hybrid, R@1 0.481). Maddeyi bilen kullanıcının sorgusu
+  ("TCK m. 141/2") hybrid'e girince doğru madde sıralamada kaybolabiliyor — bu sorgunun ihtiyacı arama değil
+  kesin getirme. Metadata hazırdı (kanun_no, madde_no, madde_tipi, mevzuat_id, `fikralar[]` ağacı), kod yoktu.
+  Kısıtlar: kanun_no globalde benzersiz değil (14 kanun_no altında 2 kanun, ör. 6551 — chunk id bu yüzden
+  mevzuat_id tabanlı); aynı kanunda iki 'Geçici 1' olabilir (`ids.py` -1/-2); mülga madde korpusta işaretli
+  durur; status.md dürüstlük notu: "fıkra N" atfının "N." bendine eşlenmesi yalnız ölçüm script'indeydi.
+- **Seçenekler:**
+  - Getirme yolu:
+    - **(A) Qdrant payload filtresi** (kanun_no + madde_no + madde_tipi): payload yalnız madde_id, kanun_no,
+      kanun_ad, madde_no, yurutluk taşıyor — madde_tipi, mevzuat_id, `fikralar` YOK → fıkra/bent getirilemez;
+      kanun_no/madde_no payload index'i yok; Qdrant index'i korpusun gerisinde (1.678 maddede yürürlük
+      uyuşmazlığı, ADR-0015) → atıf modu bayat yürürlük döndürürdü. `ingest_qdrant.py` değişikliği + yeniden
+      ingest ister; Qdrant kapalıyken atıf da çalışmazdı.
+    - **(B) BM25Index'in bellek sözlükleri** (`metinler`, `kanun_adlari`): anahtar (kanun_no, madde_no) →
+      çakışan kanun_no ve tekrarlı 'Geçici 1' birbirini EZER; fıkra ağacı yok.
+    - **(C) Ayrı bellek içi indeks + satır ofseti** — seçilen.
+  - Ayrıştırma: **deterministik regex + küçük tablo** (seçilen) vs LLM ile ayrıştırma (reddedildi: generation
+    kapsam dışı — ADR-0001; deterministik ve test edilebilir olmalı; istek yoluna model gecikmesi eklemez).
+  - Servis: ayrı `/atif` ucu vs `/ara`'ya `mod` alanı (seçilen: tek uç, geriye uyumlu; istemci sorgunun atıf
+    olup olmadığını bilmek zorunda kalmaz — `otomatik` ayırır).
+- **Karar:**
+  - **Ayrıştırıcı** (`src/kanun/retrieval/atif.py`, `atif_ayristir` / `ayristir`): harf/İ-ı/aksan duyarsız,
+    uzunluk koruyan katlama (`katla`) üzerinde regex. Kanun: 'NNNN sayılı ...', '5237 s. K.', 'Kanun No:',
+    28 kısaltma (`KISALTMALAR`: TCK, CMK, TMK, TBK, HMK, İİK, TTK, VUK, GVK, KVK, KDVK, AATUHK, DMK, KVKK,
+    İYUK, FSEK, ...), yaygın adlar (`ADLAR`: 'Türk Ceza Kanunu', 'Medeni Kanun', 'İş K.' ...), 'Anayasa' / 'AY'
+    ve servis yolunda korpustaki 916 resmî kanun adı (uzun-önce: 'Deniz İş Kanunu' İş Kanunu sayılmaz).
+    Madde: 'm./md./mad./madde N', 'N. madde', 'N inci maddesi', 'Geçici/Ek/Mükerrer N', '123/A', kanundan sonra
+    yalın numara. Fıkra: 'f. 2', '2. fıkra', 'ikinci fıkrası', 'son fıkra', '141/2', Roma '166/II'. Bent:
+    '(a) bendi', 'a bendi', 'b. a', '(1) numaralı bent', '141/2-a', '119/1(ğ)'. Çıktı korpus gösterimine
+    eşlenir ('Geçici 1', 'Mükerrer 298', '123/A').
+    - **Atıf = kanun + madde.** Yalnız kanun ('5237 sayılı kanun') ya da yalnız madde ('madde 5') atıf değildir.
+    - **Yanlış-pozitif kapıları:** 'N madde' (sıra eksiz) sayımdır; numaradan sonra belge numarası/tarih
+      ('5 sayılı', '2/3/2024', '%') madde numarasını düşürür; kapı biçimin gücüne göre KADEMELİ — açık 'm.'
+      güçlü sinyaldir ('İş K. m. 53 yıllık izin' atıftır), 'madde 3' fiziksel miktarla ('3 ton'), yalın/önekli
+      numara ('TCK 2', 'ek 3') ayrıca süre/sayım sözcükleriyle düşer ('TCK'da 2 yıl', 'TMK 4 çocuk');
+      'sayılı' sonrası KHK / CB kararnamesi / karar / liste / cetvel / Resmî Gazete kanun sayılmaz; 'Anayasa
+      Mahkemesi', küçük 'ay', 'iş kazası' kanun sayılmaz.
+    - Tablo kararları: 'TMK' → 4721 (ceza hukukunda Terörle Mücadele K. 3713 için de kullanılır; özel
+      hukuktaki baskın kullanım seçildi), 'KVK' → 5520 / 'KVKK' → 6698, 'BK'/'MK'/'HUMK'/'CMUK' yok (mülga eski
+      kanunlarla karışır), 'Borçlar Kanunu' / 'Medeni Kanun' bugünkü 6098 / 4721.
+    - Belirsiz slash eki: '359/a' (harfli 359/A ya da 359'un (a) bendi), '166/I' (harfli ya da Roma 1. fıkra) →
+      birincil yorum harfli madde + `alternatifler`.
+  - **Kesin getirme** (`src/kanun/retrieval/atif_getir.py`): **(C)**. `atif_indeks_kur` korpusu bir kez tarar:
+    (kanun_no, madde_tipi, madde_numara) → kayıt listesi; kayıt küçük alanlar + dosyadaki **bayt ofseti** tutar,
+    eşleşmede tam satır (metin + `fikralar`) diskten okunur ve id doğrulanır (dosya değişmişse `KorpusDegisti`
+    → servis 503). Çözüm kuralları (`atif_coz`):
+    - kanun korpusta yok → `kanun_yok`; kanun var madde yok → `madde_yok` (çağıran doğal dile düşer).
+    - **kanun_no çakışması:** madde birden çok mevzuat_id'de varsa sorgudaki kanun adı ipucu (kök örtüşmesi)
+      tek kanunu açıkça seçiyorsa o; yoksa HEPSİ döner, `coklu_mevzuat=true` + aday listesi. Sessizce birini
+      seçmek yanlış kanunu "kesin" diye sunardı; madde yalnız birinde varsa doğal olarak o döner. Aynı kanunda
+      aynı numaralı iki madde → ikisi de döner, uyarıyla.
+    - **fıkra → bent toleransı:** '(N)' fıkrası yok ama 'N.' bendi varsa bent döner, `tolerans='fikra->bent'`.
+      Numaralı fıkrası hiç olmayan eski stil maddede ('giriş: 1. ... 2. ...', GVK m.40) 'N.' bendi konumsal
+      fıkradan önce gelir; '(N)' fıkrası bulunup ayrıca 'N.' bendi de varsa uyarı eklenir.
+    - **yürürlük:** atıf modunda filtre UYGULANMAZ — mülga madde `yurutluk` + uyarıyla döner (kesin atfı
+      "bulunamadı" diye gizlemek yanıltıcı olurdu, korpus mülgayı tarihsel sorgu için zaten tutuyor).
+      Doğal dil modunun yürürlük filtresi değişmedi.
+    - fıkra/bent bulunamazsa madde (ya da fıkra) yine döner, uyarıyla. Alternatif yorum ('harf->bent',
+      'roma->fikra') yalnız istenen alt-parça TAM bulunursa kabul edilir.
+  - **Mod seçimi** (`modlu_ara`): `otomatik` (atıf ayrıştırılıp çözülürse atıf, değilse doğal dil) · `atif`
+    (atıf olarak dene) · `dogal`. Düşüş durumları açıkça bildirilir: `eslesme_yok`, `ayristirilamadi`
+    (`atif` modunda), `indeks_yok`, kısmi çözümde `kismi`. Atıf ayrıştırılamayan sorguda doğal dil çağrısı
+    `HybridArama.ara(sorgu, top_k, yururlukte_only, rerank)` ile birebir aynıdır; ayrıştırıcı istisnası doğal
+    dil yolunu bozmaz (loglanır, doğal dile düşülür).
+  - **Servis** (`POST /ara`): istek `mod` (varsayılan `otomatik`); `metin` artık `null` = mod varsayılanı
+    (doğal: false, atıf: true). Kullanılan mod `config.mod` (+ `istenen_mod`). Doğal dil yanıtı ESKİ ŞEMAYLA
+    birebir (yeni anahtar yok — pydantic `model_serializer` boş `atif`'i yazmaz); atıf modunda her sonuçta
+    `atif` {mevzuat_id, madde_tipi, madde_baslik, yurutluk, atif_sira, alt_parca{fikra, bent, metin, yurutluk,
+    tolerans}, tasindigi_kanun, uyarilar}, üst düzeyde `atif` {durum, dusus, aciklama, atiflar[]} (düşüşte de).
+    Atıf modunda `skor`=1.0, sıra = atıfların sorgudaki sırası, reranker ve `yururlukte_only` uygulanmaz,
+    `top_k` keser. `/saglik` → `atif_indeks` (kayıt sayısı). Ayrı uç açılmadı.
+- **Sonuç:**
+  - ✅ MVP DoD'nin atıf yarısı kodda: atıf sorgusu → kesin madde (+ fıkra/bent), yürürlük bilgisiyle.
+  - ✅ Doğal dil yolu değişmedi: `HybridArama`/`search.py` dokunulmadı; eşdeğerlik testi (gerçek `HybridArama`
+    + sahte Qdrant/BM25) ve mevcut `test_search.py` / `test_api.py` aynen geçiyor.
+  - ⚠️ `/ara`'nın varsayılanı artık `otomatik`: HTTP üzerinden doğal dil ölçen script'ler modu sabitlemeli.
+    Altınset süzgeci (`altinset_sizinti.py`) madde atıflarının çoğunu eler ama '4/1-a', 'm. 141' gibi biçimleri
+    değil → `metrik_gecikme.py` C-http satırı `mod=dogal` gönderir (protokol in-process ile eşdeğer kalır).
+  - ✅ Ayrıştırma sorgu başına ~1-3 ms (2000 krk, 916 korpus adıyla); getirme O(1) sözlük + tek satır okuma.
+    Qdrant ve embedder atıf modunda hiç çağrılmaz (Qdrant kapalıyken de çalışır).
+  - ⚠️ **Gerçek korpusla doğrulanmadı** (geliştirme makinesinde `data/` yok): atıf bulunabilirliği
+    `unique_atiflar.json` (8.290 atıf) üzerinden ölçülmeli; açılışta korpusun ikinci kez taranması (BM25
+    kurulumuyla aynı mertebe, birkaç sn) ve indeks belleği (31k küçük kayıt) ölçülmedi.
+  - ❌ Sınırlar: alt-bent okunmaz ('359/a-1'in '1'i); sıralama/aralık ('141 ve 142. maddeler',
+    '141-145') yalnız bir numarayı yakalar ('TCK m. 141 ve m. 142' ikisini de); karışık sırada kanun en yakın
+    ÖNCEKİ kanuna bağlanır; tolerans yalnız '(N)' fıkrası YOKSA devreye girer — '(N)' fıkrası da 'N.' bendi de
+    olan maddede '40/2' fıkraya gider (uyarıyla). Doğal dil modunun `BM25Index` sözlükleri (kanun_no, madde_no)
+    anahtarlı olduğundan çakışan kanunlarda `metin` yanlış kanundan gelebilir — önceden var olan, bu ADR'nin
+    dokunmadığı sınır.
+- **Öğrenme notu:**
+  - **NASIL:** sorgu katlanır ('İİK' → 'iik'; uzunluk korunur, konumlar orijinalle hizalı); kanun / madde /
+    fıkra / bent parçaları ayrı regex'lerle bulunur, çakışanlardan en-soldaki-en-uzun seçilir; her madde en
+    yakın önceki kanuna, ardından gelen ilk fıkra/bende bağlanır → `Atif`. Çözücü indekste anahtarı bulur,
+    satırı ofsetten okur, `fikralar` ağacında fıkra/bendi seçer.
+  - **NEYE GÖRE:** roadmap Faz 6 + DoD; kanun_no çakışması ve tekrarlı madde invariant'ları (CLAUDE.md);
+    dürüstlük notunun "canlı retrieval aynı toleransı uygulamalı" uyarısı; doğal dilin birebir korunması.
+  - **NEDEN (alternatif):** Qdrant payload filtresi fıkra/bent veremez ve bayat yürürlük taşır; BM25 sözlükleri
+    çakışmada veri kaybeder; LLM ayrıştırma deterministik değil ve kapsam dışı.
+  - **MANTIK:** **kesin getirme** (exact lookup) bir arama değildir — sıralama/skor yoktur, anahtar ya vardır ya
+    yoktur; bu yüzden reranker ve yürürlük filtresi (ikisi de sıralama/eleme aracı) atıf modunda uygulanmaz.
+    **Ofset indeksi:** dosyadaki her satırın bayt konumunu saklayıp gerektiğinde `seek` ile okumak, büyük
+    veriyi belleğe almadan O(1) erişim sağlar (veritabanı indekslerinin en basit biçimi).
+
 ---
 
 ## Yapı Kararları

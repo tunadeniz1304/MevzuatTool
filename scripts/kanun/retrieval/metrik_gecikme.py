@@ -120,7 +120,9 @@ def cocuk(args, cfg):
 
         def ara(sorgu):
             t = time.perf_counter()
-            r = istemci.post("/ara", json={"sorgu": sorgu, "top_k": 10, "rerank": acik})
+            # mod=dogal: protokol in-process HybridArama.ara ile eşdeğer kalsın — /ara'nın varsayılan
+            # 'otomatik' modu atıf içeren gold sorgusunu atıf moduna alırdı (ADR-0019)
+            r = istemci.post("/ara", json={"sorgu": sorgu, "top_k": 10, "rerank": acik, "mod": "dogal"})
             r.raise_for_status()
             j = r.json()
             sure = dict(j["sure_ms"])
