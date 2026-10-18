@@ -802,6 +802,15 @@ def test_dosya_degisirse_korpus_degisti(tmp_path):
         ix.chunk(ix.bul("5237", "asil", "141")[0])
 
 
+def test_dosya_okunamazsa_korpus_degisti(tmp_path):
+    yol = tmp_path / "korpus.jsonl"
+    _korpus_yaz(yol, KORPUS)
+    ix = atif_indeks_kur(str(yol))
+    yol.unlink()                                                # servis açıkken taşındı / silindi
+    with pytest.raises(KorpusDegisti, match="yeniden başlatın"):
+        ix.chunk(ix.bul("5237", "asil", "141")[0])
+
+
 # =================================================================================================
 # Mod seçimi — otomatik / atif / dogal
 # =================================================================================================

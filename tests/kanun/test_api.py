@@ -314,3 +314,15 @@ def test_korpus_degisirse_503(tmp_path):
     with _atif_istemci(SahteArama(), atif_fabrika=lambda: ix) as c:
         r = c.post("/ara", json={"sorgu": "TCK m. 141"})
     assert r.status_code == 503 and "yeniden başlatın" in r.json()["detail"]
+
+
+def test_korpus_dosyasi_silinirse_503(tmp_path):
+    import json
+    from kanun.retrieval.atif_getir import atif_indeks_kur
+    yol = tmp_path / "korpus.jsonl"
+    yol.write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in ATIF_KORPUS), encoding="utf-8")
+    ix = atif_indeks_kur(str(yol))
+    yol.unlink()                                               # FileNotFoundError 500 olarak sızmamalı
+    with _atif_istemci(SahteArama(), atif_fabrika=lambda: ix) as c:
+        r = c.post("/ara", json={"sorgu": "TCK m. 141"})
+    assert r.status_code == 503 and "yeniden başlatın" in r.json()["detail"]
