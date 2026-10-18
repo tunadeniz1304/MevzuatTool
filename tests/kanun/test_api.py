@@ -23,7 +23,7 @@ class SahteArama:
         self.client = SahteClient(qdrant)
         self.collection = "mevzuat"
         self.bm25 = BM25Index(None, [("1", "1", "a"), ("1", "2", "b")],
-                              metinler={("1", "1"): "Birinci madde metni."})
+                              metinler={"a": "Birinci madde metni."})          # madde_id → metin
         self.aday_k = 50
         self.agirliklar = (0.33, 0.33, 0.34)
         self.rerank_aday = 20

@@ -468,7 +468,7 @@ Güncel mimari görünümü: [`arch.md`](arch.md). Kapsam: [`mevzuat-mvp-kapsam.
     ÖNCEKİ kanuna bağlanır; tolerans yalnız '(N)' fıkrası YOKSA devreye girer — '(N)' fıkrası da 'N.' bendi de
     olan maddede '40/2' fıkraya gider (uyarıyla). Doğal dil modunun `BM25Index` sözlükleri (kanun_no, madde_no)
     anahtarlı olduğundan çakışan kanunlarda `metin` yanlış kanundan gelebilir — önceden var olan, bu ADR'nin
-    dokunmadığı sınır.
+    dokunmadığı sınır (2026-10-18: giderildi, ADR-0021 — doğal dil adayları madde_id ile anahtarlanır).
 - **Öğrenme notu:**
   - **NASIL:** sorgu katlanır ('İİK' → 'iik'; uzunluk korunur, konumlar orijinalle hizalı); kanun / madde /
     fıkra / bent parçaları ayrı regex'lerle bulunur, çakışanlardan en-soldaki-en-uzun seçilir; her madde en
@@ -576,6 +576,57 @@ Güncel mimari görünümü: [`arch.md`](arch.md). Kapsam: [`mevzuat-mvp-kapsam.
      filtresi)? Birleşik şemada değişenler: `ingest_qdrant.py` (`mevzuat` collection'ını silip yalnız kanun
      vektörleriyle yeniden kurar; payload alanları kanuna özgü: `kanun_no`, `kanun_ad`), BM25 bacağı (`KORPUS_YOL`
      tek korpus; IDF tüm korpusa göre değişir → kanun metrikleri yeniden ölçülmeli) ve `/ara` (tür parametresi yok).
+
+## ADR-0021 — Doğal dil aday kimliği: madde_id, (kanun_no, madde_no) değil
+- **Durum:** Kabul edildi (2026-10-18) — kodda; gerçek veriyle yeniden ölçülmedi
+- **Bağlam:** Doğal dil modunda `BM25Index` sözlükleri (`metinler`, `kanun_adlari`), `adaylar()` aday birleştirmesi,
+  WSUM füzyonu, reranker girdisi ve `/ara` `metin`'i adayları `(kanun_no, madde_no)` ile anahtarlıyordu. Bu çift
+  benzersiz değil: 14 kanun_no altında 2 kanun var (tertip çakışması, ör. 6551) ve aynı kanunda iki 'Geçici 1'
+  olabilir (`ids.py` -1/-2) — chunk id bu yüzden `mevzuat_id` tabanlı. Sonuç: iki farklı madde tek adaya çöküyor
+  (bacak skorları birbirini eziyor), `metin` ve kanun adı korpusta son gelen maddeden geliyordu; yalnız BM25'ten gelen
+  adaya sentetik payload veriliyordu (`kanun_ad` boş, `yurutluk` yok). Atıf modu (ADR-0019) bu sorunu taşımaz (kendi
+  indeksi `mevzuat_id` tutar). Ek kısıt: Qdrant index'i korpusun gerisinde (eski Colab embed'i 31.416 nokta, korpus
+  31.419 chunk) → yeniden üretilen korpusta id'si değişmiş madde olabilir.
+- **Karar:**
+  1. Adayın kimliği **madde_id** (korpus chunk id'si = Qdrant payload'ındaki `madde_id`). Bacaklar bu kimlikte
+     birleşir; reranker metni ve `/ara` `metin`'i bu kimlikle alınır. `BM25Index.metinler` ve `kanun_adlari`'nın
+     yerine gelen `payloadlar` madde_id anahtarlıdır. `Sonuc.anahtar` = (kanun_no, madde_no) yalnız gold/ölçüm
+     eşleştirme çifti olarak kalır (metrik tanımı değişmez).
+  2. Yalnız BM25'ten gelen adayın payload'ı korpustan, Qdrant payload şemasıyla dolar (`madde_id` +
+     `PAYLOAD_ALANLARI` = `colab/bge_m3_embed.ipynb` `payloadlar` alanları). Qdrant payload'ında `kanun_ad` boşsa ad
+     aynı madde_id'nin korpus kaydından gelir.
+  3. **Eski index köprüsü** (`BM25Index.kimlik`): Qdrant'ın madde_id'si korpusta yoksa, aynı kanunda (`mevzuat_id` =
+     id öneki) o madde_no'lu **tek** korpus maddesi varsa ona bağlanır; birden çoksa ya da hiç yoksa id olduğu gibi
+     kalır (aday ayrı durur, korpus metni yoktur — belirsizlik sessizce çözülmez). Eski anahtar bu maddeleri
+     birleştiriyordu; köprü olmasa çakışmayan kanunlarda da sıra değişirdi. Index güncel korpusla yeniden embed
+     edilince köprü işlemsiz kalır.
+  4. WSUM'da puanı TAM eşit adayların sırası **ilk görünme** (dense, sparse, BM25 bacak sırası; bacak içinde o
+     bacağın sıralaması). Eski `set(d) | set(s) | set(b)` birleşimi bu sırayı anahtar hash'ine (PYTHONHASHSEED)
+     bağlıyordu, süreçten sürece değişiyordu; anahtar türü değişince zaten değişecekti.
+- **Reddedilen:** payload'a `mevzuat_id` ekleyip (kanun_no, madde_no, mevzuat_id) ile anahtarlamak — yeniden embed +
+  ingest ister ve aynı kanundaki iki 'Geçici 1'i yine ayırmaz; madde_id zaten benzersiz ve payload'da var.
+- **Sonuç:**
+  - ✅ Çakışan kanun_no'larda ve tekrarlı madde no'da maddeler ayrı aday; `metin`, kanun adı ve reranker metni
+    doğru maddeden gelir.
+  - ✅ Çakışmayan kanunlarda sonuç birebir aynı (puanlar, sıra, alanlar, `/ara` yanıtı; tek istisna TAM eşit
+    puanlıların kendi aralarındaki sırası): `tests/kanun/test_madde_kimligi.py` eski kodun dondurulmuş kopyasına
+    karşı rastgele sahte Qdrant/BM25 senaryolarında (güncel ve eski index) doğrular. `/ara` şeması değişmez; eski
+    index köprüsünden geçen adayın `madde_id`'si artık korpustaki id'dir.
+  - ⚠️ Eski index'e özgü ikinci fark: bir maddenin Qdrant payload'ındaki (kanun_no, madde_no) korpustaki kaydından
+    farklıysa (aynı madde_id), eski kod maddenin dense/sparse ve BM25 puanını iki adaya bölüyordu; yeni kod
+    birleştirir (sonuçta payload alanları Qdrant'tan gelir, eskisi gibi). Dokümanlarda böyle bir ayrışma kaydı yok;
+    gerçek veride varsa `esdeger_kontrol.py` `ayrisma` diye sayar.
+  - ✅ Ölçüm script'leri: `metrik_rerank_3bacak.py` aday dosyası `adaylar` çiftlerini aynen yazar, aynı sırayla
+    `madde_idler` ekler (reranker metni bundan; `madde_idler`'siz eski dosyada çiftten). Gold eşleştirmesi (`sira`,
+    ilk eşleşen çift) değişmez; çakışan iki madde listede artık iki yer tutar. `esdeger_kontrol.py` farkları
+    puanlarıyla sınıflar: ayni / esit_puan / cakisma / ayrisma (beklenen) / fark (çıkış 1).
+  - ⚠️ **Gerçek veriyle doğrulanmadı** (geliştirme makinesinde `data/` ve Qdrant yok). Koşulacaklar:
+    `esdeger_kontrol.py` (beklenen FARK 0) ve R@10 yeniden ölçümü (`metrik_rerank_3bacak.py --aday-cikar` →
+    `--rapor` taban satırı, 0.6885'e karşı). Gold (kanun_no, madde_no) çiftidir; çakışan 14 kanun_no'da ayrışan
+    maddeler sırayı ve R@10'u değiştirebilir. Eski `rerank_skor_*` dosyaları eski aday sırasına hizalı:
+    `--aday-cikar` sonrası silinip yeniden puanlanmalı (`--rapor` yalnız uzunluk denetler).
+  - ⚠️ Servis belleği: ikinci tam-korpus haritası (`payloadlar`) — sentetik tahmin eski `kanun_adlari`'dan ~16 MB
+    fazla (31.419 satır); gerçek korpusta ölçülmedi.
 
 ---
 

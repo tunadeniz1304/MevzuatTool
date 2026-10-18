@@ -40,6 +40,16 @@ def test_wsum_uzunluk_uyusmazligi():
         wsum_puan([{"a": 1}], (0.5, 0.5))
 
 
+def test_wsum_esit_puanlilar_ilk_gorunme_sirasinda():
+    """Eşit puanda sıra = ilk görünme (bacak sırası, bacak içi sıra) — anahtar hash'ine bağlı değil.
+    (Eski set birleşiminde 20 eşit anahtarın bu sırada çıkma olasılığı ~1/20!.)"""
+    anahtarlar = [f"m{i}" for i in range(20)]
+    d = {k: 1.0 for k in anahtarlar[:10]}                 # hepsi eşit → normalize 0
+    s = {k: 1.0 for k in anahtarlar[5:]}                  # m5-m9 iki bacakta, m10+ yalnız sparse
+    assert wsum([d, s], (0.5, 0.5)) == anahtarlar
+    assert wsum_puan([], ()) == {}
+
+
 def test_tokenize_turkce():
     assert tokenize("Kira ARTIŞI, 2024'te %25!") == ["kira", "artişi", "2024", "te", "25"]
 
@@ -75,15 +85,16 @@ def _embedder(sorgu):
 
 def _arama(dense, sparse, bm_skor, maddeler, **kw):
     bm25 = BM25Index(SahteBM25(bm_skor), maddeler,
-                     metinler={(m[0], m[1]): f"metin {m[0]}/{m[1]}" for m in maddeler})
+                     metinler={m[2]: f"metin {m[0]}/{m[1]}" for m in maddeler})
     client = SahteClient(dense, sparse)
     return HybridArama(_embedder, client, bm25, **kw), client
 
 
 def _temel():
+    # Qdrant payload'ındaki madde_id = korpus chunk id'si (bacaklar madde_id'de birleşir)
     dense = [_nokta("1", "1", 0.9), _nokta("1", "2", 0.5), _nokta("2", "1", 0.1)]
     sparse = [_nokta("1", "2", 12.0), _nokta("2", "1", 2.0)]
-    maddeler = [("1", "1", "m11"), ("3", "7", "m37"), ("2", "1", "m21")]
+    maddeler = [("1", "1", "1-1"), ("3", "7", "3-7"), ("2", "1", "2-1")]
     return dense, sparse, [4.0, 0.0, 1.0], maddeler
 
 
@@ -126,6 +137,13 @@ def test_wsum_siralama_ve_top_k():
     assert sonuc[0].rerank_skor is None
 
 
+def test_esit_puanli_adaylar_bacak_sirasinda_kalir():
+    # aynı metinli maddeler (ör. 'Bu Kanun yayımı tarihinde yürürlüğe girer.') her bacakta eşit skor alır
+    dense = [_nokta("1", "1", 0.9)] + [_nokta("9", str(i), 0.5) for i in range(12, 0, -1)]
+    arama, _ = _arama(dense, [], [], [])
+    assert [s.madde_no for s in arama.ara("soru", top_k=13)] == ["1"] + [str(i) for i in range(12, 0, -1)]
+
+
 def test_sure_ms_anahtarlari():
     arama, _ = _arama(*_temel())
     sonuc = arama.ara("soru")
@@ -136,10 +154,12 @@ def test_sure_ms_anahtarlari():
 
 def test_sadece_bm25_adayinin_kanun_adi_korpustan():
     dense, sparse, _, maddeler = _temel()
-    bm25 = BM25Index(SahteBM25([0.0, 9.0, 0.0]), maddeler, kanun_adlari={("3", "7"): "Üç Kanunu"})
+    bm25 = BM25Index(SahteBM25([0.0, 9.0, 0.0]), maddeler,
+                     payloadlar={"3-7": {"madde_id": "3-7", "kanun_no": "3", "kanun_ad": "Üç Kanunu",
+                                         "madde_no": "7", "yurutluk": "yürürlükte"}})
     arama = HybridArama(_embedder, SahteClient(dense, sparse), bm25)
     s = next(s for s in arama.ara("soru", top_k=10) if s.anahtar == ("3", "7"))
-    assert s.kanun_ad == "Üç Kanunu" and s.madde_id == "m37"
+    assert s.kanun_ad == "Üç Kanunu" and s.madde_id == "3-7"
 
 
 def test_bos_sonuc():

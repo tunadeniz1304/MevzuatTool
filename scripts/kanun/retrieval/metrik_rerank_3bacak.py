@@ -11,6 +11,8 @@ Modlar:
                                      Skorlar rerank_capa_skor_<B>.jsonl'a yazılır (kaldığı yerden devam).
   --aday-cikar [--embed E] [--n N]  3-bacak WSUM top-50 → data/kanun/olcum/rerank_aday_3bacak[_<E>].jsonl
                                      E (sorgu embed backend): torch (vars.) | onnx-fp32 | onnx-int8
+                                     satır: {sorgu, dogru, adaylar [[kanun_no, madde_no]] (gold eşleştirmesi),
+                                     madde_idler (aynı sırayla; reranker metni bu benzersiz kimlikten)}
   --skorla --max-len L [--backend B] [--embed E] [--aday A] [--n N]
                                      adayların ilk A'sını puanla → rerank_skor_[<E>__]<B>_<L>.jsonl
                                      (kaldığı yerden devam eder). B: torch | onnx-fp32 | onnx-int8
@@ -126,9 +128,14 @@ def aday_cikar(args):
     t0 = time.time()
     with open(hedef_dosya, "w", encoding="utf-8") as out:
         for i, (sorgu, hedef) in enumerate(sorgular, 1):
-            sirali, _, _ = arama.adaylar(sorgu)
+            sirali, payload, _ = arama.adaylar(sorgu)
+            bas = [k for k, _ in sirali[:50]]          # aday anahtarı madde_id
+            # adaylar: (kanun_no, madde_no) — gold eşleştirmesi (metrik tanımı, değişmedi);
+            # madde_idler: aynı sırayla benzersiz kimlik — reranker metni bundan (çakışan kanun_no)
             out.write(json.dumps({"sorgu": sorgu, "dogru": list(hedef),
-                                  "adaylar": [list(k) for k, _ in sirali[:50]]},
+                                  "adaylar": [[str(payload[k]["kanun_no"]), str(payload[k]["madde_no"])]
+                                              for k in bas],
+                                  "madde_idler": bas},
                                  ensure_ascii=False) + "\n")
             if i % 50 == 0:
                 print(f"  {i}/{len(sorgular)}  ({time.time() - t0:.0f} sn)", end="\r", flush=True)
@@ -139,13 +146,24 @@ def aday_cikar(args):
 def skorla(args):
     from kanun.retrieval.search import bm25_kur
     ayar = ayarlar_oku()
-    idx = bm25_kur(ayar.korpus_yol)   # yalnız metin haritası için
+    idx = bm25_kur(ayar.korpus_yol)   # yalnız metin haritası için (madde_id → metin)
     krk = ayar.rerank_max_krk
 
-    def metin(a):
-        return (idx.metinler.get(tuple(a)) or "")[:krk]
-
     satirlar = [json.loads(l) for l in open(aday_dosya(args.embed), encoding="utf-8")][: args.n]
+    cift_metin = {}
+    if any("madde_idler" not in s for s in satirlar):
+        # madde_idler'siz ESKİ aday dosyası: (kanun_no, madde_no) → metin; çakışan çiftte korpusta son gelen
+        # (eski bm25_kur davranışı). --aday-cikar yeniden koşulursa metin madde_id'den gelir.
+        cift_metin = {(str(p["kanun_no"]), str(p["madde_no"])): idx.metinler.get(mid)
+                      for mid, p in idx.payloadlar.items()}
+
+    def metin(a):
+        if isinstance(a, str):                          # madde_id
+            return (idx.metinler.get(a) or "")[:krk]
+        return (cift_metin.get(tuple(a)) or "")[:krk]   # eski dosya: [kanun_no, madde_no]
+
+    # puanlanan aday = benzersiz kimlik (varsa); sıra "adaylar" ile aynı → skor dosyası biçimi değişmez
+    satirlar = [dict(s, adaylar=s.get("madde_idler") or s["adaylar"]) for s in satirlar]
     cikti = skor_dosya(args.embed, args.backend, args.max_len)
     yapilan = sum(1 for _ in open(cikti, encoding="utf-8")) if os.path.exists(cikti) else 0
     print(f"{cikti}: {yapilan}/{len(satirlar)} hazır, devam ediliyor (aday={args.aday})")
