@@ -40,6 +40,16 @@ def test_wsum_uzunluk_uyusmazligi():
         wsum_puan([{"a": 1}], (0.5, 0.5))
 
 
+def test_wsum_esit_puanlilar_ilk_gorunme_sirasinda():
+    """Eşit puanda sıra = ilk görünme (bacak sırası, bacak içi sıra) — anahtar hash'ine bağlı değil.
+    (Eski set birleşiminde 20 eşit anahtarın bu sırada çıkma olasılığı ~1/20!.)"""
+    anahtarlar = [f"m{i}" for i in range(20)]
+    d = {k: 1.0 for k in anahtarlar[:10]}                 # hepsi eşit → normalize 0
+    s = {k: 1.0 for k in anahtarlar[5:]}                  # m5-m9 iki bacakta, m10+ yalnız sparse
+    assert wsum([d, s], (0.5, 0.5)) == anahtarlar
+    assert wsum_puan([], ()) == {}
+
+
 def test_tokenize_turkce():
     assert tokenize("Kira ARTIŞI, 2024'te %25!") == ["kira", "artişi", "2024", "te", "25"]
 
@@ -125,6 +135,13 @@ def test_wsum_siralama_ve_top_k():
     assert [s.anahtar for s in sonuc] == [("1", "1"), ("1", "2")]
     assert sonuc[0].skor == pytest.approx(0.67)
     assert sonuc[0].rerank_skor is None
+
+
+def test_esit_puanli_adaylar_bacak_sirasinda_kalir():
+    # aynı metinli maddeler (ör. 'Bu Kanun yayımı tarihinde yürürlüğe girer.') her bacakta eşit skor alır
+    dense = [_nokta("1", "1", 0.9)] + [_nokta("9", str(i), 0.5) for i in range(12, 0, -1)]
+    arama, _ = _arama(dense, [], [], [])
+    assert [s.madde_no for s in arama.ara("soru", top_k=13)] == ["1"] + [str(i) for i in range(12, 0, -1)]
 
 
 def test_sure_ms_anahtarlari():

@@ -22,7 +22,6 @@ Bu modül torch İMPORT ETMEZ — embedder/reranker dışarıdan verilir (servis
 """
 import functools
 import json
-import operator
 import re
 import time
 from dataclasses import dataclass, field
@@ -52,14 +51,14 @@ def norm(skor):
 
 def wsum_puan(skorlar, agirliklar):
     """Bacak skor sözlüklerini normalize edip ağırlıklı topla → {anahtar: puan}.
-    Bir bacakta olmayan anahtar o bacaktan 0 alır. Birleşim sırası eski search_qdrant ile aynı
-    (set(d) | set(s) | set(b)) — eşit puanlı anahtarların sırası da birebir korunur."""
+    Bir bacakta olmayan anahtar o bacaktan 0 alır. Anahtarlar İLK GÖRÜNDÜKLERİ sırayla birleşir (bacak
+    sırası, bacak içinde sözlük sırası = o bacağın sıralaması) → kararlı sıralamada eşit puanlılar bu sırada
+    kalır, süreçten sürece aynı. Eski `set(d) | set(s) | set(b)` birleşimi eşitlerin sırasını anahtar
+    hash'ine (PYTHONHASHSEED) bağlıyordu; eşit olmayan puanların sırası ve puanlar aynıdır."""
     if len(skorlar) != len(agirliklar):
         raise ValueError("skorlar ve agirliklar aynı uzunlukta olmalı")
     normler = [norm(s) for s in skorlar]
-    if not normler:
-        return {}
-    tum = functools.reduce(operator.or_, (set(n) for n in normler))
+    tum = dict.fromkeys(k for n in normler for k in n)
     puan = {}
     for k in tum:
         puan[k] = sum(w * n.get(k, 0.0) for w, n in zip(agirliklar, normler))
@@ -67,7 +66,7 @@ def wsum_puan(skorlar, agirliklar):
 
 
 def wsum(skorlar, agirliklar):
-    """WSUM füzyon → anahtarların azalan puan sırası (metrik_iki_asama.py tanımı)."""
+    """WSUM füzyon → anahtarların azalan puan sırası (metrik_iki_asama.py tanımı); eşitlerde ilk görünme."""
     puan = wsum_puan(skorlar, agirliklar)
     return [k for k, _ in sorted(puan.items(), key=lambda x: -x[1])]
 
