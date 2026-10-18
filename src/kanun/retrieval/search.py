@@ -105,39 +105,58 @@ class HizliBM25:
         return score
 
 
+# Qdrant point payload'ı = `madde_id` (ingest_qdrant.py) + bu alanlar (colab/bge_m3_embed.ipynb `payloadlar`).
+# BM25-only aday aynı şemayı korpustan alır → adayın payload'ı hangi bacaktan geldiğine göre değişmez.
+PAYLOAD_ALANLARI = ("kanun_no", "kanun_ad", "madde_no", "yurutluk", "mevzuat_tur",
+                    "resmi_gazete_tarihi", "resmi_gazete_sayisi")
+
+
+def korpus_payload(r):
+    """Korpus satırı → Qdrant point payload'ıyla aynı şemada sözlük (eksik alan None)."""
+    m = r["metadata"]
+    return {"madde_id": str(r["id"]), **{a: m.get(a) for a in PAYLOAD_ALANLARI}}
+
+
 @dataclass
 class BM25Index:
-    """Klasik BM25 index'i + reranker/servis için madde metni ve kanun adı haritaları.
+    """Klasik BM25 index'i + korpus haritaları (reranker metni, servis `metin`i, BM25-only aday payload'ı).
 
     maddeler[i] = (kanun_no, madde_no, madde_id) — BM25 doküman i ile hizalı (yalnız yürürlükte).
-    metinler / kanun_adlari: TÜM korpus (mülga dahil) (kanun_no, madde_no) → değer.
+    metinler   : TÜM korpus (mülga dahil) (kanun_no, madde_no) → text
+    payloadlar : TÜM korpus (mülga dahil) madde_id → `korpus_payload` (Qdrant payload şeması)
     """
     bm25: object                # get_scores(tokenler) sunan nesne (HizliBM25 ya da BM25Okapi)
     maddeler: list
     metinler: dict = field(default_factory=dict)
-    kanun_adlari: dict = field(default_factory=dict)
+    payloadlar: dict = field(default_factory=dict)
 
     def __len__(self):
         return len(self.maddeler)
+
+    def payload(self, i):
+        """BM25 doküman i'nin payload'ı: korpustan gerçek alanlar. Harita yoksa (sahte index) yalnız kimlik."""
+        kn, mn, mid = self.maddeler[i]
+        return self.payloadlar.get(mid) or {"madde_id": mid, "kanun_no": kn, "madde_no": mn}
 
 
 def bm25_kur(korpus_yol="data/kanun/korpus.jsonl"):
     """Korpus 'text' üzerine BM25 index (yalnız yürürlükte maddeler), ~3-5 sn."""
     from rank_bm25 import BM25Okapi   # geç import: testler sahte index verebilsin
 
-    maddeler, dokumanlar, metinler, adlar = [], [], {}, {}
+    maddeler, dokumanlar, metinler, payloadlar = [], [], {}, {}
     with open(korpus_yol, encoding="utf-8") as f:
         for line in f:
             r = json.loads(line)
             m = r["metadata"]
             key = (str(m["kanun_no"]), str(m["madde_no"]))
+            mid = str(r["id"])
             metinler[key] = r.get("text") or ""
-            adlar[key] = m.get("kanun_ad") or ""
+            payloadlar[mid] = korpus_payload(r)
             if m["yurutluk"] != YURURLUKTE:
                 continue
-            maddeler.append((key[0], key[1], r["id"]))
+            maddeler.append((key[0], key[1], mid))
             dokumanlar.append(tokenize(r["text"]))
-    return BM25Index(HizliBM25(BM25Okapi(dokumanlar)), maddeler, metinler, adlar)
+    return BM25Index(HizliBM25(BM25Okapi(dokumanlar)), maddeler, metinler, payloadlar)
 
 
 @dataclass
@@ -253,10 +272,9 @@ class HybridArama:
         for i in en_iyi:
             if bm_skorlar[i] <= 0:
                 continue
-            kn, mn, mid = self.bm25.maddeler[i]
+            kn, mn, _ = self.bm25.maddeler[i]
             b_skor[(kn, mn)] = float(bm_skorlar[i])
-            payload.setdefault((kn, mn), {"kanun_no": kn, "madde_no": mn,
-                                          "kanun_ad": "", "madde_id": mid})
+            payload.setdefault((kn, mn), self.bm25.payload(i))   # yalnız BM25'te: korpustan gerçek alanlar
         sure["bm25"] = _ms(t)
 
         t = time.perf_counter()
@@ -267,8 +285,10 @@ class HybridArama:
 
     def _sonuc(self, anahtar, payload, skor, rerank_skor=None):
         pl = payload.get(anahtar, {})
-        return Sonuc(madde_id=str(pl.get("madde_id", "")), kanun_no=anahtar[0],
-                     kanun_ad=pl.get("kanun_ad") or self.bm25.kanun_adlari.get(anahtar, ""),
+        mid = str(pl.get("madde_id", ""))
+        korpus = self.bm25.payloadlar.get(mid) or {}     # Qdrant payload'ında kanun_ad boşsa korpustan
+        return Sonuc(madde_id=mid, kanun_no=anahtar[0],
+                     kanun_ad=pl.get("kanun_ad") or korpus.get("kanun_ad") or "",
                      madde_no=anahtar[1], skor=float(skor),
                      rerank_skor=None if rerank_skor is None else float(rerank_skor))
 

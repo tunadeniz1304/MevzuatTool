@@ -136,7 +136,9 @@ def test_sure_ms_anahtarlari():
 
 def test_sadece_bm25_adayinin_kanun_adi_korpustan():
     dense, sparse, _, maddeler = _temel()
-    bm25 = BM25Index(SahteBM25([0.0, 9.0, 0.0]), maddeler, kanun_adlari={("3", "7"): "Üç Kanunu"})
+    bm25 = BM25Index(SahteBM25([0.0, 9.0, 0.0]), maddeler,
+                     payloadlar={"m37": {"madde_id": "m37", "kanun_no": "3", "kanun_ad": "Üç Kanunu",
+                                         "madde_no": "7", "yurutluk": "yürürlükte"}})
     arama = HybridArama(_embedder, SahteClient(dense, sparse), bm25)
     s = next(s for s in arama.ara("soru", top_k=10) if s.anahtar == ("3", "7"))
     assert s.kanun_ad == "Üç Kanunu" and s.madde_id == "m37"

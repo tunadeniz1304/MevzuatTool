@@ -324,8 +324,6 @@ CAKISMA = [
 R = {r["id"]: r for r in CAKISMA}
 BILINEN_HATA = pytest.mark.xfail(strict=True, reason="iç anahtar (kanun_no, madde_no): çakışan maddeler "
                                                     "tek adaya çöküyor (BM25Index + WSUM)")
-BILINEN_HATA_PAYLOAD = pytest.mark.xfail(strict=True, reason="BM25-only adaya sentetik payload "
-                                                             "(kanun_ad boş, yurutluk yok)")
 
 
 def _pl(cid, skor):
@@ -382,7 +380,6 @@ def test_ara_cakisan_kanunlarda_metin_ve_kanun_adi_dogru_maddeden(tmp_path):
                      "100-141": ("5237", TCK, "141", R["100-141"]["text"])}
 
 
-@BILINEN_HATA_PAYLOAD
 def test_bm25_only_adayin_payloadi_korpustan_gercek_alanlar(tmp_path):
     arama = _yeni(tmp_path, CAKISMA, dense=[_pl("100-141", 0.9)], bm25={"400-6": 2.0})
     _, payload, _ = arama.adaylar("soru")
