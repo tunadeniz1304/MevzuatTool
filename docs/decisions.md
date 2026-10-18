@@ -415,6 +415,17 @@ Güncel mimari görünümü: [`arch.md`](arch.md). Kapsam: [`mevzuat-mvp-kapsam.
       numara ('TCK 2', 'ek 3') ayrıca süre/sayım sözcükleriyle düşer ('TCK'da 2 yıl', 'TMK 4 çocuk');
       'sayılı' sonrası KHK / CB kararnamesi / karar / liste / cetvel / Resmî Gazete kanun sayılmaz; 'Anayasa
       Mahkemesi', küçük 'ay', 'iş kazası' kanun sayılmaz.
+    - **Bağımsız inceleme eklemeleri (2026-10-18):** yalın numaranın miktar/tarih devamı da madde numarasını
+      düşürür ('TCK 1 Haziran 2005', 'TCK 2-5 yıl', "İş K. 30'dan fazla işçi", 'TCK 1/3 oranında', 'TMK 18
+      yaşındaki'); 'eski/mülga/önceki' ya da yabancı ülke ('İsviçre', 'Alman') nitelemeli ad/kısaltma bugünkü
+      kanuna eşlenmez ('eski İş Kanunu' 1475'tir — madde atıf üretmez); değiştiren kanun ('TCK'nın 6545 sayılı
+      Kanunla değişik 141. maddesi') maddenin sahibi sayılmaz; madde sözünden hemen önce kanun dışı belge
+      ('Yönetmeliğin 5. maddesi') varsa madde o belgenindir; adında 'Kanun' geçmeyen tam başlıklı CB
+      kararnamesi / KHK / tebliğ numarası kanun sayılmaz; tümü büyük harfli sorguda 'AY' yalnız açık madde
+      sözüyle Anayasa'dır. Yeni tanınanlar: noktalı kısaltma ('İ.İ.K.', 'T.M.K.', 'TMK.'), 'Basın İş Kanunu'
+      (5953), kanundan uzakta '220/6. maddesi' / '4/1-a maddesi', tek harfli Roma fıkradan sonraki bent
+      ('İş K. 25/I-b'); ardışık boşluklar ayrıştırmadan önce teke indirilir. Korpus dosyası servis açıkken
+      okunamazsa (taşındı/silindi) de `KorpusDegisti` → 503.
     - Tablo kararları: 'TMK' → 4721 (ceza hukukunda Terörle Mücadele K. 3713 için de kullanılır; özel
       hukuktaki baskın kullanım seçildi), 'KVK' → 5520 / 'KVKK' → 6698, 'BK'/'MK'/'HUMK'/'CMUK' yok (mülga eski
       kanunlarla karışır), 'Borçlar Kanunu' / 'Medeni Kanun' bugünkü 6098 / 4721.
@@ -457,7 +468,9 @@ Güncel mimari görünümü: [`arch.md`](arch.md). Kapsam: [`mevzuat-mvp-kapsam.
     Altınset süzgeci (`altinset_sizinti.py`) madde atıflarının çoğunu eler ama '4/1-a', 'm. 141' gibi biçimleri
     değil → `metrik_gecikme.py` C-http satırı `mod=dogal` gönderir (protokol in-process ile eşdeğer kalır).
   - ✅ Ayrıştırma sorgu başına ~1-3 ms (2000 krk, 916 korpus adıyla); getirme O(1) sözlük + tek satır okuma.
-    Qdrant ve embedder atıf modunda hiç çağrılmaz (Qdrant kapalıyken de çalışır).
+    Qdrant ve embedder atıf modunda hiç çağrılmaz (Qdrant kapalıyken de çalışır). 2026-10-18 ölçümü (916
+    sentetik adla): gerçekçi sorgu ~0.1-0.3 ms, 2000 krk doğal metin ~2 ms; 2000 krk'lik düşmanca atıf yoğun
+    girdi ('TCK 1 TCK 2 ...') ~20-30 ms — parça sayısında karesel, 2000 krk sınırıyla bağlı.
   - ⚠️ **Gerçek korpusla doğrulanmadı** (geliştirme makinesinde `data/` yok): atıf bulunabilirliği
     `unique_atiflar.json` (8.290 atıf) üzerinden ölçülmeli; açılışta korpusun ikinci kez taranması (BM25
     kurulumuyla aynı mertebe, birkaç sn) ve indeks belleği (31k küçük kayıt) ölçülmedi.
@@ -466,7 +479,9 @@ Güncel mimari görünümü: [`arch.md`](arch.md). Kapsam: [`mevzuat-mvp-kapsam.
     ('TCK'nın 141 ve 142. maddeleri', 'TCK m. 141 ve m. 142') ikisi de, sonra geliyorsa ('141 ve 142. maddeler
     TCK') yalnız son numara yakalanır (2026-10-18 doğrulaması); karışık sırada kanun en yakın
     ÖNCEKİ kanuna bağlanır; tolerans yalnız '(N)' fıkrası YOKSA devreye girer — '(N)' fıkrası da 'N.' bendi de
-    olan maddede '40/2' fıkraya gider (uyarıyla). Doğal dil modunun `BM25Index` sözlükleri (kanun_no, madde_no)
+    olan maddede '40/2' fıkraya gider (uyarıyla). Kesir yalnız 'oranında/nispetinde' ile düşer: 'TCK 1/6
+    indirim', 'İİK 1/4 maaş haczi' hâlâ m.1 f.6 / f.4 sanılır ('TCK 62/1 indirim' gerçek atıf olduğu için
+    sözcükten ayrılamaz). Doğal dil modunun `BM25Index` sözlükleri (kanun_no, madde_no)
     anahtarlı olduğundan çakışan kanunlarda `metin` yanlış kanundan gelebilir — önceden var olan, bu ADR'nin
     dokunmadığı sınır.
 - **Öğrenme notu:**
