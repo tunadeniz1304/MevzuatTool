@@ -3,11 +3,14 @@
 
 Eskiden aynı mantık `scripts/kanun/retrieval/search_qdrant.py` ve 8 ölçüm script'inde kopya halindeydi.
 Bu modül tek kaynak: CLI, FastAPI servisi, gecikme ölçümü ve reranker ölçümü buradan arar.
-Davranış `search_qdrant.ara` (main, 2026-07) ile birebir aynıdır — `esdeger_kontrol.py` 50/50 doğrular —
-tek bilinçli fark: aday kimliği madde_id'dir (korpus chunk id'si, mevzuatId tabanlı), (kanun_no, madde_no)
-değil. kanun_no globalde benzersiz değil (tertip çakışması, ör. 6551 iki kanun) ve aynı kanunda iki 'Geçici 1'
-olabilir (ids.py -1/-2); bu maddeler artık tek adaya çökmez. Çakışmasız korpusta sonuçlar birebir aynı
-(tests/kanun/test_madde_kimligi.py, eski davranışın dondurulmuş kopyasına karşı).
+Davranış `search_qdrant.ara` (main, 2026-07) ile birebir aynıdır (gerçek index + korpusta `esdeger_kontrol.py`
+karşılaştırır), iki bilinçli farkla (ADR-0021):
+  - aday kimliği madde_id'dir (korpus chunk id'si, mevzuatId tabanlı), (kanun_no, madde_no) değil. kanun_no
+    globalde benzersiz değil (tertip çakışması, ör. 6551 iki kanun) ve aynı kanunda iki 'Geçici 1' olabilir
+    (ids.py -1/-2); bu maddeler artık tek adaya çökmez.
+  - puanı TAM eşit adayların sırası ilk görünmedir (eskiden anahtar hash'ine bağlıydı, süreçten sürece değişirdi).
+Çakışmasız korpusta puanlar ve sıra birebir aynı (tests/kanun/test_madde_kimligi.py, eski davranışın
+dondurulmuş kopyasına karşı).
 
 Akış (`HybridArama.ara`):
   1. embed    : sorgu → (dense 1024, sparse {token-id: ağırlık})   [enjekte edilen embedder]
