@@ -51,7 +51,18 @@ def test_wsum_esit_puanlilar_ilk_gorunme_sirasinda():
 
 
 def test_tokenize_turkce():
-    assert tokenize("Kira ARTIŞI, 2024'te %25!") == ["kira", "artişi", "2024", "te", "25"]
+    assert tokenize("Kira ARTIŞI, 2024'te %25!") == ["kira", "artış", "2024", "te", "25"]
+
+
+def test_tokenize_buyuk_turkce_i_kelimeyi_bolmez():
+    # str.lower() 'İ'yi 'i' + U+0307 yapar; regex'te kelime ikiye bölünürdü ("İş" -> "i", "ş")
+    assert tokenize("İş Kanunu İCRA ve İflas") == ["iş", "kanun", "icra", "ve", "iflas"]
+    assert tokenize("ISIRMA") == tokenize("ısırma") == ["ısırm"]
+
+
+def test_tokenize_ilk_bes_harf_govdeleme_sayilara_dokunmaz():
+    assert tokenize("vergi vergisi vergiden VERGİLERİN") == ["vergi"] * 4
+    assert tokenize("5237 sayılı Kanun 25/5/2005 1234567") == ["5237", "sayıl", "kanun", "25", "5", "2005", "1234567"]
 
 
 # ---- sahte bileşenler ----------------------------------------------------

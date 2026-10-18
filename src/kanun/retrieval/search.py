@@ -32,13 +32,23 @@ from dataclasses import dataclass, field
 import numpy as np
 
 _TOKEN = re.compile(r"[0-9a-zçğıöşü]+", re.UNICODE)
+_TR_KUCUK = str.maketrans({"İ": "i", "I": "ı"})
+GOVDE_UZUNLUK = 5          # BM25 gövdeleme: kelimenin ilk 5 harfi (ADR-0022); sayılar kesilmez
 YURURLUKTE = "yürürlükte"
 SURE_ANAHTARLARI = ("embed", "dense", "sparse", "bm25", "fuzyon", "rerank", "toplam")
 
 
+def tr_kucuk(metin):
+    """Türkçe küçük harf: 'İ' -> 'i', 'I' -> 'ı', sonra lower(). Python'un lower()'ı 'İ'yi 'i' + U+0307
+    (birleşik nokta) yapar; regex o noktada kelimeyi böler ("İş" -> "i", "ş")."""
+    return metin.translate(_TR_KUCUK).lower()
+
+
 def tokenize(metin):
-    """BM25 klasik: lower + kelime ayır (Türkçe harfler dahil)."""
-    return _TOKEN.findall(metin.lower())
+    """BM25: Türkçe küçük harf + kelime ayır (Türkçe harfler dahil) + ilk-5-harf gövdeleme.
+    Eklemeli Türkçede "vergi / vergisi / vergiden" aynı terim olur; sayılar (kanun no, tarih) olduğu gibi
+    kalır. Korpus ve sorgu aynı fonksiyondan geçer (ADR-0022)."""
+    return [t if t.isdigit() else t[:GOVDE_UZUNLUK] for t in _TOKEN.findall(tr_kucuk(metin))]
 
 
 def norm(skor):
@@ -224,6 +234,8 @@ class HybridArama:
     client   : qdrant_client.QdrantClient (ya da `query_points` sunan sahte nesne)
     bm25     : BM25Index
     reranker : `skorla(sorgu, metinler) -> list[float]` sunan nesne ya da None
+    agirliklar: (dense, sparse, bm25). Kurucu varsayılanı eşit taban çizgisidir (testler, eski ölçümler);
+                servis ve ölçüm script'leri config.Ayarlar değerini geçirir (fabrika.arama_kur; ADR-0022).
     """
 
     def __init__(self, embedder, client, bm25, collection="mevzuat", aday_k=50,
