@@ -712,7 +712,10 @@ def ayristir(sorgu, kanun_adlari=None):
         if kt.nitelik:                  # 'eski TCK m. 491': madde o (belirsiz) kanuna ait → atıf değil
             sonuc.nitelikli_maddeler.append(mt)
             continue
-        sinir = min([t.bas for t in maddeler[i + 1:]] + [t.bas for t in kanunlar if t.bas >= mt.son] + [len(k)])
+        # fıkra/bent sınırı: sonraki madde ya da kanun (değiştiren kanun sınır değil: '141. maddesinin 6545
+        # sayılı Kanunla değişik 2. fıkrası')
+        sinir = min([t.bas for t in maddeler[i + 1:]] + [len(k)]
+                    + [t.bas for t in kanunlar if t.bas >= mt.son and not t.degistiren])
         ft = bt = None
         fikra = mt.fikra
         if fikra is None:

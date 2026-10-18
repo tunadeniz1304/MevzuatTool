@@ -261,6 +261,13 @@ def test_degistiren_kanun_maddenin_sahibi_sayilmaz(sorgu):
     assert _ozet(_tek(sorgu)) == (("5237",), "141", None, None)
 
 
+def test_degistiren_kanun_fikra_ve_bent_sinirini_kesmez():
+    a = _tek("TCK'nın 141. maddesinin 6545 sayılı Kanunla değişik 2. fıkrası")
+    assert _ozet(a) == (("5237",), "141", 2, None)
+    b = _tek("KVKK'nın 11. maddesinin 7499 sayılı Kanunla değiştirilen (ç) bendi")
+    assert _ozet(b) == (("6698",), "11", None, "ç")
+
+
 def test_degistiren_kanun_kendi_maddesiyle_ve_tek_basina():
     a = atif_ayristir("6545 sayılı Kanunun 68. maddesiyle değişik TCK'nın 141. maddesi")
     assert [_ozet(x) for x in a] == [(("6545",), "68", None, None), (("5237",), "141", None, None)]
