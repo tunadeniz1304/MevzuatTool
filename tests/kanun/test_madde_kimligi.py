@@ -534,6 +534,18 @@ def test_esdeger_kontrol_sinifi(eski, sirali, k, beklenen):
     assert _script("esdeger_kontrol").sinifla(eski, sirali, _SINIF_PAYLOAD, k=k) == beklenen
 
 
+@pytest.mark.parametrize("korpus_madde_no, beklenen", [("12/A", "ayrisma"), ("12/ A", "fark")])
+def test_esdeger_kontrol_index_korpus_ayrismasi(korpus_madde_no, beklenen):
+    """Eski index payload'ı X'i (1, '12/ A') diye taşıyor. Korpus '12/A' diyorsa eski kod X'in dense puanını ve
+    BM25 puanını iki ayrı adaya bölüyordu, yeni kod madde_id'de birleştirir (beklenen fark). Korpus da '12/ A'
+    diyorsa ayrışma yok: fark açıklanamaz."""
+    payload = {"X": {"kanun_no": "1", "madde_no": "12/ A"}, "A": {"kanun_no": "1", "madde_no": "1"}}
+    korpus = {"X": {"kanun_no": "1", "madde_no": korpus_madde_no}, "A": {"kanun_no": "1", "madde_no": "1"}}
+    eski = [(("1", "12/ A"), 0.6), (P1, 0.5), (("1", "12/A"), 0.3)]
+    sirali = [("X", 0.9), ("A", 0.5)]
+    assert _script("esdeger_kontrol").sinifla(eski, sirali, payload, korpus=korpus) == beklenen
+
+
 # =================================================================================================
 # 4. Eski index — Qdrant'taki madde_id korpusta yoksa korpus kimliğine bağlanır (yalnız tek aday varsa)
 # =================================================================================================

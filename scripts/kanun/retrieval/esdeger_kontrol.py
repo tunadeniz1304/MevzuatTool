@@ -13,6 +13,9 @@ Kütüphanenin aday kimliği madde_id'dir (eski: (kanun_no, madde_no)) → sorgu
               bu sırayı anahtar hash'ine bağlıyordu, yeni sıra ilk görünme)
   cakisma   : yeni adaylarda aynı (kanun_no, madde_no) birden çok madde (tertip çakışması / tekrarlı madde
               no) — eski kod bunları tek adaya çökertiyordu; fark beklenen düzeltmedir
+  ayrisma   : bir adayın Qdrant payload'ındaki (kanun_no, madde_no) korpustaki kaydından farklı (index korpusun
+              gerisinde) — eski kod aynı maddenin dense/sparse ve BM25 puanını iki adaya bölüyordu, yeni kod
+              madde_id'de birleştirir; fark beklenen düzeltmedir
   fark      : açıklanamayan fark → çıkış kodu 1
 
 Çalıştır: .venv/Scripts/python.exe scripts/kanun/retrieval/esdeger_kontrol.py [N]   (vars. 50)
@@ -69,15 +72,25 @@ def _eski_ara(embed_sorgu, client, collection, bm25, bm25_maddeler, sorgu, aday_
     return sorted(puan.items(), key=lambda x: -x[1])
 
 
-def sinifla(eski, sirali, payload, k=10):
-    """eski: `_eski_ara` çıktısı; sirali, payload: yeni `HybridArama.adaylar()` çıktısı (madde_id anahtarlı).
-    → 'ayni' | 'esit_puan' | 'cakisma' | 'fark' (modül docstring'i)."""
-    yeni = [((str(payload[m]["kanun_no"]), str(payload[m]["madde_no"])), p) for m, p in sirali]
+def _cift(pl):
+    return (str(pl["kanun_no"]), str(pl["madde_no"]))
+
+
+def sinifla(eski, sirali, payload, korpus=None, k=10):
+    """eski: `_eski_ara` çıktısı; sirali, payload: yeni `HybridArama.adaylar()` çıktısı (madde_id anahtarlı);
+    korpus: madde_id → korpus payload'ı (`BM25Index.payloadlar`).
+    → 'ayni' | 'esit_puan' | 'cakisma' | 'ayrisma' | 'fark' (modül docstring'i)."""
+    yeni = [(_cift(payload[m]), p) for m, p in sirali]
     if eski[:k] == yeni[:k]:
         return "ayni"
     if len({c for c, _ in yeni}) < len(yeni):
         return "cakisma"
-    return "esit_puan" if dict(eski) == dict(yeni) else "fark"
+    if dict(eski) == dict(yeni):
+        return "esit_puan"
+    korpus = korpus or {}
+    if any(_cift(payload[m]) != _cift(korpus[m]) for m, _ in sirali if m in korpus):
+        return "ayrisma"
+    return "fark"
 
 
 def main():
@@ -102,7 +115,7 @@ def main():
         gold = [json.loads(l) for l in f]
     random.shuffle(gold)
 
-    sayac = dict.fromkeys(("ayni", "esit_puan", "cakisma", "fark"), 0)
+    sayac = dict.fromkeys(("ayni", "esit_puan", "cakisma", "ayrisma", "fark"), 0)
     for g in gold:
         if sum(sayac.values()) >= n:
             break
@@ -112,15 +125,16 @@ def main():
         eski = _eski_ara(embed, client, ayar.collection, getattr(idx.bm25, "okapi", idx.bm25), idx.maddeler,
                          g["ilgi"])
         sirali, payload, _ = arama.adaylar(g["ilgi"])
-        sinif = sinifla(eski, sirali, payload)
+        sinif = sinifla(eski, sirali, payload, korpus=idx.payloadlar)
         sayac[sinif] += 1
-        if sinif in ("cakisma", "fark"):
+        if sinif in ("cakisma", "ayrisma", "fark"):
             yeni = [((payload[m]["kanun_no"], payload[m]["madde_no"]), round(p, 4)) for m, p in sirali[:10]]
             print(f"  {sinif.upper()}: {g['ilgi'][:60]!r}\n"
                   f"    eski={[(c, round(p, 4)) for c, p in eski[:10]]}\n    yeni={yeni}")
     kontrol = sum(sayac.values())
     print(f"\n{sayac['ayni']}/{kontrol} aynı · {sayac['esit_puan']} yalnız eşit-puan sırası · "
-          f"{sayac['cakisma']} çakışma (beklenen) · {sayac['fark']} FARK")
+          f"{sayac['cakisma']} çakışma (beklenen) · {sayac['ayrisma']} index/korpus ayrışması (beklenen) · "
+          f"{sayac['fark']} FARK")
     sys.exit(0 if sayac["fark"] == 0 else 1)
 
 
