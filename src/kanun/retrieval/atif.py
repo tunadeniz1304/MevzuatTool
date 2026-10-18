@@ -37,8 +37,10 @@ Belirsiz slash eki: '359/a' hem harfli madde (359/A) hem 359. maddenin (a) bendi
 madde hem Roma rakamıyla 1. fıkra olabilir. Ayrıştırıcı birincil yorumu (harfli madde) + alternatifleri
 (`Atif.alternatifler`) üretir; seçim korpusa bakan çözücünün işidir (atif_getir.py).
 
-Bilinen sınırlar: alt-bent ('359/a-1'nin '1'i) okunmaz; numara sıralaması ('141 ve 142. maddeler') ve
-aralık ('141-145') yalnız son numarayı yakalar ('TCK m. 141 ve m. 142' ikisini de yakalar); kanunun
+Bilinen sınırlar: alt-bent ('359/a-1'nin '1'i) okunmaz; aralık açılmaz ('TCK m. 141-145' yalnız 141'i,
+'5237 sayılı Kanunun 141-145. maddeleri' yalnız uçları 141 ve 145'i yakalar); numara sıralamasında kanun
+önce geliyorsa ('TCK'nın 141 ve 142. maddeleri', 'TCK m. 141 ve m. 142') ikisi de, sonra geliyorsa
+('141 ve 142. maddeler TCK') yalnız son numara yakalanır; kanunun
 maddeden SONRA geldiği yazım ('m. 141 TCK') tek atıfta çalışır ama karışık sırada en yakın ÖNCEKİ
 kanun seçilir.
 """

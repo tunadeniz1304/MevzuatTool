@@ -55,6 +55,18 @@ It takes a law/article citation or a natural-language question and returns a ran
 
 (Example query: "dismissal from the civil service as a disciplinary penalty for a civil servant"; results come from the Civil Servants Law — *Devlet Memurları Kanunu* — and the Turkish Radio and Television Law.)
 
+**Two query modes** (ADR-0019) — `POST /ara` picks one per query (`mod`: `otomatik` = auto, the default | `atif` = citation | `dogal` = natural language):
+
+- **Citation mode (atıf):** a citation such as `TCK m. 141/2` or `5237 sayılı Kanun m. 141/2-a` is parsed
+  deterministically (regex + an abbreviation table — no LLM), and the cited article — plus the fıkra/bent if
+  given — is fetched **exactly** from an in-memory index over the corpus. There is no ranking (score 1.0), and
+  neither the in-force filter nor the reranker is applied: a repealed article comes back flagged, not hidden. If a
+  law number belongs to several laws and the law name in the query does not single one out, all of them are
+  returned (`coklu_mevzuat`); "fıkra N" resolves to sub-clause
+  "N." when the article has no numbered paragraph (N). A citation that cannot be resolved falls back to natural language.
+- **Natural-language mode (doğal):** 3-leg hybrid search (dense + learned sparse + classic BM25) with the in-force
+  filter and an optional reranker — the example above.
+
 > **🧭 Boundary:** The pipeline **ends at retrieval.** The LLM that writes the answer (generation) is **out of scope** —
 > it is left as a swappable, OpenAI-compatible endpoint plugged in via config at the very end.
 > This project is the **retrieval half** of vanilla RAG.
@@ -99,6 +111,10 @@ Classic difficulties when searching Turkish legislation:
                    Top-k in-force articles
 ```
 
+**Citation mode** (ADR-0019) takes a separate path: the query is parsed as a citation and looked up in an in-memory
+index over `korpus.jsonl` (exact article / fıkra / bent; no embedding, no Qdrant). Queries that are not citations,
+or citations that cannot be resolved in the corpus, go through the hybrid path above.
+
 **Stack:** Python · [`saidsurucu/mevzuat-mcp`](https://github.com/saidsurucu/mevzuat-mcp) ·
 [BGE-M3](https://huggingface.co/BAAI/bge-m3) embeddings · [Qdrant](https://qdrant.tech) vector store ·
 `rank_bm25` · hybrid search (dense + sparse + BM25) · ONNX Runtime int8 · FastAPI · Docker Compose.
@@ -138,7 +154,7 @@ not ranked high enough. With same-**law** tolerance, R@10 = **0.889** → the sy
 - **31,419 chunks / 916 laws** (`KANUN` type only — ADR-0013)
 - Internal structure: **89,745 fıkra (paragraphs)**, **29,428 bent (sub-clauses)**; 1,718 repealed chunks (not removed but flagged — for historical queries)
 - Each chunk: `{id, text, metadata}` — a standalone, deliverable JSONL
-- Metadata: law number/name, article number/title, **in-force status (in force / repealed)**, hierarchy path, fıkra/bent tree, amendment history, footnotes, tables
+- Metadata: law number/name, article number/title, **in-force status (in force / repealed)**, hierarchy path, fıkra/bent tree, amendment history, footnotes, tables, legislation type (`mevzuat_tur`) and Official Gazette (*Resmî Gazete*) date/number (`resmi_gazete_tarihi` / `resmi_gazete_sayisi` — in the code; they enter `korpus.jsonl` on the next rebuild)
 - Atomic unit = **madde (article)** (long articles split by fıkra); **no** naive fixed-size token chunking
 - Generated **deterministically** from the cache in ~75 s with `python scripts/kanun/build_corpus.py`
 
@@ -201,6 +217,7 @@ python scripts/kanun/retrieval/search_qdrant.py
 (Example query: "how is a rent increase determined".)
 
 Output: the top-10 most relevant in-force articles, ranked by fusion score, with law/article information.
+(The CLI is natural-language only; citation mode is served by the HTTP service below.)
 
 **HTTP service** (FastAPI, ADR-0017):
 
@@ -214,7 +231,21 @@ EMBED_BACKEND=onnx-int8 RERANK_BACKEND=onnx-int8 uvicorn kanun.api.app:app --app
 
 curl localhost:8000/saglik
 curl -X POST localhost:8000/ara -H 'Content-Type: application/json' -d '{"sorgu": "kira artışı nasıl belirlenir", "top_k": 10, "rerank": false}'
+
+# citation (mod omitted = "otomatik": parsed as a citation and resolved in the corpus → exact lookup)
+curl -s -X POST localhost:8000/ara -H 'Content-Type: application/json' -d '{"sorgu": "TCK m. 141/2"}'
 ```
+
+`mod` selects the query mode: `otomatik` (default — citation mode if the query parses as a citation and resolves
+in the corpus, otherwise natural language), `atif` (try as a citation, fall back to natural language) or `dogal`
+(natural language only — measurement scripts over HTTP send this). `config.mod` in the response tells which mode
+was used. In citation mode every result has `skor` 1.0 and an `atif` object: `mevzuat_id`, `madde_tipi`,
+`yurutluk`, `alt_parca` (the requested fıkra/bent — `fikra`, `bent`, `metin`, `tolerans`; `"fikra->bent"` means
+"fıkra N" was resolved to sub-clause "N.") and `uyarilar` (warnings, e.g. a repealed article); the article text is
+returned by default. The top-level `atif` object reports `durum` (`eslesti` | `kismi` | `eslesme_yok` |
+`ayristirilamadi` | `indeks_yok`), `dusus` (true = fell back to natural language) and the parsed `atiflar`
+(`coklu_mevzuat` when one law number maps to several laws). Natural-language responses keep the old schema: the
+`atif` key appears only when a citation was attempted.
 
 ---
 
@@ -226,13 +257,15 @@ not imported.
 
 ```
 MevzuatTool/
+├── .github/workflows/ci.yml      # CI: `test` check — pytest -q on every PR and push to main
 ├── src/
 │   ├── kanun/                    # ✅ WORKING — 15 modules
 │   │   ├── fetch.py              #   bedesten fetcher (429/Retry-After aware, cached)
 │   │   ├── chunker.py fikra.py   #   article splitting · fıkra/bent tree
 │   │   ├── enrich.py corpus.py   #   metadata merging · chunk generation
 │   │   ├── retrieval/            #   search.py (HybridArama) · embed(_onnx).py · rerank.py · config.py
-│   │   └── api/app.py            #   FastAPI: POST /ara, GET /saglik
+│   │   │                         #   atif.py + atif_getir.py — citation mode (parser + exact lookup)
+│   │   └── api/app.py            #   FastAPI: POST /ara (mod), GET /saglik
 │   ├── teblig/                   # ⏸ PARKED, not in the MVP — experimental fetcher + chunker (ADR-0020)
 │   └── yonetmelik/               # ⬜ skeleton
 ├── scripts/
@@ -247,7 +280,7 @@ MevzuatTool/
 │   ├── teblig/                   # ⏸ yapi_olc.py (structure measurement); no build script
 │   └── yonetmelik/               # ⬜ empty
 ├── tests/
-│   ├── kanun/                    # 22 files, 328 tests (+3 real-model: pytest -m model)
+│   ├── kanun/                    # 24 files, 583 tests (+3 real-model: pytest -m model)
 │   ├── teblig/                   # 2 files, 53 tests (lock the parked code)
 │   └── yonetmelik/               # ⬜ empty
 ├── colab/
@@ -270,16 +303,18 @@ MevzuatTool/
 
 | Phase | Name | Status |
 |---|---|---|
-| 0 | Setup & Governance | ✅ |
+| 0 | Setup & Governance (+ CI) | ✅ |
 | 1 | Data Fetching (mevzuat-mcp) | ✅ |
 | 2 | Structural Chunking (madde/fıkra) | ✅ |
-| 3 | Metadata (in-force status/hierarchy) | ✅ |
+| 3 | Metadata (in-force status/hierarchy, Official Gazette date/number) | ✅ |
 | 4 | Clean Corpus Artifact (JSONL) | ✅ |
 | 5 | Embedding + Indexing (BGE-M3 + Qdrant) | ✅ |
-| 6 | Query + Retrieval (3-leg hybrid) | ✅ |
+| 6 | Query + Retrieval (3-leg hybrid + citation mode) | ✅ |
 | 7 | Dockerize (`docker compose up`) | ✅ |
 
-Next improvements: citation mode, re-embedding the Qdrant index with the current corpus.
+Next improvements: re-embed the Qdrant index with the current corpus (this also brings the new payload fields),
+measure citation mode on the real corpus (`unique_atiflar.json`), fix the BM25 `(kanun_no, madde_no)` key collision
+in natural-language mode, reranker score fusion.
 Details: [`docs/status.md`](docs/status.md) · [`docs/roadmap.md`](docs/roadmap.md).
 
 ---
@@ -321,6 +356,8 @@ Read [`docs/commit_discipline.md`](docs/commit_discipline.md) before starting wo
 - 🚫 Pushing directly to `main` is **forbidden** — use `phase-N/feature-name` branches + PRs.
 - 🚫 **No** AI co-author / "Generated with" lines in commit messages.
 - ⚛️ **Atomic commits** — one logical change each; `type(scope): summary` format.
+- ✅ Every PR (and every push to `main`) runs the **`test`** check — GitHub Actions, `pytest -q` on Ubuntu /
+  Python 3.11 (`.github/workflows/ci.yml`). Run `pytest -q` locally before opening a PR.
 
 ---
 

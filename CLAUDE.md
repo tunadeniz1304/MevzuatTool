@@ -32,7 +32,7 @@ mevzuat.gov.tr **kanunlarını** (yalnız `KANUN` türü) `mevzuat-mcp` ile çek
 - **Atomik commit** — tek mantıksal değişiklik; `type(scope): özet` formatı.
 
 ## Teknoloji (uygulanan)
-Python 3.10+ · bedesten API (saf `httpx` — ADR-0012 sapması, bkz. `docs/arch.md` §6) · **BGE-M3** embedding (ADR-0007) · **Qdrant** vektör store (ADR-0008) · 3-bacak hybrid arama: dense + BGE-sparse + klasik BM25, WSUM füzyon (ADR-0010) · reranker `bge-reranker-v2-m3` istek başına, varsayılan kapalı (ADR-0015) · ONNX Runtime dinamik int8 CPU çıkarımı (ADR-0016) · FastAPI servisi (ADR-0017) · docker-compose (qdrant + api + ingest profili, torch'suz imaj — ADR-0018).
+Python 3.10+ · bedesten API (saf `httpx` — ADR-0012 sapması, bkz. `docs/arch.md` §6) · **BGE-M3** embedding (ADR-0007) · **Qdrant** vektör store (ADR-0008) · 3-bacak hybrid arama: dense + BGE-sparse + klasik BM25, WSUM füzyon (ADR-0010) · reranker `bge-reranker-v2-m3` istek başına, varsayılan kapalı (ADR-0015) · ONNX Runtime dinamik int8 CPU çıkarımı (ADR-0016) · FastAPI servisi (ADR-0017) · atıf modu: deterministik ayrıştırıcı + bellek içi korpus indeksi, `POST /ara` `mod` alanı (ADR-0019) · docker-compose (qdrant + api + ingest profili, torch'suz imaj — ADR-0018) · CI: GitHub Actions `test` check'i (her PR + `main` push).
 
 ## Doküman haritası
 | Soru | Dosya |
@@ -55,6 +55,7 @@ Kanun tarafında bir kural değiştirmek başka türü **asla** bozamaz.
 
 ```
 src/kanun/        ← ÇALIŞIYOR (15 modül + retrieval/ + api/)
+src/kanun/retrieval/  search.py (HybridArama) · atif.py + atif_getir.py (atıf modu) · embed(_onnx) · rerank · config · fabrika · olcum
 src/teblig/       ← PARK EDİLDİ, MVP dışı (ADR-0020): fetch.py · chunker.py — deneysel, geliştirilmez
 src/yonetmelik/   ← iskelet (boş; sıfırdan yazılacak)
 
@@ -62,7 +63,7 @@ scripts/kanun/            build_corpus.py · eval_*.py · fetch_*.py
 scripts/kanun/retrieval/  ingest_qdrant · search_qdrant · metrik_* · onnx_export/quantize · esdeger_kontrol
 scripts/teblig/           yapi_olc.py (park; build script'i YOK) · scripts/yonetmelik/ (boş)
 
-tests/kanun/      22 dosya, 328 test (+3 `-m model`)
+tests/kanun/      24 dosya, 583 test (+3 `-m model`)
 tests/teblig/     2 dosya, 53 test (park edilmiş kodu kilitler)    · tests/yonetmelik/ (boş)
 
 data/kanun/       raw/ (cache) · korpus.jsonl · unique_atiflar.json
@@ -72,18 +73,19 @@ data/gold/        altınset gold set (tür-bağımsız, retrieval ölçümü)
 
 **Yeni tür eklerken:** `src/kanun/` modüllerini **oku ve KOPYALA** — `import` etme.
 Çıktı şeması `{id, text, metadata}` kalsın (ileride tek Qdrant'ta birleşebilsin),
-`metadata.mevzuat_tur` ekle. Ayrıntı: `src/teblig/__init__.py` (park durumu + yönergeler);
+`metadata.mevzuat_tur` ekle (kanun korpusu `"KANUN"` yazar). Ayrıntı: `src/teblig/__init__.py` (park durumu + yönergeler);
 tebliği yeniden açmanın ilk adımları: `decisions.md` ADR-0020.
 
-## Bugünkü durum (2026-09-28)
-**Faz 1-7 çalışıyor** (kütüphane + HTTP servisi + docker-compose, yalnız KANUN türü). Ayrıntı → [`docs/status.md`](docs/status.md).
+## Bugünkü durum (2026-10-18)
+**Faz 1-7 çalışıyor + atıf modu** (kütüphane + HTTP servisi + docker-compose, yalnız KANUN türü). Ayrıntı → [`docs/status.md`](docs/status.md).
 
-- **Korpus:** `data/kanun/korpus.jsonl` — 31.419 chunk / 916 kanun. `python scripts/kanun/build_corpus.py` ile cache'ten (`data/kanun/raw/`) ~75 sn'de **deterministik** üretilir. (89.745 fıkra, 29.428 bent, 1.718 mülga.)
+- **Korpus:** `data/kanun/korpus.jsonl` — 31.419 chunk / 916 kanun. `python scripts/kanun/build_corpus.py` ile cache'ten (`data/kanun/raw/`) ~75 sn'de **deterministik** üretilir. (89.745 fıkra, 29.428 bent, 1.718 mülga.) Metadata'ya `mevzuat_tur` + `resmi_gazete_tarihi`/`resmi_gazete_sayisi` eklendi (kod, PR #33) — diskteki korpusa yeniden build ile girer.
 - **Retrieval:** kütüphane `src/kanun/retrieval/search.py` (`HybridArama`), BGE-M3 + Qdrant, 3-bacak hybrid. **R@10 = 0.6885** (bugünkü index; eski 0.700 index/korpus yürürlük uyuşmazlığından düştü — ADR-0015). +reranker 20/512 (istek başına) R@10 0.711 ama R@1 0.481→0.465 → varsayılan kapalı. ONNX int8 sorgu embed'i R@10 0.688, embed gecikmesi ~3× düşük. (Eski "+reranker 0.706" 2-bacak RRF tabanındaydı.)
-- **Servis:** FastAPI `POST /ara`, `GET /saglik` (`src/kanun/api/app.py`); ayarlar ortam değişkeninden (`config.py`).
-- **Testler:** 381 test geçiyor (`pytest -q`: `tests/kanun/` 328 + `tests/teblig/` 53); 3 gerçek-model parity testi ayrıca `pytest -m model`.
+- **Atıf modu** (ADR-0019): `atif.py` (deterministik ayrıştırıcı) + `atif_getir.py` (korpus üzerinde bayt-ofsetli bellek içi indeks) — "TCK m. 141/2" → kesin madde/fıkra/bent; fıkra→bent toleransı, kanun_no çakışmasında `coklu_mevzuat`, eşleşme yoksa doğal dile düşüş. Gerçek korpusla doğrulanmadı.
+- **Servis:** FastAPI `POST /ara` (`mod`: `otomatik` varsayılan | `atif` | `dogal`), `GET /saglik` (+ `atif_indeks`) (`src/kanun/api/app.py`); ayarlar ortam değişkeninden (`config.py`).
+- **Testler:** 636 test geçiyor (`pytest -q`: `tests/kanun/` 583 + `tests/teblig/` 53); 3 gerçek-model parity testi ayrıca `pytest -m model`. CI: her PR'da ve `main`'e push'ta GitHub Actions `test` check'i aynı paketi koşar (ubuntu, Python 3.11).
 - **Docker:** `docker compose up -d qdrant api` + `--profile ingest run --rm ingest` (ön koşul: `colab/outputs/`, `models/onnx/`, korpus).
-- **Eksik:** atıf modu (metadata hazır, kod yok) · Qdrant index'inin güncel korpusla yeniden embed'i.
+- **Eksik:** atıf modunun gerçek korpusla doğrulanması (`unique_atiflar.json`, 8.290 atıf) · korpusun yeni alanlarla yeniden build'i + Qdrant index'inin güncel korpusla yeniden embed/ingest'i.
 
 ### Build zincirine dokunacaksan — kritik invariant'lar
 Bunlar bozulursa korpus **sessizce** bozulur (mevcut testler yakalamayabilir):
@@ -94,5 +96,11 @@ Bunlar bozulursa korpus **sessizce** bozulur (mevcut testler yakalamayabilir):
 5. **Chunk id `mevzuatId` tabanlıdır**, `kanun_no` değil (6551 gibi çakışan kanun no'ları var).
 
 **Doğrulama refleksi:** `python scripts/kanun/build_corpus.py` → 916 kanun / 31.419 chunk; `k193 m7` = 2 fıkra, 7 bent.
+Build ayrıca `[R.G.] X/Y kanunda R.G. tarihi var` ve `R.G. tarihi dolu chunk: N/M` satırlarını basar. Kaynak liste cache'i
+`data/kanun/raw/_kanun_liste.json` (`PYTHONPATH=src python -m kanun.fetch` doldurur) `_kanun_ids.txt`'den **bağımsızdır**:
+kanun seti ve sırası ids cache'inden gelir, liste cache'i yalnız alan ekler (yoksa alanlar null, build kırılmaz).
+Yeni alanların yalnız eklemeli olduğunu doğrula (`ESKI.jsonl` = build öncesi korpusun kopyası; build ezer):
+`python scripts/kanun/compare_corpus.py ESKI.jsonl YENI.jsonl --yoksay mevzuat_tur,resmi_gazete_tarihi,resmi_gazete_sayisi`
+(chunk sayısı, id'ler ve kalan alanlar aynı kalmalı; "Metadata alanı: eklenen" satırı yalnız bu üç alanı göstermeli).
 
 ⚠️ **`build_corpus.py` çıktıyı SESSİZCE EZER** (`"w"` modu). `CORPUS_MID=...` ile tek kanun çalıştırırsan diskteki tam korpus 1 kanuna iner. Cache duruyorsa geri üretilebilir (deterministik). Tür-kapsamlı veri yolu sayesinde tebliğ/yönetmelik build'i kanun korpusunu **asla** ezemez.

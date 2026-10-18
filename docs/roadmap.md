@@ -19,6 +19,7 @@ Akış:
 - Yönetişim dokümanları (compliance, status, arch, roadmap, decisions, commit_discipline)
 - `README.md`, `.gitignore`, `CLAUDE.md`
 - Repo + branch disiplini devrede
+- CI (GitHub Actions, pytest) ✓ — `.github/workflows/ci.yml`, check `test`
 **Çıktı:** Dokümante edilmiş, dallanma disiplinli repo.
 **Bağımlılık:** —
 
@@ -41,7 +42,7 @@ Akış:
 
 ### Faz 3 — Metadata
 **Hedef:** Her chunk için zengin, filtrelenebilir metadata.
-- mevzuat adı/no/tür, madde no/başlık, fıkra, hiyerarşi path, kaynak, R.G. tarihi
+- mevzuat adı/no/tür, madde no/başlık, fıkra, hiyerarşi path, kaynak, R.G. tarihi ✓ (PR #33)
 - **Yürürlük durumu (yürürlükte / mülga)** — kritik; mülga hükümler işaretlenir/ayrılır
 **Çıktı:** Metadata ile zenginleştirilmiş chunk'lar.
 **Bağımlılık:** Faz 2
@@ -56,14 +57,14 @@ Akış:
 ### Faz 5 — Embedding + Indexleme
 **Hedef:** Korpusu aranabilir hale getirme.
 - Türkçe'ye uygun embedding (ör. `BGE-M3`)
-- Vektör store: Qdrant **veya** pgvector *(karar açık — bkz. decisions.md)*
+- Vektör store: Qdrant **veya** pgvector *(karar: Qdrant — decisions.md ADR-0008)*
 - Hybrid arama: dense + BM25/sparse
 **Çıktı:** Doldurulmuş index + hybrid arama altyapısı.
 **Bağımlılık:** Faz 4
 
 ### Faz 6 — Sorgu Formatı + Retrieval
 **Hedef:** Soruya/atıfa karşılık ilgili maddeleri getirmek.
-- **Atıf modu:** kanun/madde/fıkra/bent → metadata filtresiyle kesin getirme
+- **Atıf modu:** kanun/madde/fıkra/bent → metadata filtresiyle kesin getirme ✓ (ADR-0019)
 - **Doğal dil modu:** serbest soru → hybrid semantik retrieval
 - (Opsiyonel) reranker ile precision artırma
 - Çıktı: sıralanmış ilgili maddeler (metadata + atıf bilgisiyle)

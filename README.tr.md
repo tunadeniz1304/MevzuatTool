@@ -53,6 +53,17 @@ mevzuat korpusundan **yürürlükteki ilgili maddeleri** sıralayarak döndürü
  ...
 ```
 
+**İki sorgu modu** (ADR-0019) — `POST /ara` her sorgu için birini seçer (`mod`: `otomatik` varsayılan | `atif` | `dogal`):
+
+- **Atıf modu:** `TCK m. 141/2` ya da `5237 sayılı Kanun m. 141/2-a` gibi bir atıf deterministik olarak ayrıştırılır
+  (regex + kısaltma tablosu — LLM yok) ve atıf edilen madde, verilmişse fıkra/bent de, korpus üzerindeki bellek içi
+  indeksten **kesin** getirilir. Sıralama yoktur (skor 1.0); yürürlük filtresi ve reranker uygulanmaz: mülga madde
+  gizlenmez, işaretli döner. Bir kanun numarası birden çok kanuna aitse ve sorgudaki kanun adı birini
+  seçmiyorsa hepsi döner (`coklu_mevzuat`); maddede
+  `(N)` fıkrası yoksa "fıkra N" atfı `N.` bendine çözülür. Çözülemeyen atıf doğal dile düşer.
+- **Doğal dil modu:** 3-bacak hybrid arama (dense + öğrenilmiş sparse + klasik BM25), yürürlük filtresi ve
+  opsiyonel reranker — yukarıdaki örnek.
+
 > **🧭 Sınır:** Pipeline **retrieval'da biter.** Cevabı yazan LLM (generation) **kapsam dışıdır** —
 > en sonda config'le takılan, OpenAI-uyumlu, swap'lanabilir bir endpoint olarak bırakılmıştır.
 > Bu proje, vanilla RAG'ın **retrieval yarısıdır.**
@@ -97,6 +108,10 @@ Türk mevzuatı aranırken klasik zorluklar:
                    Top-k yürürlükteki madde
 ```
 
+**Atıf modu** (ADR-0019) ayrı bir yoldan gider: sorgu atıf olarak ayrıştırılır ve `korpus.jsonl` üzerindeki bellek
+içi indekste aranır (kesin madde / fıkra / bent; embed ve Qdrant yok). Atıf olmayan ya da korpusta çözülemeyen
+sorgular yukarıdaki hybrid yoldan geçer.
+
 **Teknoloji:** Python · [`saidsurucu/mevzuat-mcp`](https://github.com/saidsurucu/mevzuat-mcp) ·
 [BGE-M3](https://huggingface.co/BAAI/bge-m3) embedding · [Qdrant](https://qdrant.tech) vektör store ·
 `rank_bm25` · hybrid arama (dense + sparse + BM25) · ONNX Runtime int8 · FastAPI · Docker Compose.
@@ -136,7 +151,7 @@ kanun içinde **madde ayrımı**. (Sıradaki: index'i yeniden embed, reranker sk
 - **31.419 chunk / 916 kanun** (yalnız `KANUN` türü — ADR-0013)
 - İç yapı: **89.745 fıkra**, **29.428 bent**; 1.718 mülga chunk (elenmez, işaretlenir — tarihsel sorgu)
 - Her chunk: `{id, text, metadata}` — bağımsız teslim edilebilir JSONL
-- Metadata: kanun_no/ad, madde_no/başlık, **yürürlük (yürürlükte/mülga)**, hiyerarşi yolu, fıkra/bent ağacı, değişiklik geçmişi, dipnotlar, tablolar
+- Metadata: kanun_no/ad, madde_no/başlık, **yürürlük (yürürlükte/mülga)**, hiyerarşi yolu, fıkra/bent ağacı, değişiklik geçmişi, dipnotlar, tablolar, mevzuat türü (`mevzuat_tur`), R.G. tarihi/sayısı (`resmi_gazete_tarihi` / `resmi_gazete_sayisi` — kodda; `korpus.jsonl`'e bir sonraki build'de girer)
 - Atomik birim = **madde** (uzun maddeler fıkra bazında); naive sabit-boy token chunking **yok**
 - `python scripts/kanun/build_corpus.py` ile cache'ten ~75 sn'de **deterministik** üretilir
 
@@ -195,6 +210,7 @@ python scripts/kanun/retrieval/search_qdrant.py
 ```
 
 Çıktı: yürürlükteki en ilgili top-10 madde, füzyon skoru + kanun/madde bilgisiyle sıralı.
+(CLI yalnız doğal dil modudur; atıf modu aşağıdaki HTTP servisinde.)
 
 **HTTP servisi** (FastAPI, ADR-0017):
 
@@ -208,7 +224,20 @@ EMBED_BACKEND=onnx-int8 RERANK_BACKEND=onnx-int8 uvicorn kanun.api.app:app --app
 
 curl localhost:8000/saglik
 curl -X POST localhost:8000/ara -H 'Content-Type: application/json'      -d '{"sorgu": "kira artışı nasıl belirlenir", "top_k": 10, "rerank": false}'
+
+# atıf (mod verilmezse "otomatik": atıf olarak ayrıştırılıp korpusta çözülür → kesin getirme)
+curl -s -X POST localhost:8000/ara -H 'Content-Type: application/json' -d '{"sorgu": "TCK m. 141/2"}'
 ```
+
+`mod` sorgu modunu seçer: `otomatik` (varsayılan — sorgu atıf olarak ayrıştırılıp korpusta çözülürse atıf modu,
+değilse doğal dil), `atif` (atıf olarak dene, olmazsa doğal dile düş) ya da `dogal` (yalnız doğal dil — HTTP
+üzerinden ölçüm yapan script'ler bunu gönderir). Kullanılan mod yanıttaki `config.mod`'dadır. Atıf modunda her
+sonucun `skor`'u 1.0'dır ve bir `atif` nesnesi taşır: `mevzuat_id`, `madde_tipi`, `yurutluk`, `alt_parca` (istenen
+fıkra/bent — `fikra`, `bent`, `metin`, `tolerans`; `"fikra->bent"` = "fıkra N" atfı `N.` bendine çözüldü) ve
+`uyarilar` (ör. mülga madde uyarısı); madde metni varsayılan olarak döner. Üst düzeydeki `atif` nesnesi `durum`
+(`eslesti` | `kismi` | `eslesme_yok` | `ayristirilamadi` | `indeks_yok`), `dusus` (true = doğal dile düşüldü) ve
+ayrıştırılan `atiflar`'ı (bir kanun numarası birden çok kanuna aitse `coklu_mevzuat`) verir. Doğal dil yanıtı eski
+şemayla aynıdır: `atif` anahtarı yalnız atıf denendiğinde görünür.
 
 ---
 
@@ -220,13 +249,15 @@ import edilmez.
 
 ```
 MevzuatTool/
+├── .github/workflows/ci.yml      # CI: `test` check'i — her PR'da ve main'e push'ta pytest -q
 ├── src/
 │   ├── kanun/                    # ✅ ÇALIŞIYOR — 15 modül
 │   │   ├── fetch.py              #   bedesten çekici (429/Retry-After uyumlu, cache'li)
 │   │   ├── chunker.py fikra.py   #   madde bölme · fıkra/bent ağacı
 │   │   ├── enrich.py corpus.py   #   metadata birleştirme · chunk üretimi
 │   │   ├── retrieval/            #   search.py (HybridArama) · embed(_onnx).py · rerank.py · config.py
-│   │   └── api/app.py            #   FastAPI: POST /ara, GET /saglik
+│   │   │                         #   atif.py + atif_getir.py — atıf modu (ayrıştırıcı + kesin getirme)
+│   │   └── api/app.py            #   FastAPI: POST /ara (mod), GET /saglik
 │   ├── teblig/                   # ⏸ PARK EDİLDİ, MVP dışı — deneysel çekici + chunker (ADR-0020)
 │   └── yonetmelik/               # ⬜ iskelet
 ├── scripts/
@@ -241,7 +272,7 @@ MevzuatTool/
 │   ├── teblig/                   # ⏸ yapi_olc.py (yapı ölçümü); build script'i yok
 │   └── yonetmelik/               # ⬜ boş
 ├── tests/
-│   ├── kanun/                    # 22 dosya, 328 test (+3 gerçek-model: pytest -m model)
+│   ├── kanun/                    # 24 dosya, 583 test (+3 gerçek-model: pytest -m model)
 │   ├── teblig/                   # 2 dosya, 53 test (park edilmiş kodu kilitler)
 │   └── yonetmelik/               # ⬜ boş
 ├── colab/
@@ -262,16 +293,18 @@ MevzuatTool/
 
 | Faz | Ad | Durum |
 |---|---|---|
-| 0 | Kurulum & Yönetişim | ✅ |
+| 0 | Kurulum & Yönetişim (+ CI) | ✅ |
 | 1 | Veri Çekme (mevzuat-mcp) | ✅ |
 | 2 | Yapısal Chunking (madde/fıkra) | ✅ |
-| 3 | Metadata (yürürlük/hiyerarşi) | ✅ |
+| 3 | Metadata (yürürlük/hiyerarşi, R.G. tarihi/sayısı) | ✅ |
 | 4 | Temiz Korpus Artifact (JSONL) | ✅ |
 | 5 | Embedding + Indexleme (BGE-M3 + Qdrant) | ✅ |
-| 6 | Sorgu + Retrieval (3-bacak hybrid) | ✅ |
+| 6 | Sorgu + Retrieval (3-bacak hybrid + atıf modu) | ✅ |
 | 7 | Dockerize (`docker compose up`) | ✅ |
 
-Sıradaki iyileştirmeler: atıf modu, Qdrant index'ini güncel korpusla yeniden embed.
+Sıradaki iyileştirmeler: Qdrant index'ini güncel korpusla yeniden embed (yeni payload alanları da böyle gelir),
+atıf modunu gerçek korpusta ölçmek (`unique_atiflar.json`), doğal dil modunda BM25 `(kanun_no, madde_no)` anahtar
+çakışmasını gidermek, reranker skor füzyonu.
 Detay: [`docs/status.md`](docs/status.md) · [`docs/roadmap.md`](docs/roadmap.md).
 
 ---
@@ -311,6 +344,8 @@ Detay: [`docs/mevzuat-mvp-kapsam.md`](docs/mevzuat-mvp-kapsam.md) · [`docs/comp
 - 🚫 `main`'e doğrudan push **yasak** — `phase-N/feature-adi` branch'leri + PR.
 - 🚫 Commit mesajlarında AI co-author / "Generated with" satırı **yok**.
 - ⚛️ **Atomik commit** — tek mantıksal değişiklik; `type(scope): özet` formatı.
+- ✅ Her PR'da (ve `main`'e her push'ta) **`test`** check'i koşar — GitHub Actions, Ubuntu / Python 3.11 üzerinde
+  `pytest -q` (`.github/workflows/ci.yml`). PR açmadan önce yerelde `pytest -q` koş.
 
 ---
 

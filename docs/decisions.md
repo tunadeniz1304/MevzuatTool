@@ -461,8 +461,10 @@ Güncel mimari görünümü: [`arch.md`](arch.md). Kapsam: [`mevzuat-mvp-kapsam.
   - ⚠️ **Gerçek korpusla doğrulanmadı** (geliştirme makinesinde `data/` yok): atıf bulunabilirliği
     `unique_atiflar.json` (8.290 atıf) üzerinden ölçülmeli; açılışta korpusun ikinci kez taranması (BM25
     kurulumuyla aynı mertebe, birkaç sn) ve indeks belleği (31k küçük kayıt) ölçülmedi.
-  - ❌ Sınırlar: alt-bent okunmaz ('359/a-1'in '1'i); sıralama/aralık ('141 ve 142. maddeler',
-    '141-145') yalnız bir numarayı yakalar ('TCK m. 141 ve m. 142' ikisini de); karışık sırada kanun en yakın
+  - ❌ Sınırlar: alt-bent okunmaz ('359/a-1'in '1'i); aralık açılmaz — 'TCK m. 141-145' yalnız 141'i,
+    '5237 sayılı Kanunun 141-145. maddeleri' yalnız uçları (141, 145) yakalar; sıralamada kanun önce geliyorsa
+    ('TCK'nın 141 ve 142. maddeleri', 'TCK m. 141 ve m. 142') ikisi de, sonra geliyorsa ('141 ve 142. maddeler
+    TCK') yalnız son numara yakalanır (2026-10-18 doğrulaması); karışık sırada kanun en yakın
     ÖNCEKİ kanuna bağlanır; tolerans yalnız '(N)' fıkrası YOKSA devreye girer — '(N)' fıkrası da 'N.' bendi de
     olan maddede '40/2' fıkraya gider (uyarıyla). Doğal dil modunun `BM25Index` sözlükleri (kanun_no, madde_no)
     anahtarlı olduğundan çakışan kanunlarda `metin` yanlış kanundan gelebilir — önceden var olan, bu ADR'nin

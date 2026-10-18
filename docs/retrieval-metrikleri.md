@@ -2,7 +2,8 @@
 
 > Sistemin **ölçülmüş** durumu. Cetvel: dışarıdan gelen **altınset** gold set (21.737 sızıntısız
 > sorgu; `ilgi`=sorgu, kanun_no+madde_no=doğru madde). Kapsam: retrieval'da biter (CLAUDE.md).
-> Son güncelleme: 2026-09-28 (Faz 6 kapanışı: reranker entegrasyonu, ONNX int8, servis, gecikme tablosu).
+> Son güncelleme: 2026-10-18 (atıf modu notları — ADR-0019). Ölçümler 2026-09-28 Faz 6 kapanışından (reranker
+> entegrasyonu, ONNX int8, servis, gecikme tablosu).
 
 ## Sistem mimarisi (ölçülen)
 
@@ -14,6 +15,9 @@ Sorgu → BGE-M3 embed (PC; torch FP32 ya da ONNX int8) → dense + BGE-sparse (
 Kütüphane: src/kanun/retrieval/search.py (HybridArama) · Servis: src/kanun/api/app.py (FastAPI)
 ```
 
+- **Atıf modu (ADR-0019) bu sayfadaki ölçümlerin DIŞINDA:** atıf sorgusu kesin getirmedir (sıralama yok, skor
+  1.0), R@k ile ölçülmez ve henüz ölçülmedi — önerilen sanity ölçümü "Sonraki adımlar"da. Aşağıdaki tüm sayılar
+  doğal dil yolunun (`HybridArama`) sayılarıdır.
 - **Embedder:** BGE-M3 (ADR-0007). Dense=CLS pooling (FlagEmbedding ile birebir, 0.9998 aynı-metin).
 - **Vektör store:** Qdrant (ADR-0008), dense + BGE-sparse.
 - **Füzyon:** 3-bacak WSUM (dense + BGE-sparse + klasik-BM25), min-max normalize ağırlıklı toplam.
@@ -238,6 +242,10 @@ embed + 3 bacak + füzyon + reranker). Kalite sütunları **2000 sorgu** (`reran
   "varsayılan kapalı" kararını kalite kuralından bağımsız olarak da destekliyor.
 - p99 N=200'de ≈ en yavaş 2 sorgu → düşük güvenilirlik; bacak süreleri (dense/sparse/BM25) her satırda ~10-25 ms.
 - Servis ek yükü (C-http − C) ölçülmedi; servis doğruluğu `tests/kanun/test_api.py` ile (sahte arama) test edildi.
+- **HTTP üzerinden doğal dil ölçümü `mod=dogal` göndermeli** (ADR-0019): `/ara`'nın varsayılanı artık `otomatik`;
+  altınset süzgecinin elemediği atıf biçimlerini ('4/1-a', 'm. 141') içeren gold sorgusu atıf moduna gider ve
+  protokol in-process `HybridArama.ara` ile eşdeğer olmaktan çıkar. `metrik_gecikme.py` C-http satırı `mod=dogal`
+  gönderir; HTTP'den ölçen yeni script'ler de aynısını yapmalı.
 
 ## Araçlar
 
@@ -250,7 +258,8 @@ Tüm script'ler `scripts/kanun/retrieval/` altında; kütüphane `src/kanun/retr
 | `src/kanun/retrieval/embed.py` · `embed_onnx.py` | BGE-M3 sorgu embed (torch) · ONNX Runtime karşılığı |
 | `src/kanun/retrieval/rerank.py` | `TorchReranker` / `OnnxReranker` (bge-reranker-v2-m3) |
 | `src/kanun/retrieval/olcum.py` | Ortak gold örnekleme (SEED 4721) + R@k/MRR/nDCG |
-| `src/kanun/api/app.py` | FastAPI `/ara`, `/saglik` (ADR-0017) |
+| `src/kanun/retrieval/atif.py` · `atif_getir.py` | Atıf modu: ayrıştırıcı + bellek içi korpus indeksiyle kesin getirme, `modlu_ara` (ADR-0019; ölçülmedi) |
+| `src/kanun/api/app.py` | FastAPI `/ara` (`mod`: otomatik \| atif \| dogal), `/saglik` (ADR-0017/0019) |
 | `ingest_qdrant.py` | Colab vektörlerini Qdrant'a yükle (+ `yurutluk` payload index) |
 | `search_qdrant.py` | Arama CLI (kütüphanenin ince sarmalayıcısı) |
 | `esdeger_kontrol.py` | Kütüphane = eski script (50 sorgu, birebir) |
@@ -264,9 +273,15 @@ Tüm script'ler `scripts/kanun/retrieval/` altında; kütüphane `src/kanun/retr
 
 ## Sonraki adımlar (açık)
 
+- **Atıf modu sanity ölçümü (önerilen, ADR-0019):** `unique_atiflar.json` (8.290 atıf) → her kayıt için atıf sorgusu
+  (varsa ham atıf metni, yoksa kanun_no + madde_no [+ fıkra/bent] alanlarından kurulan metin) atıf modundan
+  (`modlu_ara(..., mod="atif")` ya da `/ara` `mod=atif`) geçirilir → **doğru madde oranı** (kanun / madde /
+  fıkra-bent kırılımıyla; `tolerans="fikra->bent"`, `coklu_mevzuat` ve doğal dile düşüş ayrı sayılır). Build
+  katmanındaki %75.3 ölçüm üst sınırıyla kıyaslanır (status.md dürüstlük notu). Gerçek korpus gerekir; tek script +
+  sabit protokol + tek tablo (harness değil — compliance B).
 - **Qdrant index'ini güncel korpusla yeniden embed et** (1.678 maddelik yürürlük uyuşmazlığı → taban 0.688 → ~0.70).
 - Reranker'ı R@1'i bozmadan kullanmak: WSUM skoruyla reranker skorunu **birleştirmek** (şimdi saf yer değiştirme).
 - Reranker'ı GPU'lu ayrı bir serviste koşmak (CPU'da ~15 sn/sorgu, bütçe 1.5 sn).
 - 2000 sorguluk int8-reranker kalitesi (GPU'da ya da gece koşusu).
 - Çok-versiyonlu kanun toleransıyla "gerçek" R@10.
-- (Future, kapsam-dışı) fine-tune; statik int8; atıf modu.
+- (Future, kapsam-dışı) fine-tune; statik int8.

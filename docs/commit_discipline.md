@@ -122,6 +122,16 @@ GitHub repo ayarlarından `main` kilitlenmelidir:
 
 Ayar yapılana kadar kural **manuel** uygulanır: kimse `git push origin main` çalıştırmaz.
 
+> **Durum (2026-10-18) — koruma şu an kurulamıyor:** repo **private** ve hesap **GitHub Free** planında; bu
+> kombinasyonda branch protection / ruleset kullanılamıyor — API **403** döner ("Upgrade to GitHub Pro or make this
+> repository public"). Açmak için GitHub Pro (ya da üstü) gerekir veya repo public yapılmalı (kullanıcı kararı).
+> O zamana kadar yukarıdaki manuel kural geçerlidir; açıldığında zorunlu check `test`'tir.
+>
+> ⚠️ **"Require linear history"** bu reponun PR akışıyla çelişir: PR'lar **merge commit** ile birleştiriliyor
+> (`Merge pull request #N ...`), linear history ise merge commit'i reddeder. Koruma açılırken bu seçenek işaretlenecekse
+> önce GitHub'ın merge yöntemi **squash** ya da **rebase merge**'e geçirilmeli; merge-commit akışı sürecekse seçenek
+> kapalı kalmalı.
+
 **CI (`test` check'i):** `main`'i hedefleyen her PR'da ve `main`'e her push'ta (merge) `ubuntu-latest` + Python 3.11 üzerinde CPU torch + `requirements.txt` kurulur ve varsayılan test paketi koşar: `python -m pytest -q` (`pytest.ini` gereği `-m model` testleri hariç). Yerelde aynı paket: `pytest -q`.
 - Check, ruleset listesinde ancak en az bir kez koştuktan sonra çıkar (ilk koşu CI'ı ekleyen PR'dadır); `test` diye aranır.
 - Job id'si (`test`) değişirse ruleset'teki check adı da güncellenmeli; yoksa PR'lar artık hiç raporlanmayan eski check'i bekleyip kilitlenir.
