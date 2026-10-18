@@ -198,6 +198,25 @@ def test_tek_harfli_roma_rakami_alternatif_uretir():
     assert _tek("TMK 166/II").alternatifler == ()             # çok harfli Roma rakamı belirsiz değil
 
 
+# 'İş K. 25/I-b' (haklı fesih atıflarının yerleşik yazımı): tek harfli Roma rakamından sonraki bent düşüyordu
+# (harf ekinden sonrası alt-bent sayılıp okunmuyordu) → yalnız fıkra ya da madde dönüyordu.
+@pytest.mark.parametrize("sorgu, birincil, alternatif", [
+    ("İş Kanunu 25/I-b", ("25/I", None, "b"), ("25", 1, "b")),
+    ("4857 sayılı Kanunun 25/I-b maddesi", ("25/I", None, "b"), ("25", 1, "b")),
+    ("İş K. m. 25/V (a)", ("25/V", None, "a"), ("25", 5, "a")),
+])
+def test_tek_harfli_roma_fikradan_sonraki_bent_okunur(sorgu, birincil, alternatif):
+    a = _tek(sorgu)
+    assert (a.madde_no, a.fikra, a.bent) == birincil
+    assert [(y.madde_no, y.fikra, y.bent, y.aciklama) for y in a.alternatifler] == [alternatif + ("roma->fikra",)]
+
+
+def test_roma_olmayan_harf_ekinden_sonrasi_alt_bent_kalir():
+    a = _tek("VUK 359/a-1")                                   # '1' alt-bent: okunmaz (bilinen sınır)
+    assert a.yorum == Yorum("asil", "359/A") and a.alternatifler == (Yorum("asil", "359", bent="a",
+                                                                           aciklama="harf->bent"),)
+
+
 def test_birden_cok_atif_sirasiyla():
     a = atif_ayristir("TCK m. 141 ve CMK m. 100")
     assert [_ozet(x) for x in a] == [(("5237",), "141", None, None), (("5271",), "100", None, None)]
@@ -644,6 +663,12 @@ def test_roma_fikra(indeks):
     assert _coz("TMK 166/II", indeks).eslesmeler[0].alt_parca.fikra == "(2)"
     c = _coz("TMK 166/I", indeks)                              # 166/I harfli maddesi yok → 1. fıkra
     assert c.yorum.aciklama == "roma->fikra" and c.eslesmeler[0].alt_parca.fikra == "(1)"
+
+
+def test_roma_fikra_alternatifi_benti_de_getirir(indeks):
+    c = _coz("KVKK 11/I-b", indeks)                           # 11/I harfli maddesi yok → (1) fıkra (b) bendi
+    assert c.yorum.aciklama == "roma->fikra"
+    assert (c.eslesmeler[0].alt_parca.fikra, c.eslesmeler[0].alt_parca.bent) == ("(1)", "b)")
 
 
 def test_tek_harf_roma_harfli_madde_varsa_harfli_kazanir(indeks):

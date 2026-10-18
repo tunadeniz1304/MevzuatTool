@@ -18,7 +18,7 @@ Tanınan biçimler — büyük/küçük harf, İ/I/ı/i ve Türkçe karakter duy
   Fıkra : 'f. 2', 'fıkra 2', '2. fıkra', '2 nci fıkrası', 'ikinci fıkrası', 'son fıkrası',
           '(2) numaralı fıkrası', madde/fıkra '141/2', Roma rakamı '166/II'.
   Bent  : 'b. a', 'bent a', '(a) bendi', 'a bendi', 'a) bendi', '(1) numaralı bendi', '3. bendi',
-          satır içi '141/2-a', '119/1(ğ)'.
+          satır içi '141/2-a', '119/1(ğ)', Roma fıkradan sonra '25/I-b', '25/II-e'.
 
 ATIF = KANUN + MADDE (ikisi birden şart). Yalnız kanun ('5237 sayılı Kanun') ya da yalnız madde
 ('madde 5') atıf DEĞİLDİR → doğal dil modu. Yanlış-pozitif kapıları (doğal dil sorgusu atıf sanılmasın):
@@ -522,6 +522,7 @@ def _slash_uygula(m, sorgu, tok):
     ek = m.group("ek")
     if ek is None:
         return True
+    grup = "eb1" if m.group("eb1") is not None else ("eb2" if m.group("eb2") is not None else None)
     if ek.isdigit():
         tok.fikra = int(ek)
     elif len(ek) > 1:
@@ -531,8 +532,10 @@ def _slash_uygula(m, sorgu, tok):
     else:
         tok.harf = sorgu[m.start("ek")]
         tok.roma_tek = ek in ("i", "v", "x")
-        return True                                             # harf ekinden sonraki '-1' (alt-bent) okunmaz
-    grup = "eb1" if m.group("eb1") is not None else ("eb2" if m.group("eb2") is not None else None)
+        # harf ekinden sonraki '-1' alt-bent sayılır, okunmaz ('359/a-1'); tek harfli Roma rakamından
+        # sonraki HARF ise benttir ('İş K. 25/I-b' = I. fıkra (b) bendi)
+        if not (tok.roma_tek and grup and not m.group(grup).isdigit()):
+            return True
     if grup:
         b = m.group(grup)
         tok.bent = str(int(b)) if b.isdigit() else tr_kucuk(sorgu[m.start(grup)])
