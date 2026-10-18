@@ -391,6 +391,36 @@ def test_yalin_sayi_miktar_ifadesiyse_atif_sanilmaz(sorgu):
     assert atif_ayristir(sorgu) == []
 
 
+# Aynı sınıfın ikinci dalgası: bağlamlı özkesir ('1/6 indirim' — pay < payda), kat, sıra + yapı sözcüğü
+# ('2. kitap', '3. derece'), alan birimi ('18 m2'), iş günü.
+@pytest.mark.parametrize("sorgu", [
+    "TCK 1/6 indirim",
+    "KDVK 9/10 tevkifat",
+    "TTK 2/3 çoğunlukla karar",
+    "TMK 1/4 saklı pay",
+    "İİK 1/4 maaş haczi",
+    "İİK 1/4'ü haczedilir",
+    "TCK 2 katına kadar artırılır",
+    "TCK 2. kitap",
+    "TCK'nın 2. kısmı",
+    "TMK 3. derece akraba",
+    "İmar Kanunu 18 m2",
+    "HMK 2 iş günü",
+])
+def test_yalin_sayi_kesir_kat_yapi_ve_alan_ifadesiyse_atif_sanilmaz(sorgu):
+    assert atif_ayristir(sorgu, kanun_adlari=[("imar kanunu", ("3194",))]) == []
+
+
+@pytest.mark.parametrize("sorgu, beklenen", [
+    ("TMK 1/2", ("1", 2)),                        # özkesir ama bağlam yok: m.1 f.2 (klasik atıf)
+    ("TCK 62/1 indirim", ("62", 1)),              # pay > payda: kesir değil
+    ("TMK 1/2 hâkim örf ve âdet hukukuna göre karar verir", ("1", 2)),
+])
+def test_kesir_kapisi_gercek_fikra_atfini_dusurmez(sorgu, beklenen):
+    a = _tek(sorgu)
+    assert (a.madde_no, a.fikra) == beklenen
+
+
 @pytest.mark.parametrize("sorgu, maddeler", [
     ("TCK 141 ila 145", ["141"]),                 # birimsiz aralık madde aralığıdır (yalnız ilk uç)
     ("TCK m. 141-145", ["141"]),

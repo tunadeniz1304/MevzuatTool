@@ -263,11 +263,12 @@ _B_ONCE = re.compile(r"(?<![a-z])(?:bent|bendi|bnt\.?|b\.)\s?\(?\s?(?P<h>[a-z]|[
 # birim sanıp gerçek atfı düşürürdü ('TMK 24 kişilik hakkı' atıftır, 'kişilik' listede yok).
 _BELGE_DEVAMI = r"%|sayili|sy\.|s\s?\.\s?k|numarali|nolu|no\s?'?\s?lu"
 _FIZIKSEL = (r"tl|lira(?:si|ya|lik)?|kurus|adet|metre|km|kg|ton|(?:kilo|mili)?gram(?:dan|a|i|lik)?|litre"
-             r"|yuzde|bin|milyon|milyar")
+             r"|m2|m3|m²|m³|metrekare|metrekup|dekar|donum|hektar|yuzde|bin|milyon|milyar")
 _SURE_SAYIM = (r"yil(?:a|i|in|ina|inda|da|dan|lik|lar[a-z]*)?|sene(?:si|ye|de|den|lik)?"
                r"|gun(?:u|un|e|de|den|luk|ler[a-z]*)?|hafta(?:si|ya|da|dan|lik)?|saat(?:i|e|te|ten|lik)?"
                r"|dakika(?:si|ya|da|dan|lik)?|saniye(?:si|ye|de|den|lik)?|ay(?:a|da|dan|i|in|lik)?"
-               r"|kez|defa|kere|kat|kati|tane|kisi(?:ye|yle|nin|den|de|ler[a-z]*)?"
+               r"|is\s?gun(?:u|un|e|de|den|luk|ler[a-z]*)?"
+               r"|kez|defa|kere|kat(?:i|ina|ini|inda|indan|lik)?|tane|kisi(?:ye|yle|nin|den|de|ler[a-z]*)?"
                r"|cocuk(?:lu|u|un|a|lar[a-z]*)?|kardes(?:i|ler[a-z]*)?|isci(?:ye|nin|den|ler[a-z]*)?"
                r"|taksit(?:le|li|te)?|donem(?:de|lik)?"
                r"|yas(?:i|ini|inin|inda|indaki[a-z]*|indan|ina)?|puan|derece|sayfa")
@@ -278,7 +279,13 @@ _MIKTAR_DEVAMI = (r"(?:\s?(?:" + _AY_ADLARI + r")(?![a-z])"
                   r"|'?\s?(?:dan|den|tan|ten)\s(?:daha\s)?(?:fazla|az|cok|ziyade|buyuk|kucuk|yuksek|dusuk"
                   r"|uzun|kisa)(?![a-z])"
                   r"|\s(?:ve|veya|ya da)\s(?:daha\s)?(?:fazla|az|uzeri|ustu|alti)(?![a-z])"
-                  r"|\s?(?:oran|nispet)[a-z]*)")
+                  r"|\s?(?:oran|nispet)[a-z]*"
+                  r"|" + _ORD + r"\s?(?:kitap|kitab|kisim|kism|bolum|ayirim|fasil|derece|sinif|kusak|daire"
+                  r"|donem)[a-z]*)")
+# Özkesir (pay < payda) + kesir bağlamı: 'TCK 1/6 indirim', 'KDVK 9/10 tevkifat', "İİK 1/4'ü haczedilir".
+# Bağlamsız özkesir atıftır ('TMK 1/2' = m.1 f.2); pay > payda ('TCK 62/1 indirim') kesir değildir.
+_KESIR_BAGLAMI = re.compile(r"(?:'?(?:u|i|si|su|unu|ini|sini|sunu)(?![a-z]))?\s(?:[a-z]+\s)?"
+                            r"(?:indiri|artiri|tevkifat|cogunlu|pay|hisse|hacz|haciz|kesinti)")
 _MADDE_DEGIL_SONRA = {
     "guclu": re.compile(r"\s?(?:" + _BELGE_DEVAMI + r")|[.,/][0-9]"),
     "madde": re.compile(r"\s?(?:" + _BELGE_DEVAMI + r"|(?:" + _FIZIKSEL + r")(?![a-z]))|[.,/][0-9]"),
@@ -609,8 +616,11 @@ def _madde_tokenleri(k, sorgu, kanunlar):
         if _MADDE_SOZU.match(k, m.end("no")) or _madde_degil(k, m.end(), "zayif") or int(m.group("no")) == 0:
             continue
         t = _MaddeTok(m.start("no"), m.end(), "asil", m.group("no"))
-        if _slash_uygula(m, sorgu, t):
-            secilen.append(t)
+        if not _slash_uygula(m, sorgu, t):
+            continue
+        if t.fikra and int(t.no) < t.fikra and _KESIR_BAGLAMI.match(k, m.end()):
+            continue                                            # 'TCK 1/6 indirim': kesir, madde/fıkra değil
+        secilen.append(t)
     return sorted(secilen, key=lambda t: t.bas)
 
 
