@@ -209,6 +209,7 @@ python scripts/kanun/retrieval/search_qdrant.py
 ```
 
 Çıktı: yürürlükteki en ilgili top-10 madde, füzyon skoru + kanun/madde bilgisiyle sıralı.
+(CLI yalnız doğal dil modudur; atıf modu aşağıdaki HTTP servisinde.)
 
 **HTTP servisi** (FastAPI, ADR-0017):
 

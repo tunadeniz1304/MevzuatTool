@@ -216,6 +216,7 @@ python scripts/kanun/retrieval/search_qdrant.py
 (Example query: "how is a rent increase determined".)
 
 Output: the top-10 most relevant in-force articles, ranked by fusion score, with law/article information.
+(The CLI is natural-language only; citation mode is served by the HTTP service below.)
 
 **HTTP service** (FastAPI, ADR-0017):
 
