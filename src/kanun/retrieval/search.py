@@ -33,6 +33,7 @@ import numpy as np
 
 _TOKEN = re.compile(r"[0-9a-zçğıöşü]+", re.UNICODE)
 _TR_KUCUK = str.maketrans({"İ": "i", "I": "ı"})
+GOVDE_UZUNLUK = 5          # BM25 gövdeleme: kelimenin ilk 5 harfi (ADR-0022); sayılar kesilmez
 YURURLUKTE = "yürürlükte"
 SURE_ANAHTARLARI = ("embed", "dense", "sparse", "bm25", "fuzyon", "rerank", "toplam")
 
@@ -44,8 +45,10 @@ def tr_kucuk(metin):
 
 
 def tokenize(metin):
-    """BM25 klasik: Türkçe küçük harf + kelime ayır (Türkçe harfler dahil)."""
-    return _TOKEN.findall(tr_kucuk(metin))
+    """BM25: Türkçe küçük harf + kelime ayır (Türkçe harfler dahil) + ilk-5-harf gövdeleme.
+    Eklemeli Türkçede "vergi / vergisi / vergiden" aynı terim olur; sayılar (kanun no, tarih) olduğu gibi
+    kalır. Korpus ve sorgu aynı fonksiyondan geçer (ADR-0022)."""
+    return [t if t.isdigit() else t[:GOVDE_UZUNLUK] for t in _TOKEN.findall(tr_kucuk(metin))]
 
 
 def norm(skor):
