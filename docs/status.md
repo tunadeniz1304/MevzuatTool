@@ -4,7 +4,7 @@ Fazlar: [`roadmap.md`](roadmap.md) · Kapsam uygunluğu: [`compliance.md`](compl
 Yapısal düzeltme fazları: [`yapisal-sadakat-master-plan.md`](yapisal-sadakat-master-plan.md) · Retrieval ölçümleri: [`retrieval-metrikleri.md`](retrieval-metrikleri.md)
 
 **Son güncelleme:** 2026-10-18
-**Genel durum:** 🟢 Faz 1-7 tamam; atıf modu kodda (ADR-0019). Korpus üretiliyor (31.419 chunk / 916 kanun), embed+index kurulu (BGE-M3 + Qdrant), arama kütüphanede (`HybridArama` + atıf modu) + FastAPI servisi (`/ara` + `mod`, `/saglik`). 3-bacak taban R@10 = **0.6885** (index/korpus yürürlük uyuşmazlığı, bkz. ADR-0015); +reranker (istek başına, 20/512) 0.711 ama R@1 düşer → varsayılan kapalı. ONNX int8 sorgu embed'i kaliteyi korur (0.688), embed gecikmesini ~3× düşürür. Faz 7: docker-compose (qdrant + api + ingest profili) çalışıyor, torch'suz imaj. CI: GitHub Actions `test` check'i (her PR + `main` push). Chunk metadata'sına `mevzuat_tur` + R.G. tarihi/sayısı eklendi (kod; korpus ve Qdrant'a yansıması yeniden build + embed/ingest ister). Doğal dil adayları artık madde_id ile anahtarlanıyor (ADR-0021; çakışan kanun_no'lar ayrı aday). Açık: atıf modunun gerçek korpusta ölçümü, ADR-0021 sonrası R@10'un gerçek veriyle yeniden ölçümü, Qdrant'ın güncel korpusla yeniden embed'i.
+**Genel durum:** 🟢 Faz 1-7 tamam; atıf modu kodda (ADR-0019). Korpus 2026-10-18'de yeniden çekilip üretildi (31.611 chunk / 917 kanun; 195 yönlendirme chunk'ı yeniden üretilen atıf setinden). Qdrant index'i güncel korpusla yeniden embed edildi (31.398 nokta, Colab T4). Arama kütüphanede (`HybridArama` + atıf modu) + FastAPI servisi (`/ara` + `mod`, `/saglik`). Eski altınset bu kopyada yok → sızıntısız **ölçüm seti v2** (442 soru): güncel servis R@10 **0.871**, MRR 0.718, R@1 0.643 (ADR-0022: BM25 Türkçe tokenizer + ilk 5 harf, WSUM 0.65/0.20/0.15; önceki servis 0.835 / 0.660 / 0.568). Eski altınset sayıları (R@10 0.6885, +reranker 0.711) bu setle karşılaştırılamaz. Reranker varsayılan kapalı; ONNX int8 sorgu embed'i embed gecikmesini ~3× düşürür. Faz 7: docker-compose (qdrant + api + ingest profili), torch'suz imaj. CI: GitHub Actions `test` check'i (her PR + `main` push). Doğal dil adayları madde_id ile anahtarlanıyor (ADR-0021). Açık: atıf modunun gerçek korpusta ölçümü, atıf seti üretim script'lerinin repoya alınması, Clef reranker deneyi.
 
 İşaretler: ✅ tamam · 🟡 devam ediyor · ⬜ başlamadı · ⛔ engelli
 
@@ -15,15 +15,15 @@ Yapısal düzeltme fazları: [`yapisal-sadakat-master-plan.md`](yapisal-sadakat-
 | Faz | Ad | Durum | Kanıt |
 |---|---|---|---|
 | 0 | Kurulum & Yönetişim | ✅ | Yönetişim dokümanları + branch disiplini + CI (`test`) |
-| 1 | Veri Çekme | ✅ | `fetch.py` — 916 kanun HTML+tree cache'li |
+| 1 | Veri Çekme | ✅ | `fetch.py` — 917 kanun HTML+tree cache'li (2026-10-18 yeniden çekim) |
 | 2 | Yapısal Chunking | ✅ | `chunker.py` + `fikra.py` — madde/fıkra/bent ağacı |
 | 3 | Metadata | ✅ | `enrich.py` + `corpus.py` — hiyerarşi, yürürlük, künye, dipnot, tablo, tür, R.G. tarihi/sayısı |
-| 4 | Temiz Korpus Artifact | ✅ | `korpus.jsonl` — 31.419 chunk `{id,text,metadata}` |
+| 4 | Temiz Korpus Artifact | ✅ | `korpus.jsonl` — 31.611 chunk `{id,text,metadata}` |
 | 5 | Embedding + Indexleme | ✅ | BGE-M3 (Colab) → Qdrant (dense+sparse) |
 | 6 | Sorgu + Retrieval | ✅ | `HybridArama` + atıf modu (ADR-0019) + reranker (ops.) + ONNX int8 + FastAPI servisi (ADR-0015/16/17) |
 | 7 | Dockerize | ✅ | `docker-compose.yml` + `Dockerfile` (ADR-0018); compose üzerinden `/ara` R@10 = in-process |
 
-**Test durumu:** 1004 test geçiyor (`pytest -q`): `tests/kanun/` 25 dosya 951 test (366'ü `test_madde_kimligi.py` — çoğu rastgele eşdeğerlik senaryosu parametresi) + `tests/teblig/` 2 dosya 53 test; 3 gerçek-model parity testi `pytest -m model` ile ayrı (ağ/model indirmez varsayılan koşu). CI: her PR'da ve `main`'e push'ta GitHub Actions `test` check'i aynı paketi koşar (ubuntu-latest, Python 3.11).
+**Test durumu:** 1109 test geçiyor (`pytest -q`): `tests/kanun/` 26 dosya 1056 test (366'ü `test_madde_kimligi.py` — çoğu rastgele eşdeğerlik senaryosu parametresi) + `tests/teblig/` 2 dosya 53 test; 3 gerçek-model parity testi `pytest -m model` ile ayrı (ağ/model indirmez varsayılan koşu). CI: her PR'da ve `main`'e push'ta GitHub Actions `test` check'i aynı paketi koşar (ubuntu-latest, Python 3.11).
 
 ---
 
@@ -33,16 +33,16 @@ Yapısal düzeltme fazları: [`yapisal-sadakat-master-plan.md`](yapisal-sadakat-
 
 | Ölçü | Değer |
 |---|---|
-| Toplam chunk | **31.419** |
-| Benzersiz kanun | 916 |
-| `madde_tipi` | asil 25.564 · gecici 4.059 · ek 1.691 · mukerrer 57 · islenmistir_yonlendirme 48 |
-| `yurutluk` | yürürlükte 29.701 · mülga 1.718 |
-| Fıkra (metadata ağacı) | 89.745 |
-| Bent | 29.428 |
+| Toplam chunk | **31.611** |
+| Benzersiz kanun | 917 |
+| `madde_tipi` | asil 25.585 · gecici 4.074 · ek 1.700 · mukerrer 57 · islenmistir_yonlendirme 195 |
+| `yurutluk` | yürürlükte 29.893 · mülga 1.718 |
+| Fıkra (metadata ağacı) | 89.986 |
+| Bent | 29.621 |
 
-> Yönlendirme chunk'ları (48) yalnız `unique_atiflar.json` varsa üretilir; dosya yoksa korpus 31.371 chunk olur ve başka hiçbir şey değişmez.
+> 2026-10-18 build'i (bedesten'den yeniden çekim, 917 kanun). Yönlendirme chunk'ları (195) yalnız `unique_atiflar.json` varsa üretilir; dosya yoksa korpus 31.416 chunk olur ve başka hiçbir şey değişmez. Atıf seti aynı gün DeepSeek + Qwen + Clef hakemliğiyle yeniden üretildi (15.672 adres; üretim script'leri henüz repoda değil, `data/` git dışı).
 >
-> Tablo PR #33 öncesi build'indir. Yeni alanlar (`mevzuat_tur`, `resmi_gazete_tarihi`, `resmi_gazete_sayisi`) yalnız eklemelidir (chunk seti, `id`, `text` değişmez — testlerle kilitli); diskteki korpusa yeniden build ile girer.
+> R.G. tarihi 735/917 kanunda dolu (kaynak liste yanıtında 182 kanunda tarih yok).
 
 ---
 
