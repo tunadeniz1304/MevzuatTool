@@ -457,6 +457,12 @@ def test_nitelemeli_kanun_adi_guncel_kanuna_eslenmez(sorgu):
     assert atif_ayristir(sorgu) == []
 
 
+def test_yil_nitelemeli_eski_anayasa_guncel_anayasaya_eslenmez():
+    assert atif_ayristir("1961 Anayasası m. 5") == []
+    assert atif_ayristir("1924 Anayasası'nın 5. maddesi") == []
+    assert _ozet(_tek("1982 Anayasası m. 5")) == (("2709",), "5", None, None)
+
+
 def test_nitelemeli_korpus_adi_ve_numarali_yazim():
     adlar = [("imar kanunu", ("3194",))]
     assert atif_ayristir("eski İmar Kanunu m. 18", kanun_adlari=adlar) == []

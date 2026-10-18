@@ -311,6 +311,7 @@ _SAYILI_BELGE = ("karar", "khk", "cbk", "teblig", "yonetmeli", "genelge", "tuzu"
 # (1475), 'mülga TCK' (765), 'İsviçre Borçlar Kanunu' (OR). Numaralı tanımaya uygulanmaz.
 _NITELEME = ("eski", "mulga", "onceki", "evvelki", "isvicre", "alman", "fransiz", "italyan", "avusturya")
 _SON_SOZCUK = re.compile(r"([a-z]+)[\s,]*$")
+_SON_YIL = re.compile(r"(?<![0-9])(1[89][0-9]{2}|20[0-9]{2})[\s,]*$")    # '1961 Anayasası' (1982 = bugünkü)
 # Vasıta hâlindeki kanun ('Kanunla' / "Kanun'la" / 'Kanun ile') + 'değişik | değiştirilen | eklenen ...' →
 # DEĞİŞTİREN kanun: ardından gelen madde onun değil, daha önce anılan kanunundur ('TCK'nın 6545 sayılı
 # Kanunla değişik 141. maddesi'). Tamlayan hâli ('TCK'nın değişik 141. maddesi') sahibin kendisidir.
@@ -545,6 +546,9 @@ def _kanun_tokenleri(k, sorgu, kanun_adlari):
             m = _SON_SOZCUK.search(k[max(0, t.bas - 24):t.bas])
             if m and m.group(1) in _NITELEME:
                 t.nitelik = m.group(1)
+            y = _SON_YIL.search(k[max(0, t.bas - 12):t.bas]) if t.nolar == ("2709",) else None
+            if y and y.group(1) != "1982":
+                t.nitelik = y.group(1)
         t.degistiren = bool(_ILE_DEGISIK_SONRA.match(k, t.son)
                             or (_VASITA_EKI.search(k, t.bas, t.son) and _DEGISIK_SONRA.match(k, t.son)))
     return _sec(toklar)
