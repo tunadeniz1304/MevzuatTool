@@ -40,7 +40,7 @@ YÖNERGELER (park kaldırılırsa):
   2. `src/kanun/` modüllerini OKU, uygun olanları KOPYALA (import etme). Kopyaladıktan
      sonra tebliğe özgü hale getir; kanun tarafına asla dokunma.
   3. Çıktı şeması `{id, text, metadata}` kalsın — böylece ileride tek Qdrant'ta birleşebilir.
-     `metadata.mevzuat_tur = "TEBLIGLER"` ekle (kanun korpusunda bu alan yok, tek-tür olduğu için).
+     `metadata.mevzuat_tur = "TEBLIGLER"` ekle (kanun korpusu da taşır: `"KANUN"` — src/kanun/corpus.py).
 
 Veri yolları (tür-kapsamlı, kanunla karışmaz; `data/` git-ignored):
   data/teblig/raw/          ham HTML + ağaç cache (`fetch.py` yazar)
