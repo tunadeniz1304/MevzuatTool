@@ -321,7 +321,8 @@ _ILE_DEGISIK_SONRA = re.compile(r"\sile\s" + _DEGISIK_SOZ)
 # Madde sözünden HEMEN önce kanun dışı bir belge ('Yönetmeliğin 5. maddesi', "KHK'nın ek 9. maddesi",
 # 'Sözleşmenin 6. maddesi', 'teklifinin 5. maddesi') → madde o belgenindir, hiçbir kanuna bağlanmaz.
 _BELGE_MADDESI = re.compile(r"(?<![a-z0-9])(?:yonetmeli[gk]|teblig|tuzu[gk]|genelge|yonerge|karar|khk|cbk"
-                            r"|sozlesme|anlasma|protokol|sartname|aihs|teklif|tasari)[a-z']*[\s,]*$")
+                            r"|sozlesme|anlasma|protokol|sartname|aihs|teklif|tasari)[a-z']*"
+                            r"(?:\s(?:ilgili|anilan|soz konusu|ayni|bu|mezkur))?[\s,]*$")
 
 
 # ---- veri sınıfları ---------------------------------------------------------------------------

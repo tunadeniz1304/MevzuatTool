@@ -499,6 +499,15 @@ def test_kararname_onaylayan_kanun_kanundur():
     assert (a.kanun_nolari, a.madde_no) == (("7071",), "3")
 
 
+@pytest.mark.parametrize("sorgu", [
+    "Yönetmeliğin ilgili 5. maddesi ve İş Kanunu",
+    "Tebliğin söz konusu 3. maddesi ile KDVK",
+    "anılan Yönetmeliğin anılan 7. maddesi TCK",
+])
+def test_belge_ile_madde_arasindaki_niteleyici_baglantiyi_kesmez(sorgu):
+    assert atif_ayristir(sorgu) == []
+
+
 def test_belge_sozu_maddeden_sonra_gelirse_atif_kalir():
     assert _ozet(_tek("TCK'nın 5. maddesi ve yönetmelik")) == (("5237",), "5", None, None)
 
