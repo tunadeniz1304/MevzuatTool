@@ -417,15 +417,18 @@ Güncel mimari görünümü: [`arch.md`](arch.md). Kapsam: [`mevzuat-mvp-kapsam.
       Mahkemesi', küçük 'ay', 'iş kazası' kanun sayılmaz.
     - **Bağımsız inceleme eklemeleri (2026-10-18):** yalın numaranın miktar/tarih devamı da madde numarasını
       düşürür ('TCK 1 Haziran 2005', 'TCK 2-5 yıl', "İş K. 30'dan fazla işçi", 'TCK 1/3 oranında', 'TMK 18
-      yaşındaki'); 'eski/mülga/önceki' ya da yabancı ülke ('İsviçre', 'Alman') nitelemeli ad/kısaltma bugünkü
-      kanuna eşlenmez ('eski İş Kanunu' 1475'tir — madde atıf üretmez); değiştiren kanun ('TCK'nın 6545 sayılı
-      Kanunla değişik 141. maddesi') maddenin sahibi sayılmaz; madde sözünden hemen önce kanun dışı belge
-      ('Yönetmeliğin 5. maddesi') varsa madde o belgenindir; adında 'Kanun' geçmeyen tam başlıklı CB
+      yaşındaki', 'TCK 2 katına', 'TCK 2. kitap', 'TMK 3. derece', 'İmar K. 18 m2', 'HMK 2 iş günü'); özkesir
+      (pay < payda) ardından kesir bağlamı gelirse kesirdir ('TCK 1/6 indirim', 'KDVK 9/10 tevkifat');
+      'eski/mülga/önceki', yabancı ülke ('İsviçre', 'Alman') ya da 1982 dışı yıl ('1961 Anayasası')
+      nitelemeli ad/kısaltma bugünkü kanuna eşlenmez ('eski İş Kanunu' 1475'tir — madde atıf üretmez);
+      değiştiren kanun ('TCK'nın 6545 sayılı Kanunla değişik 141. maddesi') maddenin sahibi ve fıkra/bent
+      sınırı sayılmaz; madde sözünden hemen (ya da 'ilgili/anılan' gibi tek niteleyiciyle) önce kanun dışı
+      belge ('Yönetmeliğin 5. maddesi') varsa madde o belgenindir; adında 'Kanun' geçmeyen tam başlıklı CB
       kararnamesi / KHK / tebliğ numarası kanun sayılmaz; tümü büyük harfli sorguda 'AY' yalnız açık madde
       sözüyle Anayasa'dır. Yeni tanınanlar: noktalı kısaltma ('İ.İ.K.', 'T.M.K.', 'TMK.'), 'Basın İş Kanunu'
-      (5953), kanundan uzakta '220/6. maddesi' / '4/1-a maddesi', tek harfli Roma fıkradan sonraki bent
-      ('İş K. 25/I-b'); ardışık boşluklar ayrıştırmadan önce teke indirilir. Korpus dosyası servis açıkken
-      okunamazsa (taşındı/silindi) de `KorpusDegisti` → 503.
+      (5953; tireli 'Basın-İş' / 'Deniz-İş' de), kanundan uzakta '220/6. maddesi' / '4/1-a maddesi', tek harfli
+      Roma fıkradan sonraki bent ('İş K. 25/I-b'); ardışık boşluklar ayrıştırmadan önce teke indirilir. Korpus
+      dosyası servis açıkken okunamazsa (taşındı/silindi) de `KorpusDegisti` → 503.
     - Tablo kararları: 'TMK' → 4721 (ceza hukukunda Terörle Mücadele K. 3713 için de kullanılır; özel
       hukuktaki baskın kullanım seçildi), 'KVK' → 5520 / 'KVKK' → 6698, 'BK'/'MK'/'HUMK'/'CMUK' yok (mülga eski
       kanunlarla karışır), 'Borçlar Kanunu' / 'Medeni Kanun' bugünkü 6098 / 4721.
@@ -479,9 +482,8 @@ Güncel mimari görünümü: [`arch.md`](arch.md). Kapsam: [`mevzuat-mvp-kapsam.
     ('TCK'nın 141 ve 142. maddeleri', 'TCK m. 141 ve m. 142') ikisi de, sonra geliyorsa ('141 ve 142. maddeler
     TCK') yalnız son numara yakalanır (2026-10-18 doğrulaması); karışık sırada kanun en yakın
     ÖNCEKİ kanuna bağlanır; tolerans yalnız '(N)' fıkrası YOKSA devreye girer — '(N)' fıkrası da 'N.' bendi de
-    olan maddede '40/2' fıkraya gider (uyarıyla). Kesir yalnız 'oranında/nispetinde' ile düşer: 'TCK 1/6
-    indirim', 'İİK 1/4 maaş haczi' hâlâ m.1 f.6 / f.4 sanılır ('TCK 62/1 indirim' gerçek atıf olduğu için
-    sözcükten ayrılamaz). Doğal dil modunun `BM25Index` sözlükleri (kanun_no, madde_no)
+    olan maddede '40/2' fıkraya gider (uyarıyla). Bağlamsız kesir atıf kalır ('TMK 1/2' = m.1 f.2 klasik
+    atıftır; 'TCK 1/6' tek başına da m.1 f.6 sayılır). Doğal dil modunun `BM25Index` sözlükleri (kanun_no, madde_no)
     anahtarlı olduğundan çakışan kanunlarda `metin` yanlış kanundan gelebilir — önceden var olan, bu ADR'nin
     dokunmadığı sınır.
 - **Öğrenme notu:**

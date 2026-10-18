@@ -29,9 +29,9 @@ ATIF = KANUN + MADDE (ikisi birden şart). Yalnız kanun ('5237 sayılı Kanun')
   - Numaradan hemen sonra başka bir belge numarası ('5 sayılı', '2/3/2024', '1.5', '%') gelirse madde
     değildir; yalın numarada ('TCK 2') ve önekli numarada ('ek 3') süre/sayım sözcüğü de ('2 yıl', '3 ay',
     '4 çocuk', '18 yaşındaki') ve miktar/tarih devamı da ('1 Haziran 2005', '2-5 yıl', "30'dan fazla",
-    '1/3 oranında'), 'madde 3' biçiminde fiziksel miktar da ('3 ton', '10 gramdan') madde numarasını
-    düşürür. Açık 'm.' / 'md.' kısaltması güçlü sinyaldir: 'İş K. m. 53 yıllık izin' atıftır
-    (`_MADDE_DEGIL_SONRA`).
+    '1/3 oranında', '2. kitap', '18 m2'), bağlamlı özkesir de ('1/6 indirim', `_KESIR_BAGLAMI`), 'madde 3'
+    biçiminde fiziksel miktar da ('3 ton', '10 gramdan') madde numarasını düşürür. Açık 'm.' / 'md.'
+    kısaltması güçlü sinyaldir: 'İş K. m. 53 yıllık izin' atıftır (`_MADDE_DEGIL_SONRA`).
   - 'NNNN sayılı' ardından KHK / Cumhurbaşkanlığı Kararnamesi / karar / yönetmelik / tebliğ / liste /
     cetvel / Resmî Gazete gelirse kanun değildir ('375 sayılı KHK', '2023/15 sayılı karar'); adında
     'Kanun' sözcüğü hiç geçmeyen uzun başlıkta kararname/tebliğ sonradan gelse de ('1 sayılı
