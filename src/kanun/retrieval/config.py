@@ -9,7 +9,7 @@ Değişkenler (varsayılan):
   MEVZUAT_COLLECTION  mevzuat
   KORPUS_YOL          data/kanun/korpus.jsonl
   ADAY_K              50        her bacağın (dense / BGE-sparse / BM25) aday sayısı
-  W_DENSE/W_SPARSE/W_BM25  0.33/0.33/0.34  WSUM ağırlıkları (ÖLÇÜM 5, EŞİT)
+  W_DENSE/W_SPARSE/W_BM25  0.65/0.20/0.15  WSUM ağırlıkları (ADR-0022; eski eşit 0.33/0.33/0.34 ÖLÇÜM 5)
   EMBED_BACKEND       torch     torch | onnx-fp32 | onnx-int8
   RERANK_BACKEND      kapali    kapali | torch | onnx-fp32 | onnx-int8
   RERANK_ADAY         20        reranker'ın yeniden sıraladığı ilk aday sayısı (ADR-0015)
@@ -41,9 +41,9 @@ class Ayarlar:
     collection: str = "mevzuat"
     korpus_yol: str = "data/kanun/korpus.jsonl"
     aday_k: int = 50
-    w_dense: float = 0.33
-    w_sparse: float = 0.33
-    w_bm25: float = 0.34
+    w_dense: float = 0.65        # ADR-0022: ölçüm seti v2'de 20x5 katlı grup CV ile seçildi
+    w_sparse: float = 0.20
+    w_bm25: float = 0.15
     embed_backend: str = "torch"
     rerank_backend: str = "kapali"
     rerank_aday: int = 20

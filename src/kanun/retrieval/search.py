@@ -234,6 +234,8 @@ class HybridArama:
     client   : qdrant_client.QdrantClient (ya da `query_points` sunan sahte nesne)
     bm25     : BM25Index
     reranker : `skorla(sorgu, metinler) -> list[float]` sunan nesne ya da None
+    agirliklar: (dense, sparse, bm25). Kurucu varsayılanı eşit taban çizgisidir (testler, eski ölçümler);
+                servis ve ölçüm script'leri config.Ayarlar değerini geçirir (fabrika.arama_kur; ADR-0022).
     """
 
     def __init__(self, embedder, client, bm25, collection="mevzuat", aday_k=50,
