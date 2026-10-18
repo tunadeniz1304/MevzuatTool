@@ -278,6 +278,45 @@ def test_dogal_dil_atif_sanilmaz(sorgu):
     assert atif_ayristir(sorgu) == []
 
 
+# Kanundan hemen sonraki yalın sayı bir MİKTARIN başı olabilir: tarih, aralık, kıyas, oran, yaş. Bu
+# sorgular otomatik modda ilgisiz tek bir maddeye (TCK m.1, m.2 ...) skor 1.0 ile kaçırılıyordu.
+@pytest.mark.parametrize("sorgu", [
+    "Türk Medeni Kanunu 1 Ocak 2002'de yürürlüğe girdi",
+    "TCK 1 Haziran 2005 tarihinde yürürlüğe girdi",
+    "6698 sayılı Kanun 7 Nisan 2016",
+    "TCK 2-5 yıl hapis cezası",
+    "TCK 2 ila 5 yıl hapis cezası gerektiren suçlar",
+    "TCK 3 ile 7 yıl arası",
+    "İş Kanunu 30 ila 50 işçi",
+    "İş Kanunu 30'dan fazla işçi çalıştıran işyeri",
+    "TCK 2'den fazla kişi",
+    "İş Kanunu 100 ve daha fazla işçi",
+    "İş Kanunu 30 veya daha fazla işçi",
+    "TCK 1/3 oranında indirim",
+    "İİK 1/4 oranında haciz",
+    "TCK 1/2 nispetinde artırılır",
+    "KDV Kanunu 20 oranında vergi",
+    "TMK 18 yaşındaki çocuk",
+    "TCK 15 yaşındaki çocuk cinsel istismar",
+    "TCK 3 kişiyle birlikte işlenen hırsızlık",
+    "uyuşturucu madde 10 gramdan fazla TCK",
+    "uyuşturucu madde 5 kilogram TCK",
+])
+def test_yalin_sayi_miktar_ifadesiyse_atif_sanilmaz(sorgu):
+    assert atif_ayristir(sorgu) == []
+
+
+@pytest.mark.parametrize("sorgu, maddeler", [
+    ("TCK 141 ila 145", ["141"]),                 # birimsiz aralık madde aralığıdır (yalnız ilk uç)
+    ("TCK m. 141-145", ["141"]),
+    ("TCK 62 1/6 indirim", ["62"]),               # kesir maddeden SONRA: madde 62 kalır
+    ("TCK 141 ve 142", ["141"]),
+    ("İş Kanunu 17 ihbar süresi", ["17"]),
+])
+def test_miktar_kapisi_gercek_atifi_dusurmez(sorgu, maddeler):
+    assert [a.madde_no for a in atif_ayristir(sorgu)] == maddeler
+
+
 def test_tani_neden_atif_olmadigini_soyler():
     assert "kanun tanındı (5237)" in ayristir("5237 sayılı kanun").tani()
     assert "kanun tanınmadı" in ayristir("madde 5").tani()

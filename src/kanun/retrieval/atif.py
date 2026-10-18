@@ -26,8 +26,10 @@ ATIF = KANUN + MADDE (ikisi birden şart). Yalnız kanun ('5237 sayılı Kanun')
     ('141 maddesi') şart.
   - Numaradan hemen sonra başka bir belge numarası ('5 sayılı', '2/3/2024', '1.5', '%') gelirse madde
     değildir; yalın numarada ('TCK 2') ve önekli numarada ('ek 3') süre/sayım sözcüğü de ('2 yıl', '3 ay',
-    '4 çocuk'), 'madde 3' biçiminde fiziksel miktar da ('3 ton') madde numarasını düşürür. Açık 'm.' /
-    'md.' kısaltması güçlü sinyaldir: 'İş K. m. 53 yıllık izin' atıftır (`_MADDE_DEGIL_SONRA`).
+    '4 çocuk', '18 yaşındaki') ve miktar/tarih devamı da ('1 Haziran 2005', '2-5 yıl', "30'dan fazla",
+    '1/3 oranında'), 'madde 3' biçiminde fiziksel miktar da ('3 ton', '10 gramdan') madde numarasını
+    düşürür. Açık 'm.' / 'md.' kısaltması güçlü sinyaldir: 'İş K. m. 53 yıllık izin' atıftır
+    (`_MADDE_DEGIL_SONRA`).
   - 'NNNN sayılı' ardından KHK / Cumhurbaşkanlığı Kararnamesi / karar / yönetmelik / tebliğ / liste /
     cetvel / Resmî Gazete gelirse kanun değildir ('375 sayılı KHK', '2023/15 sayılı karar').
   - 'Anayasa Mahkemesi', 'anayasal' kanun sayılmaz; 'AY' yalnız büyük harfle yazılmışsa Anayasa'dır
@@ -236,22 +238,35 @@ _B_ONCE = re.compile(r"(?<![a-z])(?:bent|bendi|bnt\.?|b\.)\s?\(?\s?(?P<h>[a-z]|[
 #         gerçek atıftır (53. madde tam da yıllık izin).
 #   madde ('madde 3' — 'madde' aynı zamanda 'cisim' demek): + fiziksel miktar ('madde 3 ton', '5 kg').
 #   zayif (kanundan sonra yalın numara 'TCK 2', önekli 'ek 3'): + süre/sayım sözcükleri ('TCK'da 2 yıl',
-#         'ek 3 ay', 'TMK 4 çocuk', 'TCK 18 yaşından').
+#         'ek 3 ay', 'TMK 4 çocuk', 'TCK 18 yaşından') + miktar/tarih ifadesinin devamı (`_MIKTAR_DEVAMI`):
+#         tarih ('TCK 1 Haziran 2005'), birimli aralık ('TCK 2-5 yıl', 'İş K. 30 ila 50 işçi'), kıyas
+#         ("İş K. 30'dan fazla", '100 ve daha fazla'), oran ('TCK 1/3 oranında'). Birimsiz aralık madde
+#         aralığıdır ('TCK 141 ila 145' → 141).
 # Sözcükler AÇIK çekim listesiyle yazıldı: önek eşleşmesi 'güncel' / 'kişisel' / 'evlilik' gibi sözcükleri
 # birim sanıp gerçek atfı düşürürdü ('TMK 24 kişilik hakkı' atıftır, 'kişilik' listede yok).
 _BELGE_DEVAMI = r"%|sayili|sy\.|s\s?\.\s?k|numarali|nolu|no\s?'?\s?lu"
-_FIZIKSEL = r"tl|lira(?:si|ya|lik)?|kurus|adet|metre|km|kg|ton|gram|litre|yuzde|bin|milyon|milyar"
+_FIZIKSEL = (r"tl|lira(?:si|ya|lik)?|kurus|adet|metre|km|kg|ton|(?:kilo|mili)?gram(?:dan|a|i|lik)?|litre"
+             r"|yuzde|bin|milyon|milyar")
 _SURE_SAYIM = (r"yil(?:a|i|in|ina|inda|da|dan|lik|lar[a-z]*)?|sene(?:si|ye|de|den|lik)?"
                r"|gun(?:u|un|e|de|den|luk|ler[a-z]*)?|hafta(?:si|ya|da|dan|lik)?|saat(?:i|e|te|ten|lik)?"
                r"|dakika(?:si|ya|da|dan|lik)?|saniye(?:si|ye|de|den|lik)?|ay(?:a|da|dan|i|in|lik)?"
-               r"|kez|defa|kere|kat|kati|tane|kisi(?:ye|nin|den|de|ler[a-z]*)?|cocuk(?:lu|u|un|a|lar[a-z]*)?"
-               r"|kardes(?:i|ler[a-z]*)?|isci(?:ye|nin|den|ler[a-z]*)?|taksit(?:le|li|te)?|donem(?:de|lik)?"
-               r"|yas(?:i|ini|inda|indan|ina)?|puan|derece|sayfa")
+               r"|kez|defa|kere|kat|kati|tane|kisi(?:ye|yle|nin|den|de|ler[a-z]*)?"
+               r"|cocuk(?:lu|u|un|a|lar[a-z]*)?|kardes(?:i|ler[a-z]*)?|isci(?:ye|nin|den|ler[a-z]*)?"
+               r"|taksit(?:le|li|te)?|donem(?:de|lik)?"
+               r"|yas(?:i|ini|inin|inda|indaki[a-z]*|indan|ina)?|puan|derece|sayfa")
+_AY_ADLARI = r"ocak|subat|mart|nisan|mayis|haziran|temmuz|agustos|eylul|ekim|kasim|aralik"
+_MIKTAR_DEVAMI = (r"(?:\s?(?:" + _AY_ADLARI + r")(?![a-z])"
+                  r"|(?:\s?-\s?|\s(?:ila|ile|veya|ya da)\s)[0-9]+(?:[.,][0-9]+)?\s?(?:" + _FIZIKSEL + "|"
+                  + _SURE_SAYIM + r")(?![a-z])"
+                  r"|'?\s?(?:dan|den|tan|ten)\s(?:daha\s)?(?:fazla|az|cok|ziyade|buyuk|kucuk|yuksek|dusuk"
+                  r"|uzun|kisa)(?![a-z])"
+                  r"|\s(?:ve|veya|ya da)\s(?:daha\s)?(?:fazla|az|uzeri|ustu|alti)(?![a-z])"
+                  r"|\s?(?:oran|nispet)[a-z]*)")
 _MADDE_DEGIL_SONRA = {
     "guclu": re.compile(r"\s?(?:" + _BELGE_DEVAMI + r")|[.,/][0-9]"),
     "madde": re.compile(r"\s?(?:" + _BELGE_DEVAMI + r"|(?:" + _FIZIKSEL + r")(?![a-z]))|[.,/][0-9]"),
     "zayif": re.compile(r"\s?(?:" + _BELGE_DEVAMI + r"|(?:" + _FIZIKSEL + "|" + _SURE_SAYIM
-                        + r")(?![a-z]))|[.,/][0-9]"),
+                        + r")(?![a-z]))|[.,/][0-9]|" + _MIKTAR_DEVAMI),
 }
 _MADDE_SOZU = re.compile(r"\s?madde")
 _KELIME = re.compile(r"[a-z0-9'][a-z0-9']*\.?")
