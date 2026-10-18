@@ -32,7 +32,9 @@ ATIF = KANUN + MADDE (ikisi birden şart). Yalnız kanun ('5237 sayılı Kanun')
     düşürür. Açık 'm.' / 'md.' kısaltması güçlü sinyaldir: 'İş K. m. 53 yıllık izin' atıftır
     (`_MADDE_DEGIL_SONRA`).
   - 'NNNN sayılı' ardından KHK / Cumhurbaşkanlığı Kararnamesi / karar / yönetmelik / tebliğ / liste /
-    cetvel / Resmî Gazete gelirse kanun değildir ('375 sayılı KHK', '2023/15 sayılı karar').
+    cetvel / Resmî Gazete gelirse kanun değildir ('375 sayılı KHK', '2023/15 sayılı karar'); adında
+    'Kanun' sözcüğü hiç geçmeyen uzun başlıkta kararname/tebliğ sonradan gelse de ('1 sayılı
+    Cumhurbaşkanlığı Teşkilatı Hakkında Cumhurbaşkanlığı Kararnamesi').
   - Madde sözünden hemen önce kanun dışı belge geliyorsa ('Yönetmeliğin 5. maddesi', "KHK'nın ek 9.
     maddesi", 'Sözleşmenin 6. maddesi') madde o belgenindir, sorgudaki bir kanuna bağlanmaz.
   - 'Anayasa Mahkemesi', 'anayasal' kanun sayılmaz; 'AY' yalnız büyük harfle yazılmışsa Anayasa'dır
@@ -288,6 +290,10 @@ _SAYILI_RET_ON = ("khk", "cbk", "karar", "yonetmelik", "teblig", "genelge", "tuz
                   "ozelge", "protokol", "sozlesme", "anlasma", "dosya")
 _SAYILI_RET_TAM = ("ek", "eki", "ekli", "ekte", "alt", "esas")
 _SAYILI_RET_IKI = (("kanun", "hukmunde"), ("resmi", "gazete"), ("cumhurbaskanligi", "karar"))
+# Uzun resmî başlıkta ilk sözcük bir şey söylemez ('1 sayılı Cumhurbaşkanlığı Teşkilatı Hakkında
+# Cumhurbaşkanlığı Kararnamesi'): adda 'Kanun' sözcüğü HİÇ yoksa ve bu sözcüklerden biri geçiyorsa kanun değil.
+# ('Kanun Hükmünde Kararnamenin ... Kabul Edilmesine Dair Kanun' sonda 'Kanun'u bulduğu için kanundur.)
+_SAYILI_BELGE = ("karar", "khk", "cbk", "teblig", "yonetmeli", "genelge", "tuzu", "yonerge")
 # Ad/kısaltmadan hemen önce gelince onu BUGÜNKÜ Türk kanunu olmaktan çıkaran nitelemeler: 'eski İş Kanunu'
 # (1475), 'mülga TCK' (765), 'İsviçre Borçlar Kanunu' (OR). Numaralı tanımaya uygulanmaz.
 _NITELEME = ("eski", "mulga", "onceki", "evvelki", "isvicre", "alman", "fransiz", "italyan", "avusturya")
@@ -475,7 +481,7 @@ def _sayili_tokenleri(k):
         asil = [w.rstrip(".") for w, _ in kelimeler if not w.startswith("'")]
         if asil and _sayili_ret(asil):
             continue                                            # KHK, karar, liste, Resmî Gazete ...
-        son, ipucu = m.end(), []
+        son, ipucu, tasarim = m.end(), [], False
         for i, (w, w_son) in enumerate(kelimeler[:16]):
             if w[0].isdigit():                                  # madde numarası başladı → ad bitti
                 break
@@ -484,9 +490,11 @@ def _sayili_tokenleri(k):
                     son = w_son
                 continue
             if _tasarim_mi(w, sonraki(i)):
-                son = w_son
+                son, tasarim = w_son, True
                 break
             ipucu.append(w.rstrip("."))
+        if not tasarim and any(w.startswith(_SAYILI_BELGE) for w in ipucu):
+            continue                    # tam başlıklı CB kararnamesi / KHK / tebliğ: adda 'Kanun' sözcüğü yok
         out.append(_KanunTok(m.start(), son, (no,), "numara", " ".join(ipucu) or None))
     return out
 

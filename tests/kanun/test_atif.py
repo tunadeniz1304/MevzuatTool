@@ -415,6 +415,24 @@ def test_baska_belgenin_maddesi_kanuna_baglanmaz(sorgu):
     assert atif_ayristir(sorgu) == []
 
 
+# 'N sayılı' + TAM başlık: yalnız ilk sözcüğe bakan ret listesi ('KHK', 'Cumhurbaşkanlığı Kararnamesi')
+# uzun resmî başlıkları kaçırıyordu → CB kararnamesi / KHK / tebliğ numarası kanun numarası sanılıyordu.
+@pytest.mark.parametrize("sorgu", [
+    "1 sayılı Cumhurbaşkanlığı Teşkilatı Hakkında Cumhurbaşkanlığı Kararnamesi uyarınca 5. madde",
+    "696 sayılı Olağanüstü Hal Kapsamında Bazı Düzenlemeler Yapılması Hakkında Kanun Hükmünde Kararname "
+    "uyarınca 3. madde",
+    "5 sayılı Genel Tebliğ kapsamında 3. madde",
+])
+def test_sayili_tam_baslikli_kanun_disi_belge_kanun_sayilmaz(sorgu):
+    assert atif_ayristir(sorgu) == []
+
+
+def test_kararname_onaylayan_kanun_kanundur():
+    a = _tek("7071 sayılı Olağanüstü Hal Kapsamında Bazı Düzenlemeler Yapılması Hakkında Kanun Hükmünde "
+             "Kararnamenin Değiştirilerek Kabul Edilmesine Dair Kanun'un 3. maddesi")
+    assert (a.kanun_nolari, a.madde_no) == (("7071",), "3")
+
+
 def test_belge_sozu_maddeden_sonra_gelirse_atif_kalir():
     assert _ozet(_tek("TCK'nın 5. maddesi ve yönetmelik")) == (("5237",), "5", None, None)
 
