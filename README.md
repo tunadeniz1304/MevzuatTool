@@ -61,7 +61,8 @@ It takes a law/article citation or a natural-language question and returns a ran
   deterministically (regex + an abbreviation table — no LLM), and the cited article — plus the fıkra/bent if
   given — is fetched **exactly** from an in-memory index over the corpus. There is no ranking (score 1.0), and
   neither the in-force filter nor the reranker is applied: a repealed article comes back flagged, not hidden. If a
-  law number belongs to several laws, all of them are returned (`coklu_mevzuat`); "fıkra N" resolves to sub-clause
+  law number belongs to several laws and the law name in the query does not single one out, all of them are
+  returned (`coklu_mevzuat`); "fıkra N" resolves to sub-clause
   "N." when the article has no numbered paragraph (N). A citation that cannot be resolved falls back to natural language.
 - **Natural-language mode (doğal):** 3-leg hybrid search (dense + learned sparse + classic BM25) with the in-force
   filter and an optional reranker — the example above.

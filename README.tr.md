@@ -58,7 +58,8 @@ mevzuat korpusundan **yürürlükteki ilgili maddeleri** sıralayarak döndürü
 - **Atıf modu:** `TCK m. 141/2` ya da `5237 sayılı Kanun m. 141/2-a` gibi bir atıf deterministik olarak ayrıştırılır
   (regex + kısaltma tablosu — LLM yok) ve atıf edilen madde, verilmişse fıkra/bent de, korpus üzerindeki bellek içi
   indeksten **kesin** getirilir. Sıralama yoktur (skor 1.0); yürürlük filtresi ve reranker uygulanmaz: mülga madde
-  gizlenmez, işaretli döner. Bir kanun numarası birden çok kanuna aitse hepsi döner (`coklu_mevzuat`); maddede
+  gizlenmez, işaretli döner. Bir kanun numarası birden çok kanuna aitse ve sorgudaki kanun adı birini
+  seçmiyorsa hepsi döner (`coklu_mevzuat`); maddede
   `(N)` fıkrası yoksa "fıkra N" atfı `N.` bendine çözülür. Çözülemeyen atıf doğal dile düşer.
 - **Doğal dil modu:** 3-bacak hybrid arama (dense + öğrenilmiş sparse + klasik BM25), yürürlük filtresi ve
   opsiyonel reranker — yukarıdaki örnek.
