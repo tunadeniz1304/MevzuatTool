@@ -12,7 +12,8 @@ Tanınan biçimler — büyük/küçük harf, İ/I/ı/i ve Türkçe karakter duy
           yaygın ad ('Türk Ceza Kanunu', 'Medeni Kanun', 'İş K.' — `ADLAR`), 'Anayasa' / 'AY';
           verilirse korpustaki 916 resmî kanun adı (`kanun_adlari`, ör. 'İmar Kanunu').
   Madde : 'm. 141', 'md. 141', 'mad. 141', 'madde 141', '141. madde', '141 inci maddesi',
-          '48/A maddesi', 'Geçici 1' / 'geçici madde 1' / 'geçici 1 inci madde', 'Ek 3' / 'ek madde 3',
+          '48/A maddesi', '220/6. maddesi', '4/1-a maddesi', 'Geçici 1' / 'geçici madde 1' /
+          'geçici 1 inci madde', 'Ek 3' / 'ek madde 3',
           'Mükerrer 298', kanundan hemen sonra yalın numara ('TCK 141', 'HMK 119/1-ğ').
   Fıkra : 'f. 2', 'fıkra 2', '2. fıkra', '2 nci fıkrası', 'ikinci fıkrası', 'son fıkrası',
           '(2) numaralı fıkrası', madde/fıkra '141/2', Roma rakamı '166/II'.
@@ -221,8 +222,7 @@ _M_ONCE = re.compile(r"(?<![a-z0-9])(?:(?P<tip>gecici|gec\.|ek|mukerrer|muk\.)\s
                      r"(?P<kw>madde(?:si)?|md\.?|mad\.?|m\.?)\s?(?:no\s?[.:]?\s?)?" + _NO + _SLASH)
 _M_ONEK = re.compile(r"(?<![a-z0-9])(?P<tip>gecici|ek|mukerrer)\s" + _NO + _SLASH
                      + r"(?P<ord>" + _ORD + r")?(?P<kw>\s?madde[a-z]*)?")
-_M_SONRA = re.compile(r"(?<![0-9/.,a-z])" + _NO + r"(?:\s?/\s?(?P<harf>[a-z])(?![a-z]))?"
-                      r"(?P<ord>" + _ORD + r")?\s?madde(?P<ek>[a-z]*)")
+_M_SONRA = re.compile(r"(?<![0-9/.,a-z])" + _NO + _SLASH + r"(?P<ord>" + _ORD + r")?\s?madde(?P<mek>[a-z]*)")
 _M_YALIN = re.compile(r"(?:'[a-z]{1,6})?[\s,:]{1,3}" + _NO + _SLASH)
 
 _F_SOZ = re.compile(r"(?<![a-z])(?P<on>on\s?)?(?P<s>birinci|ikinci|ucuncu|dorduncu|besinci|altinci|"
@@ -564,13 +564,11 @@ def _madde_tokenleri(k, sorgu, kanunlar):
             continue
         adaylar.append(t)
     for m in _M_SONRA.finditer(k):
-        if not (m.group("ord") or m.group("harf") or m.group("ek").startswith("si")):
+        if not (m.group("ord") or m.group("ek") or m.group("mek").startswith("si")):
             continue                                            # 'N madde(de)' = sayım, atıf değil
         t = _MaddeTok(m.start(), m.end(), "asil", m.group("no"))
-        if m.group("harf"):
-            t.harf = sorgu[m.start("harf")]
-            t.roma_tek = m.group("harf") in ("i", "v", "x")
-        adaylar.append(t)
+        if _slash_uygula(m, sorgu, t):                          # '48/A maddesi', '220/6. maddesi', '4/1-a'
+            adaylar.append(t)
     secilen = [t for t in _sec(adaylar) if not _cakisir(t, kanunlar) and int(t.no) > 0]
     # kanundan hemen sonra yalın numara: 'TCK 141', "TCK'nın 141/2", 'HMK 119/1-ğ'
     for kt in kanunlar:

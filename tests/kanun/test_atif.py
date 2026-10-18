@@ -228,6 +228,19 @@ def test_degistiren_kanun_kendi_maddesiyle_ve_tek_basina():
     assert atif_ayristir("6545 sayılı Kanunla değişik 141. madde") == []      # asıl kanun anılmamış
 
 
+# 'N/M. maddesi', 'N/M-a maddesi' (fıkra/bent bölü işaretiyle + madde sözü) yalnız kanundan HEMEN sonra
+# (yalın numara yolu) okunuyordu; araya söz girince ('değişik', 'kapsamında') atıf kaçıyordu.
+@pytest.mark.parametrize("sorgu, beklenen", [
+    ("5237 sayılı TCK'nın 6352 sayılı Kanun ile değişik 220/6. maddesi", (("5237",), "220", 6, None)),
+    ("5510 sayılı Kanun kapsamında 4/1-a maddesi", (("5510",), "4", 1, "a")),
+    ("TCK'nın değişik 50/3. maddesi", (("5237",), "50", 3, None)),
+    ("50/3. madde TCK", (("5237",), "50", 3, None)),
+    ("İş Kanunu kapsamında 25/II-e maddesi", (("4857",), "25", 2, "e")),
+])
+def test_bolu_fikrali_madde_sozu_kanundan_uzakta_da_okunur(sorgu, beklenen):
+    assert _ozet(_tek(sorgu)) == beklenen
+
+
 def test_degisik_nitelemesi_tamlayan_kanunu_degistiren_yapmaz():
     # yalnız vasıta hâli ('Kanunla', 'Kanun ile') değiştiren kanundur; 'TCK'nın değişik' sahibin kendisi
     assert _ozet(_tek("TCK'nın değişik 141. maddesi")) == (("5237",), "141", None, None)
