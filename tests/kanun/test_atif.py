@@ -466,6 +466,13 @@ def test_belge_sozu_maddeden_sonra_gelirse_atif_kalir():
     assert _ozet(_tek("TCK'nın 5. maddesi ve yönetmelik")) == (("5237",), "5", None, None)
 
 
+def test_tumu_buyuk_harfli_sorguda_ay_yalniz_guclu_bicimle_anayasa():
+    # 'AY' Anayasa'dır kuralı büyük harfe dayanır; tümü büyük harfli sorguda bu sinyal yoktur
+    assert atif_ayristir("HER AY 1 TARİHİNDE KİRA ÖDENİR") == []
+    assert _ozet(_tek("AY M. 10")) == (("2709",), "10", None, None)
+    assert _ozet(_tek("AY 10'a göre eşitlik")) == (("2709",), "10", None, None)
+
+
 def test_tani_neden_atif_olmadigini_soyler():
     assert "kanun tanındı (5237)" in ayristir("5237 sayılı kanun").tani()
     assert "kanun tanınmadı" in ayristir("madde 5").tani()

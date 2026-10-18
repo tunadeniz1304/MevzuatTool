@@ -39,7 +39,8 @@ ATIF = KANUN + MADDE (ikisi birden şart). Yalnız kanun ('5237 sayılı Kanun')
   - Madde sözünden hemen önce kanun dışı belge geliyorsa ('Yönetmeliğin 5. maddesi', "KHK'nın ek 9.
     maddesi", 'Sözleşmenin 6. maddesi') madde o belgenindir, sorgudaki bir kanuna bağlanmaz.
   - 'Anayasa Mahkemesi', 'anayasal' kanun sayılmaz; 'AY' yalnız büyük harfle yazılmışsa Anayasa'dır
-    ('ay' = ay/süre). 'İş K.' 'iş kazası'nda tetiklenmez; 'Deniz İş Kanunu' (854) ve 'Basın İş Kanunu'
+    ('ay' = ay/süre); tümü büyük harfli sorguda ('HER AY 1 TARİHİNDE') yalnız ardından açık madde sözü
+    gelirse ('AY M. 10'). 'İş K.' 'iş kazası'nda tetiklenmez; 'Deniz İş Kanunu' (854) ve 'Basın İş Kanunu'
     (5953) İş Kanunu (4857) sayılmaz.
   - 'eski/mülga/önceki' ya da yabancı ülke ('İsviçre', 'Alman' ...) nitelemeli ad/kısaltma bugünkü kanun
     değildir ('eski İş Kanunu' 1475'tir, 4857 değil; 'İsviçre Borçlar Kanunu' 6098 değil) → atıf çıkmaz,
@@ -222,6 +223,8 @@ _KISA = re.compile(r"(?<![a-z0-9])(?P<kisa>"
 _AD_DESENLERI = tuple(
     (re.compile(r"(?<![a-z0-9])" + r"\s+".join(map(re.escape, sozcukler)) + r"\s+k(?:anun[a-z']*|\.)"),
      no) for sozcukler, no in ADLAR)
+# Tümü büyük harfli sorguda 'AY' ancak ardından açık madde sözü gelirse Anayasa'dır ('AY M. 10')
+_AY_GUCLU = re.compile(r"\s?(?:m\.|md\.?|mad\.|madde)")
 _IS_KANUNU = re.compile(r"(?<![a-z0-9])(?<!deniz )(?<!basin )is\s?k(?:anun[a-z']*|\.|(?![a-z]))")
 _ANAYASA = re.compile(r"(?<![a-z0-9])anayasa(?!l)[a-z']*")
 
@@ -510,6 +513,8 @@ def _kanun_tokenleri(k, sorgu, kanun_adlari):
         kisa = m.group("kisa").replace(".", "")
         if kisa == "ay" and sorgu[m.start():m.start() + 2] != "AY":
             continue                                            # küçük 'ay' = süre birimi
+        if kisa == "ay" and sorgu.isupper() and not _AY_GUCLU.match(k, m.end()):
+            continue                                            # 'HER AY 1 TARİHİNDE': büyük harf sinyal değil
         toklar.append(_KanunTok(m.start(), m.end(), (_KISA_NO[kisa],), "kisaltma", _KISA_AD[kisa]))
     for desen, no in _AD_DESENLERI:
         toklar += [_KanunTok(m.start(), m.end(), (no,), "ad", m.group()) for m in desen.finditer(k)]
