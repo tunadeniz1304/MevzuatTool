@@ -81,15 +81,18 @@ def test_reranker_int8_top10_kesisimi():
     _gerekli(os.path.join(RR, "model.onnx"), os.path.join(RR, "model.int8.onnx"), ADAY_DOSYA)
     from kanun.retrieval.rerank import OnnxReranker
     from kanun.retrieval.search import bm25_kur
-    metin = bm25_kur().metinler
+    idx = bm25_kur()
+    # metin haritası madde_id anahtarlı; madde_idler'siz eski aday dosyasında (kanun_no, madde_no) çifti
+    # madde_id'ye çevrilir (çakışan çiftte korpusta son gelen — eski davranış)
+    cift = {(str(p["kanun_no"]), str(p["madde_no"])): mid for mid, p in idx.payloadlar.items()}
     fp32 = OnnxReranker(os.path.join(RR, "model.onnx"))
     int8 = OnnxReranker(os.path.join(RR, "model.int8.onnx"))
     kesisim = []
     with open(ADAY_DOSYA, encoding="utf-8") as f:
         satirlar = [json.loads(l) for l in f][:RR_N]
     for s in satirlar:
-        adaylar = [tuple(a) for a in s["adaylar"][:RR_ADAY]]
-        metinler = [(metin.get(a) or "")[:3000] for a in adaylar]
+        idler = s.get("madde_idler") or [cift.get(tuple(a)) for a in s["adaylar"]]
+        metinler = [(idx.metinler.get(m) or "")[:3000] for m in idler[:RR_ADAY]]
         a = np.argsort(-np.asarray(fp32.skorla(s["sorgu"], metinler)), kind="stable")[:10]
         b = np.argsort(-np.asarray(int8.skorla(s["sorgu"], metinler)), kind="stable")[:10]
         kesisim.append(len(set(a) & set(b)) / 10)

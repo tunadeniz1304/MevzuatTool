@@ -4,7 +4,7 @@ Fazlar: [`roadmap.md`](roadmap.md) · Kapsam uygunluğu: [`compliance.md`](compl
 Yapısal düzeltme fazları: [`yapisal-sadakat-master-plan.md`](yapisal-sadakat-master-plan.md) · Retrieval ölçümleri: [`retrieval-metrikleri.md`](retrieval-metrikleri.md)
 
 **Son güncelleme:** 2026-10-18
-**Genel durum:** 🟢 Faz 1-7 tamam; atıf modu kodda (ADR-0019). Korpus üretiliyor (31.419 chunk / 916 kanun), embed+index kurulu (BGE-M3 + Qdrant), arama kütüphanede (`HybridArama` + atıf modu) + FastAPI servisi (`/ara` + `mod`, `/saglik`). 3-bacak taban R@10 = **0.6885** (index/korpus yürürlük uyuşmazlığı, bkz. ADR-0015); +reranker (istek başına, 20/512) 0.711 ama R@1 düşer → varsayılan kapalı. ONNX int8 sorgu embed'i kaliteyi korur (0.688), embed gecikmesini ~3× düşürür. Faz 7: docker-compose (qdrant + api + ingest profili) çalışıyor, torch'suz imaj. CI: GitHub Actions `test` check'i (her PR + `main` push). Chunk metadata'sına `mevzuat_tur` + R.G. tarihi/sayısı eklendi (kod; korpus ve Qdrant'a yansıması yeniden build + embed/ingest ister). Açık: atıf modunun gerçek korpusta ölçümü, Qdrant'ın güncel korpusla yeniden embed'i.
+**Genel durum:** 🟢 Faz 1-7 tamam; atıf modu kodda (ADR-0019). Korpus üretiliyor (31.419 chunk / 916 kanun), embed+index kurulu (BGE-M3 + Qdrant), arama kütüphanede (`HybridArama` + atıf modu) + FastAPI servisi (`/ara` + `mod`, `/saglik`). 3-bacak taban R@10 = **0.6885** (index/korpus yürürlük uyuşmazlığı, bkz. ADR-0015); +reranker (istek başına, 20/512) 0.711 ama R@1 düşer → varsayılan kapalı. ONNX int8 sorgu embed'i kaliteyi korur (0.688), embed gecikmesini ~3× düşürür. Faz 7: docker-compose (qdrant + api + ingest profili) çalışıyor, torch'suz imaj. CI: GitHub Actions `test` check'i (her PR + `main` push). Chunk metadata'sına `mevzuat_tur` + R.G. tarihi/sayısı eklendi (kod; korpus ve Qdrant'a yansıması yeniden build + embed/ingest ister). Doğal dil adayları artık madde_id ile anahtarlanıyor (ADR-0021; çakışan kanun_no'lar ayrı aday). Açık: atıf modunun gerçek korpusta ölçümü, ADR-0021 sonrası R@10'un gerçek veriyle yeniden ölçümü, Qdrant'ın güncel korpusla yeniden embed'i.
 
 İşaretler: ✅ tamam · 🟡 devam ediyor · ⬜ başlamadı · ⛔ engelli
 
@@ -23,7 +23,7 @@ Yapısal düzeltme fazları: [`yapisal-sadakat-master-plan.md`](yapisal-sadakat-
 | 6 | Sorgu + Retrieval | ✅ | `HybridArama` + atıf modu (ADR-0019) + reranker (ops.) + ONNX int8 + FastAPI servisi (ADR-0015/16/17) |
 | 7 | Dockerize | ✅ | `docker-compose.yml` + `Dockerfile` (ADR-0018); compose üzerinden `/ara` R@10 = in-process |
 
-**Test durumu:** 636 test geçiyor (`pytest -q`): `tests/kanun/` 24 dosya 583 test + `tests/teblig/` 2 dosya 53 test; 3 gerçek-model parity testi `pytest -m model` ile ayrı (ağ/model indirmez varsayılan koşu). CI: her PR'da ve `main`'e push'ta GitHub Actions `test` check'i aynı paketi koşar (ubuntu-latest, Python 3.11).
+**Test durumu:** 1004 test geçiyor (`pytest -q`): `tests/kanun/` 25 dosya 951 test (366'ü `test_madde_kimligi.py` — çoğu rastgele eşdeğerlik senaryosu parametresi) + `tests/teblig/` 2 dosya 53 test; 3 gerçek-model parity testi `pytest -m model` ile ayrı (ağ/model indirmez varsayılan koşu). CI: her PR'da ve `main`'e push'ta GitHub Actions `test` check'i aynı paketi koşar (ubuntu-latest, Python 3.11).
 
 ---
 
@@ -93,7 +93,7 @@ Yapısal düzeltme fazları: [`yapisal-sadakat-master-plan.md`](yapisal-sadakat-
 - [x] `scripts/kanun/retrieval/ingest_qdrant.py` — vektörleri yükle
 
 ## Faz 6 — Sorgu + Retrieval ✅
-- [x] Doğal dil modu: 3-bacak hybrid + yürürlük filtresi — kütüphane `src/kanun/retrieval/search.py` (`HybridArama`), eski script ile 50/50 birebir
+- [x] Doğal dil modu: 3-bacak hybrid + yürürlük filtresi — kütüphane `src/kanun/retrieval/search.py` (`HybridArama`), eski script ile 50/50 birebir; aday kimliği madde_id (ADR-0021 — çakışan kanun_no'lar ayrı aday, gerçek veriyle yeniden ölçülmedi)
 - [x] Ölçüm altyapısı: altınset gold (21.737 sızıntısız sorgu), R@k/MRR/nDCG (`scripts/kanun/retrieval/metrik_*.py`, `src/kanun/retrieval/olcum.py`)
 - [x] Reranker (`bge-reranker-v2-m3`) **entegre** (ADR-0015): 3-bacak üstünde yeniden ölçüldü; varsayılan kapalı, istek başına açık (önerilen 20 aday / 512 token)
 - [x] ONNX Runtime + dinamik int8 (ADR-0016): parity + 2000 sorgu kalite + p50/p95/p99 gecikme tablosu
@@ -170,11 +170,16 @@ Oturum başı ~%59.7 → **%75.3**. Kırılım: kanun %98 · madde %86 · fıkra
 6. **Atıf modu gerçek korpusta ölçülmedi** (ADR-0019; geliştirme makinesinde `data/` yoktu): atıf
    bulunabilirliği `unique_atiflar.json` (8.290 atıf) üzerinden ölçülmeli. Servis açılışındaki ikinci
    korpus taraması (atıf indeksi, BM25 kurulumuna ek) ve indeks belleği de ölçülmedi.
-7. **Doğal dil modunda (kanun_no, madde_no) anahtar çakışması:** `BM25Index` sözlükleri (`metinler`,
-   `kanun_adlari`) bu anahtarla tutuluyor → çakışan kanun_no'larda (14 kanun_no, ör. 6551) `metin` ve kanun
-   adı yanlış kanundan gelebilir. `adaylar()` yalnız BM25'ten gelen adaylara sentetik payload veriyor (`kanun_ad`
-   boş, `yurutluk` alanı yok); WSUM füzyonu da aynı anahtarla birleştirdiği için iki kanunun aynı numaralı maddesi tek
-   adaya çöker. Çözüm yönü: anahtarı `madde_id`'ye geçirmek / payload'a `mevzuat_id` eklemek.
+7. **Doğal dil anahtar çakışması giderildi, gerçek veriyle doğrulama bekliyor** (ADR-0021, 2026-10-18): BM25
+   sözlükleri, WSUM füzyonu, reranker girdisi ve `/ara` `metin`'i adayları artık `madde_id` ile anahtarlıyor
+   (önce `(kanun_no, madde_no)`). Çakışan kanun_no'larda (14 kanun_no, ör. 6551) ve aynı kanundaki iki 'Geçici
+   1'de maddeler ayrı aday; `metin` ve kanun adı doğru maddeden; yalnız BM25'ten gelen adayın payload'ı korpustan
+   (gerçek `kanun_ad`, `yurutluk`, ...). Çakışmayan kanunlarda sonuç birebir aynı — sahte Qdrant/BM25 eşdeğerlik
+   testleri eski kodun dondurulmuş kopyasına karşı kilitliyor. İstisnalar: TAM eşit puanlıların kendi aralarındaki
+   sırası (eskiden hash'e bağlıydı) ve eski index'te payload'ı korpustan ayrışan madde (eskiden iki aday, artık tek).
+   **Bekleyen (bu makinede `data/` ve Qdrant yok):** `esdeger_kontrol.py` (beklenen FARK 0) ve R@10 yeniden ölçümü — `metrik_rerank_3bacak.py --aday-cikar` → `--rapor` taban satırı,
+   0.6885'e karşı (eski `rerank_skor_*` dosyaları eski aday sırasına hizalı: silinip yeniden puanlanmalı).
+   Servis belleği (`payloadlar` haritası, sentetik tahmin +~16 MB) gerçek korpusta ölçülmedi.
 8. **Atıf modu sınırları** (ADR-0019): alt-bent okunmaz ('359/a-1'in '1'i); aralık açılmaz ('TCK m. 141-145'
    yalnız 141'i, '141-145. maddeleri' yalnız 141 ve 145'i getirir); 'TMK' → 4721 (Medeni Kanun) eşlenir —
    ceza hukukunda 3713 (Terörle Mücadele K.) için de kullanıldığından karışabilir.

@@ -41,7 +41,7 @@ def _kur(n=6, rerank_aday=3, reranker=None, rerank_varsayilan=False):
     noktalar = [SimpleNamespace(score=float(n - i), payload={
         "kanun_no": "1", "madde_no": f"m{i}", "madde_id": f"1-m{i}", "kanun_ad": "K"}) for i in range(n)]
     # reranker skoru = i → WSUM'un tersini tercih eder
-    metinler = {("1", f"m{i}"): f"madde {i}" for i in range(n)}
+    metinler = {f"1-m{i}": f"madde {i}" for i in range(n)}          # madde_id → metin
     idx = BM25Index(SahteBM25(), [], metinler=metinler)
     reranker = reranker or SahteReranker()
     arama = HybridArama(lambda s: ([0.0], {}), SahteClient(noktalar), idx, reranker=reranker,
@@ -92,7 +92,7 @@ def test_reranker_yokken_rerank_istenirse_hata():
 def test_rerank_metni_krk_sinirinda_kesilir():
     arama, rr = _kur(rerank_aday=1)
     arama.rerank_max_krk = 3
-    arama.bm25.metinler[("1", "m0")] = "7 uzun metin 9"
+    arama.bm25.metinler["1-m0"] = "7 uzun metin 9"
     arama.reranker = SahteReranker(sabit=0.0)
     arama.ara("q", rerank=True)
     assert arama.reranker.gorulen == [["7 u"]]

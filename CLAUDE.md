@@ -63,7 +63,7 @@ scripts/kanun/            build_corpus.py · eval_*.py · fetch_*.py
 scripts/kanun/retrieval/  ingest_qdrant · search_qdrant · metrik_* · onnx_export/quantize · esdeger_kontrol
 scripts/teblig/           yapi_olc.py (park; build script'i YOK) · scripts/yonetmelik/ (boş)
 
-tests/kanun/      24 dosya, 583 test (+3 `-m model`)
+tests/kanun/      25 dosya, 951 test (+3 `-m model`)
 tests/teblig/     2 dosya, 53 test (park edilmiş kodu kilitler)    · tests/yonetmelik/ (boş)
 
 data/kanun/       raw/ (cache) · korpus.jsonl · unique_atiflar.json
@@ -80,12 +80,12 @@ tebliği yeniden açmanın ilk adımları: `decisions.md` ADR-0020.
 **Faz 1-7 çalışıyor + atıf modu** (kütüphane + HTTP servisi + docker-compose, yalnız KANUN türü). Ayrıntı → [`docs/status.md`](docs/status.md).
 
 - **Korpus:** `data/kanun/korpus.jsonl` — 31.419 chunk / 916 kanun. `python scripts/kanun/build_corpus.py` ile cache'ten (`data/kanun/raw/`) ~75 sn'de **deterministik** üretilir. (89.745 fıkra, 29.428 bent, 1.718 mülga.) Metadata'ya `mevzuat_tur` + `resmi_gazete_tarihi`/`resmi_gazete_sayisi` eklendi (kod, PR #33) — diskteki korpusa yeniden build ile girer.
-- **Retrieval:** kütüphane `src/kanun/retrieval/search.py` (`HybridArama`), BGE-M3 + Qdrant, 3-bacak hybrid. **R@10 = 0.6885** (bugünkü index; eski 0.700 index/korpus yürürlük uyuşmazlığından düştü — ADR-0015). +reranker 20/512 (istek başına) R@10 0.711 ama R@1 0.481→0.465 → varsayılan kapalı. ONNX int8 sorgu embed'i R@10 0.688, embed gecikmesi ~3× düşük. (Eski "+reranker 0.706" 2-bacak RRF tabanındaydı.)
+- **Retrieval:** kütüphane `src/kanun/retrieval/search.py` (`HybridArama`), BGE-M3 + Qdrant, 3-bacak hybrid. **R@10 = 0.6885** (bugünkü index; eski 0.700 index/korpus yürürlük uyuşmazlığından düştü — ADR-0015). +reranker 20/512 (istek başına) R@10 0.711 ama R@1 0.481→0.465 → varsayılan kapalı. ONNX int8 sorgu embed'i R@10 0.688, embed gecikmesi ~3× düşük. (Eski "+reranker 0.706" 2-bacak RRF tabanındaydı.) Aday kimliği `madde_id` (ADR-0021; çakışan kanun_no'lar ayrı aday) — bu sayılar ondan önce ölçüldü, gerçek veriyle yeniden ölçülmedi.
 - **Atıf modu** (ADR-0019): `atif.py` (deterministik ayrıştırıcı) + `atif_getir.py` (korpus üzerinde bayt-ofsetli bellek içi indeks) — "TCK m. 141/2" → kesin madde/fıkra/bent; fıkra→bent toleransı, kanun_no çakışmasında `coklu_mevzuat`, eşleşme yoksa doğal dile düşüş. Gerçek korpusla doğrulanmadı.
 - **Servis:** FastAPI `POST /ara` (`mod`: `otomatik` varsayılan | `atif` | `dogal`), `GET /saglik` (+ `atif_indeks`) (`src/kanun/api/app.py`); ayarlar ortam değişkeninden (`config.py`).
-- **Testler:** 636 test geçiyor (`pytest -q`: `tests/kanun/` 583 + `tests/teblig/` 53); 3 gerçek-model parity testi ayrıca `pytest -m model`. CI: her PR'da ve `main`'e push'ta GitHub Actions `test` check'i aynı paketi koşar (ubuntu, Python 3.11).
+- **Testler:** 1004 test geçiyor (`pytest -q`: `tests/kanun/` 951 + `tests/teblig/` 53); 3 gerçek-model parity testi ayrıca `pytest -m model`. CI: her PR'da ve `main`'e push'ta GitHub Actions `test` check'i aynı paketi koşar (ubuntu, Python 3.11).
 - **Docker:** `docker compose up -d qdrant api` + `--profile ingest run --rm ingest` (ön koşul: `colab/outputs/`, `models/onnx/`, korpus).
-- **Eksik:** atıf modunun gerçek korpusla doğrulanması (`unique_atiflar.json`, 8.290 atıf) · korpusun yeni alanlarla yeniden build'i + Qdrant index'inin güncel korpusla yeniden embed/ingest'i.
+- **Eksik:** atıf modunun gerçek korpusla doğrulanması (`unique_atiflar.json`, 8.290 atıf) · ADR-0021 sonrası `esdeger_kontrol.py` + R@10 yeniden ölçümü · korpusun yeni alanlarla yeniden build'i + Qdrant index'inin güncel korpusla yeniden embed/ingest'i.
 
 ### Build zincirine dokunacaksan — kritik invariant'lar
 Bunlar bozulursa korpus **sessizce** bozulur (mevcut testler yakalamayabilir):
@@ -93,7 +93,7 @@ Bunlar bozulursa korpus **sessizce** bozulur (mevcut testler yakalamayabilir):
 2. **Bent-listeli fıkra devam-koruması** (`fikra.py`): bozulursa rakamlı bent listeleri parçalanır (k193 m7: 7 → 0 bent).
 3. **`'Ancak'` yeni-fıkra sinyali DEĞİLDİR** (bilinçli): bent-içi istisna cümlesi de "Ancak" ile başlar.
 4. **Mülga maddeler korpusta KALIR** (işaretli), elenmez — tarihsel sorgu için.
-5. **Chunk id `mevzuatId` tabanlıdır**, `kanun_no` değil (6551 gibi çakışan kanun no'ları var).
+5. **Chunk id `mevzuatId` tabanlıdır**, `kanun_no` değil (6551 gibi çakışan kanun no'ları var). Doğal dil araması da adayı bu id ile tanır (Qdrant payload `madde_id` = chunk id, ADR-0021): id şeması değişirse Qdrant yeniden embed/ingest edilmeli — köprü (`BM25Index.kimlik`) yalnız aynı kanundaki tek eş maddeyi bağlar.
 
 **Doğrulama refleksi:** `python scripts/kanun/build_corpus.py` → 916 kanun / 31.419 chunk; `k193 m7` = 2 fıkra, 7 bent.
 Build ayrıca `[R.G.] X/Y kanunda R.G. tarihi var` ve `R.G. tarihi dolu chunk: N/M` satırlarını basar. Kaynak liste cache'i
