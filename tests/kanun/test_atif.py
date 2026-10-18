@@ -317,6 +317,34 @@ def test_miktar_kapisi_gercek_atifi_dusurmez(sorgu, maddeler):
     assert [a.madde_no for a in atif_ayristir(sorgu)] == maddeler
 
 
+# 'eski/mülga/önceki' ya da yabancı ülke nitelemeli kanun adı BUGÜNKÜ Türk kanunu değildir: 'eski İş Kanunu'
+# 1475, 'eski TCK' 765, 'İsviçre Borçlar Kanunu' OR. Kısaltma/ad tablosu bunları 4857 / 5237 / 6098'e eşleyip
+# başka kanunun maddesini kesin atıf diye döndürüyordu.
+@pytest.mark.parametrize("sorgu", [
+    "eski TCK'nın 141. maddesi",
+    "mülga TCK m. 491",
+    "eski Borçlar Kanunu m. 18",
+    "mülga Borçlar Kanunu 18. madde",
+    "eski İş Kanunu'nun 14. maddesi",
+    "önceki Türk Ticaret Kanunu m. 18",
+    "İsviçre Borçlar Kanunu m. 41",
+    "Alman Medeni Kanunu m. 1",
+    "ESKİ TCK M. 141",
+])
+def test_nitelemeli_kanun_adi_guncel_kanuna_eslenmez(sorgu):
+    assert atif_ayristir(sorgu) == []
+
+
+def test_nitelemeli_korpus_adi_ve_numarali_yazim():
+    adlar = [("imar kanunu", ("3194",))]
+    assert atif_ayristir("eski İmar Kanunu m. 18", kanun_adlari=adlar) == []
+    assert _ozet(_tek("765 sayılı eski TCK m. 491")) == (("765",), "491", None, None)   # numara açık
+    assert _ozet(_tek("yeni TCK m. 141")) == (("5237",), "141", None, None)
+    # eski kanunun maddesi sonraki (güncel) kanuna da bağlanmaz
+    assert [_ozet(a) for a in atif_ayristir("eski TCK m. 491 ve TCK m. 142")] == [(("5237",), "142", None, None)]
+    assert "numarasıyla" in ayristir("eski TCK m. 141").tani()
+
+
 def test_tani_neden_atif_olmadigini_soyler():
     assert "kanun tanındı (5237)" in ayristir("5237 sayılı kanun").tani()
     assert "kanun tanınmadı" in ayristir("madde 5").tani()

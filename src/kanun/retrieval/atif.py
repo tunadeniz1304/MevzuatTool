@@ -34,6 +34,9 @@ ATIF = KANUN + MADDE (ikisi birden şart). Yalnız kanun ('5237 sayılı Kanun')
     cetvel / Resmî Gazete gelirse kanun değildir ('375 sayılı KHK', '2023/15 sayılı karar').
   - 'Anayasa Mahkemesi', 'anayasal' kanun sayılmaz; 'AY' yalnız büyük harfle yazılmışsa Anayasa'dır
     ('ay' = ay/süre). 'İş K.' 'iş kazası'nda tetiklenmez; 'Deniz/Basın İş Kanunu' İş Kanunu sayılmaz.
+  - 'eski/mülga/önceki' ya da yabancı ülke ('İsviçre', 'Alman' ...) nitelemeli ad/kısaltma bugünkü kanun
+    değildir ('eski İş Kanunu' 1475'tir, 4857 değil; 'İsviçre Borçlar Kanunu' 6098 değil) → atıf çıkmaz,
+    maddesi başka kanuna da bağlanmaz (`_NITELEME`). Numarayla yazım geçerlidir ('765 sayılı eski TCK').
 
 Belirsiz slash eki: '359/a' hem harfli madde (359/A) hem 359. maddenin (a) bendi; '166/I' hem harfli
 madde hem Roma rakamıyla 1. fıkra olabilir. Ayrıştırıcı birincil yorumu (harfli madde) + alternatifleri
@@ -279,6 +282,10 @@ _SAYILI_RET_ON = ("khk", "cbk", "karar", "yonetmelik", "teblig", "genelge", "tuz
                   "ozelge", "protokol", "sozlesme", "anlasma", "dosya")
 _SAYILI_RET_TAM = ("ek", "eki", "ekli", "ekte", "alt", "esas")
 _SAYILI_RET_IKI = (("kanun", "hukmunde"), ("resmi", "gazete"), ("cumhurbaskanligi", "karar"))
+# Ad/kısaltmadan hemen önce gelince onu BUGÜNKÜ Türk kanunu olmaktan çıkaran nitelemeler: 'eski İş Kanunu'
+# (1475), 'mülga TCK' (765), 'İsviçre Borçlar Kanunu' (OR). Numaralı tanımaya uygulanmaz.
+_NITELEME = ("eski", "mulga", "onceki", "evvelki", "isvicre", "alman", "fransiz", "italyan", "avusturya")
+_SON_SOZCUK = re.compile(r"([a-z]+)[\s,]*$")
 
 
 # ---- veri sınıfları ---------------------------------------------------------------------------
@@ -344,6 +351,7 @@ class _KanunTok:
     kaynak: str
     ipucu: str | None = None
     oncelik: int = 0                  # aynı açıklıkta: tablo/numara (0) > korpus adı (1)
+    nitelik: str | None = None        # 'eski' / 'mülga' / 'isvicre' ...: bugünkü kanun değil (atıf üretmez)
 
 
 @dataclass
@@ -371,11 +379,15 @@ class Ayristirma:
     atiflar: list = field(default_factory=list)
     kanunlar: list = field(default_factory=list)
     kanunsuz_maddeler: list = field(default_factory=list)
+    nitelikli_maddeler: list = field(default_factory=list)   # 'eski TCK m. 141' gibi: kanunu belirsiz
 
     def tani(self):
         """Atıf çıkmadıysa nedenini söyle (yanıttaki açıklama için)."""
         if self.atiflar:
             return ""
+        if self.nitelikli_maddeler:
+            return ("kanun adı eski/mülga ya da yabancı nitelemeli — bugünkü kanuna eşlenmedi; kanunu "
+                    "numarasıyla yazın ('765 sayılı Kanun')")
         if self.kanunlar:
             nolar = sorted({n for t in self.kanunlar for n in t.nolar})
             return f"kanun tanındı ({', '.join(nolar)}) ama madde numarası bulunamadı"
@@ -482,6 +494,11 @@ def _kanun_tokenleri(k, sorgu, kanun_adlari):
             if i == 0 or not k[i - 1].isalnum():
                 toklar.append(_KanunTok(i, _ek_sonu(k, i + len(ad)), tuple(nolar), "korpus_adi", ad, 1))
             i = k.find(ad, i + 1)
+    for t in toklar:
+        if t.kaynak != "numara":
+            m = _SON_SOZCUK.search(k[max(0, t.bas - 24):t.bas])
+            if m and m.group(1) in _NITELEME:
+                t.nitelik = m.group(1)
     return _sec(toklar)
 
 
@@ -632,6 +649,9 @@ def ayristir(sorgu, kanun_adlari=None):
         kt = _kanun_sec(kanunlar, mt)
         if kt is None:
             sonuc.kanunsuz_maddeler.append(mt)
+            continue
+        if kt.nitelik:                  # 'eski TCK m. 491': madde o (belirsiz) kanuna ait → atıf değil
+            sonuc.nitelikli_maddeler.append(mt)
             continue
         sinir = min([t.bas for t in maddeler[i + 1:]] + [t.bas for t in kanunlar if t.bas >= mt.son] + [len(k)])
         ft = bt = None
