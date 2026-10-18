@@ -8,7 +8,8 @@ YAPILMAZ — `atif_getir.py` korpus indeksinde çözer.
 
 Tanınan biçimler — büyük/küçük harf, İ/I/ı/i ve Türkçe karakter duyarsız (`katla`):
   Kanun : '5237 sayılı Kanun', '5237 sayılı Türk Ceza Kanunu', '5237 sayılı TCK', '5237 s. K.',
-          '5237 numaralı Kanun', 'Kanun No: 5237', kısaltma (TCK, İİK, KVKK ... — `KISALTMALAR`),
+          '5237 numaralı Kanun', 'Kanun No: 5237', kısaltma (TCK, İİK, KVKK ... — `KISALTMALAR`;
+          noktalı 'İ.İ.K.', 'T.M.K.', 'TMK.' de),
           yaygın ad ('Türk Ceza Kanunu', 'Medeni Kanun', 'İş K.' — `ADLAR`), 'Anayasa' / 'AY';
           verilirse korpustaki 916 resmî kanun adı (`kanun_adlari`, ör. 'İmar Kanunu').
   Madde : 'm. 141', 'md. 141', 'mad. 141', 'madde 141', '141. madde', '141 inci maddesi',
@@ -213,8 +214,10 @@ _SAYILI = re.compile(r"(?<![0-9/.,])(?P<no>[0-9]{1,4})(?![0-9])\s?"
                      r"(?P<tur>sayili|sy\.|s\s?\.|numarali|no\.?\s?'?\s?l[iu]|nolu)")
 _KANUN_NO = re.compile(r"(?<![a-z0-9])(?:kanun|k\.)\s?(?:no|numarasi|numara|nr)\.?\s?:?\s?"
                        r"(?P<no>[0-9]{1,4})(?![0-9/])")
+# Noktalı yazım da tanınır: 'İ.İ.K.', 'T.M.K.', kısaltmadan sonra nokta 'TMK. 166' ('ay' hariç: 'a.y.' belirsiz)
 _KISA = re.compile(r"(?<![a-z0-9])(?P<kisa>"
-                   + "|".join(sorted(map(re.escape, _KISA_NO), key=len, reverse=True))
+                   + "|".join(k if k == "ay" else r"\.?".join(k) + r"\.?"
+                              for k in sorted(_KISA_NO, key=len, reverse=True))
                    + r")(?:'[a-z]{1,6}|nin|nun|in|un|da|de|ta|te|ya|ye|den|dan|ten|tan)?(?![a-z0-9])")
 _AD_DESENLERI = tuple(
     (re.compile(r"(?<![a-z0-9])" + r"\s+".join(map(re.escape, sozcukler)) + r"\s+k(?:anun[a-z']*|\.)"),
@@ -504,7 +507,7 @@ def _kanun_tokenleri(k, sorgu, kanun_adlari):
     toklar += [_KanunTok(m.start(), m.end(), (kanun_no_norm(m.group("no")),), "numara")
                for m in _KANUN_NO.finditer(k)]
     for m in _KISA.finditer(k):
-        kisa = m.group("kisa")
+        kisa = m.group("kisa").replace(".", "")
         if kisa == "ay" and sorgu[m.start():m.start() + 2] != "AY":
             continue                                            # küçük 'ay' = süre birimi
         toklar.append(_KanunTok(m.start(), m.end(), (_KISA_NO[kisa],), "kisaltma", _KISA_AD[kisa]))

@@ -110,6 +110,26 @@ def test_kanun_tanima(sorgu, kanun_no):
     assert a.kanun_nolari == (kanun_no,) and a.madde_no == "141"
 
 
+# İcra ve ceza pratiğinde yerleşik noktalı yazım ('İ.İ.K.', 'T.M.K.') ve kısaltmadan sonra nokta ('TMK. 166')
+# hiç tanınmıyordu → atıf sorgusu doğal dile gidiyordu.
+@pytest.mark.parametrize("sorgu, beklenen", [
+    ("İ.İ.K. m. 89", (("2004",), "89", None, None)),
+    ("İ.İ.K.'nın 89. maddesi", (("2004",), "89", None, None)),
+    ("T.M.K. m. 166", (("4721",), "166", None, None)),
+    ("T.C.K. 141. madde", (("5237",), "141", None, None)),
+    ("C.M.K. m. 231/5", (("5271",), "231", 5, None)),
+    ("H.M.K. 107", (("6100",), "107", None, None)),
+    ("TMK. 166", (("4721",), "166", None, None)),
+])
+def test_noktali_kisaltmalar_taninir(sorgu, beklenen):
+    assert _ozet(_tek(sorgu)) == beklenen
+
+
+def test_noktali_kisaltma_kimlik_numarasina_takilmaz():
+    assert atif_ayristir("T.C. Kimlik No 12345") == []
+    assert atif_ayristir("T.C.Kimlik 5. madde") == []
+
+
 def test_kanun_kaynagi_ve_ad_ipucu():
     assert _tek("5237 sayılı Kanun m. 1").kanun_kaynak == "numara"
     assert _tek("TCK m. 1").kanun_kaynak == "kisaltma"
