@@ -394,6 +394,7 @@ class _MaddeTok:
     roma_tek: bool = False            # harf aynı zamanda tek harfli Roma rakamı (I, V, X)
     fikra: int | None = None          # satır içi fıkra ('/2', '/II')
     bent: str | None = None           # satır içi bent ('/2-a', '/1(ğ)')
+    belge: bool = False               # 'Yönetmeliğin 5. maddesi': kanun dışı belgenin maddesi (atıf değil)
 
 
 @dataclass
@@ -410,6 +411,7 @@ class Ayristirma:
     kanunlar: list = field(default_factory=list)
     kanunsuz_maddeler: list = field(default_factory=list)
     nitelikli_maddeler: list = field(default_factory=list)   # 'eski TCK m. 141' gibi: kanunu belirsiz
+    belge_maddeleri: list = field(default_factory=list)      # 'Yönetmeliğin 5. maddesi': kanun dışı
 
     def tani(self):
         """Atıf çıkmadıysa nedenini söyle (yanıttaki açıklama için)."""
@@ -418,6 +420,8 @@ class Ayristirma:
         if self.nitelikli_maddeler:
             return ("kanun adı eski/mülga ya da yabancı nitelemeli — bugünkü kanuna eşlenmedi; kanunu "
                     "numarasıyla yazın ('765 sayılı Kanun')")
+        if self.belge_maddeleri:
+            return "madde kanun dışı bir belgeye ait (yönetmelik, tebliğ, KHK, sözleşme ...)"
         if self.kanunlar:
             nolar = sorted({n for t in self.kanunlar for n in t.nolar})
             return f"kanun tanındı ({', '.join(nolar)}) ama madde numarası bulunamadı"
@@ -594,8 +598,9 @@ def _madde_tokenleri(k, sorgu, kanunlar):
         t = _MaddeTok(m.start(), m.end(), "asil", m.group("no"))
         if _slash_uygula(m, sorgu, t):                          # '48/A maddesi', '220/6. maddesi', '4/1-a'
             adaylar.append(t)
-    secilen = [t for t in _sec(adaylar) if not _cakisir(t, kanunlar) and int(t.no) > 0
-               and not _BELGE_MADDESI.search(k[max(0, t.bas - 40):t.bas])]
+    secilen = [t for t in _sec(adaylar) if not _cakisir(t, kanunlar) and int(t.no) > 0]
+    for t in secilen:                   # belge maddesi atıf üretmez ama SINIR kalır: ardındaki fıkra onundur
+        t.belge = bool(_BELGE_MADDESI.search(k[max(0, t.bas - 40):t.bas]))
     # kanundan hemen sonra yalın numara: 'TCK 141', "TCK'nın 141/2", 'HMK 119/1-ğ'
     for kt in kanunlar:
         m = _M_YALIN.match(k, kt.son)
@@ -687,6 +692,9 @@ def ayristir(sorgu, kanun_adlari=None):
     sonuc = Ayristirma(kanunlar=kanunlar)
     gorulen = set()
     for i, mt in enumerate(maddeler):
+        if mt.belge:                    # 'Yönetmeliğin 5. maddesi': hiçbir kanuna bağlanmaz
+            sonuc.belge_maddeleri.append(mt)
+            continue
         kt = _kanun_sec(kanunlar, mt)
         if kt is None:
             sonuc.kanunsuz_maddeler.append(mt)

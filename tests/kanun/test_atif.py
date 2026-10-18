@@ -466,6 +466,12 @@ def test_belge_sozu_maddeden_sonra_gelirse_atif_kalir():
     assert _ozet(_tek("TCK'nın 5. maddesi ve yönetmelik")) == (("5237",), "5", None, None)
 
 
+def test_belge_maddesinin_fikra_ve_bendi_onceki_kanun_maddesine_gecmez():
+    assert _ozet(_tek("TCK m. 141 ve Yönetmeliğin 5. maddesinin 2. fıkrası")) == (("5237",), "141", None, None)
+    assert _ozet(_tek("TCK m. 141 ile Tebliğin 3. maddesi (a) bendi")) == (("5237",), "141", None, None)
+    assert "kanun dışı" in ayristir("Yönetmeliğin 5. maddesi").tani()
+
+
 def test_tumu_buyuk_harfli_sorguda_ay_yalniz_guclu_bicimle_anayasa():
     # 'AY' Anayasa'dır kuralı büyük harfe dayanır; tümü büyük harfli sorguda bu sinyal yoktur
     assert atif_ayristir("HER AY 1 TARİHİNDE KİRA ÖDENİR") == []
