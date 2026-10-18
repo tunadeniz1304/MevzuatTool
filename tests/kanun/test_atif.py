@@ -210,6 +210,30 @@ def test_kanun_maddeden_sonra_gelebilir():
     assert _ozet(_tek("geçici madde 1, 6111 sayılı kanun")) == (("6111",), "Geçici 1", None, None)
 
 
+# Yargı kararlarındaki kalıp: '5237 sayılı TCK'nın 6545 sayılı Kanunla değişik 141. maddesi'. Madde en yakın
+# önceki kanuna bağlandığı için DEĞİŞTİREN kanuna (6545) gidiyordu: yanlış kanun ya da doğal dile düşüş.
+@pytest.mark.parametrize("sorgu", [
+    "TCK'nın 6545 sayılı Kanunla değişik 141. maddesi",
+    "5237 sayılı Kanunun 5560 sayılı Kanun ile değişik 141. maddesi",
+    "TCK'nın 6545 sayılı Kanun'la değiştirilen 141. maddesi",
+    "Türk Ceza Kanunu'nun 6545 sayılı Kanunla eklenen 141. maddesi",
+])
+def test_degistiren_kanun_maddenin_sahibi_sayilmaz(sorgu):
+    assert _ozet(_tek(sorgu)) == (("5237",), "141", None, None)
+
+
+def test_degistiren_kanun_kendi_maddesiyle_ve_tek_basina():
+    a = atif_ayristir("6545 sayılı Kanunun 68. maddesiyle değişik TCK'nın 141. maddesi")
+    assert [_ozet(x) for x in a] == [(("6545",), "68", None, None), (("5237",), "141", None, None)]
+    assert atif_ayristir("6545 sayılı Kanunla değişik 141. madde") == []      # asıl kanun anılmamış
+
+
+def test_degisik_nitelemesi_tamlayan_kanunu_degistiren_yapmaz():
+    # yalnız vasıta hâli ('Kanunla', 'Kanun ile') değiştiren kanundur; 'TCK'nın değişik' sahibin kendisi
+    assert _ozet(_tek("TCK'nın değişik 141. maddesi")) == (("5237",), "141", None, None)
+    assert _ozet(_tek("5237 sayılı Kanunun değişik 141. maddesi")) == (("5237",), "141", None, None)
+
+
 def test_ayni_atif_tekrari_tekillesir():
     assert len(atif_ayristir("TCK m. 141 (TCK m. 141)")) == 1
 

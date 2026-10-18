@@ -48,7 +48,7 @@ Bilinen sınırlar: alt-bent ('359/a-1'nin '1'i) okunmaz; aralık açılmaz ('TC
 önce geliyorsa ('TCK'nın 141 ve 142. maddeleri', 'TCK m. 141 ve m. 142') ikisi de, sonra geliyorsa
 ('141 ve 142. maddeler TCK') yalnız son numara yakalanır; kanunun
 maddeden SONRA geldiği yazım ('m. 141 TCK') tek atıfta çalışır ama karışık sırada en yakın ÖNCEKİ
-kanun seçilir.
+kanun seçilir; değiştiren kanun ('TCK'nın 6545 sayılı Kanunla değişik 141. maddesi') sahip sayılmaz.
 """
 import re
 from dataclasses import dataclass, field
@@ -290,6 +290,13 @@ _SAYILI_RET_IKI = (("kanun", "hukmunde"), ("resmi", "gazete"), ("cumhurbaskanlig
 # (1475), 'mülga TCK' (765), 'İsviçre Borçlar Kanunu' (OR). Numaralı tanımaya uygulanmaz.
 _NITELEME = ("eski", "mulga", "onceki", "evvelki", "isvicre", "alman", "fransiz", "italyan", "avusturya")
 _SON_SOZCUK = re.compile(r"([a-z]+)[\s,]*$")
+# Vasıta hâlindeki kanun ('Kanunla' / "Kanun'la" / 'Kanun ile') + 'değişik | değiştirilen | eklenen ...' →
+# DEĞİŞTİREN kanun: ardından gelen madde onun değil, daha önce anılan kanunundur ('TCK'nın 6545 sayılı
+# Kanunla değişik 141. maddesi'). Tamlayan hâli ('TCK'nın değişik 141. maddesi') sahibin kendisidir.
+_DEGISIK_SOZ = r"(?:degisik|degistiril|eklen|ihdas|yapilan\sdegisiklik)"
+_VASITA_EKI = re.compile(r"'?(?:yla|yle|la|le)$")
+_DEGISIK_SONRA = re.compile(r"\s" + _DEGISIK_SOZ)
+_ILE_DEGISIK_SONRA = re.compile(r"\sile\s" + _DEGISIK_SOZ)
 
 
 # ---- veri sınıfları ---------------------------------------------------------------------------
@@ -356,6 +363,7 @@ class _KanunTok:
     ipucu: str | None = None
     oncelik: int = 0                  # aynı açıklıkta: tablo/numara (0) > korpus adı (1)
     nitelik: str | None = None        # 'eski' / 'mülga' / 'isvicre' ...: bugünkü kanun değil (atıf üretmez)
+    degistiren: bool = False          # 'N sayılı Kanunla değişik ...': sonraki maddenin sahibi değil
 
 
 @dataclass
@@ -503,6 +511,8 @@ def _kanun_tokenleri(k, sorgu, kanun_adlari):
             m = _SON_SOZCUK.search(k[max(0, t.bas - 24):t.bas])
             if m and m.group(1) in _NITELEME:
                 t.nitelik = m.group(1)
+        t.degistiren = bool(_ILE_DEGISIK_SONRA.match(k, t.son)
+                            or (_VASITA_EKI.search(k, t.bas, t.son) and _DEGISIK_SONRA.match(k, t.son)))
     return _sec(toklar)
 
 
@@ -615,11 +625,13 @@ def _bent_tokenleri(k, sorgu):
 
 # ---- eşleştirme -------------------------------------------------------------------------------
 def _kanun_sec(kanunlar, mt):
-    """Maddeye en yakın ÖNCEKİ kanun; yoksa en yakın SONRAKİ ('141. madde TCK')."""
-    onceki = [t for t in kanunlar if t.son <= mt.bas]
+    """Maddeye en yakın ÖNCEKİ kanun; yoksa en yakın SONRAKİ ('141. madde TCK'). Değiştiren kanun
+    ('6545 sayılı Kanunla değişik') sahip sayılmaz; asıl kanun anılmamışsa madde kanunsuz kalır."""
+    adaylar = [t for t in kanunlar if not t.degistiren]
+    onceki = [t for t in adaylar if t.son <= mt.bas]
     if onceki:
         return onceki[-1]
-    return next((t for t in kanunlar if t.bas >= mt.son), None)
+    return next((t for t in adaylar if t.bas >= mt.son), None)
 
 
 def _yorumlar(mt, fikra, bent):
