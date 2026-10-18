@@ -2,8 +2,31 @@
 
 > Sistemin **ölçülmüş** durumu. Cetvel: dışarıdan gelen **altınset** gold set (21.737 sızıntısız
 > sorgu; `ilgi`=sorgu, kanun_no+madde_no=doğru madde). Kapsam: retrieval'da biter (CLAUDE.md).
-> Son güncelleme: 2026-10-18 (atıf modu notları — ADR-0019). Ölçümler 2026-09-28 Faz 6 kapanışından (reranker
-> entegrasyonu, ONNX int8, servis, gecikme tablosu).
+> Son güncelleme: 2026-10-18 (ölçüm seti v2 + ADR-0022; atıf modu notları — ADR-0019). Aşağıdaki "v2" bölümü dışındaki
+> ölçümler 2026-09-28 Faz 6 kapanışından (reranker entegrasyonu, ONNX int8, servis, gecikme tablosu).
+
+## Ölçüm seti v2 — güncel taban (2026-10-18, ADR-0022)
+
+Eski altınset bu çalışma kopyasında yok; yerine sızıntısız **set v2** kuruldu (`data/gold/retrieval_v2/set.jsonl`,
+git dışı): 442 soru, 276 tek chunk'lı yürürlükteki madde, 205 kanun (220 hedef kanunlara yayılmış + 97 hedef en çok atıf
+alan 20 kanundan). DeepSeek her madde için vatandaş ve hukukçu dilinde birer soru yazdı; kanun no / madde no / kanun adı /
+maddeden ≥4 kelimelik kopya içerenler elendi; Clef cevaplanabilirliği doğruladı (p ≥ 0.7). Index güncel korpusla yeniden
+embed edildi (31.398 nokta; boş metinli yönlendirme chunk'ları hariç). Ölçüm: `scripts/kanun/retrieval/metrik_v2.py`
+(sorgu vektörleri `colab/outputs/sorgu_*`, yerelde model gerekmez); ağırlık seçimi: `metrik_agirlik_cv.py`.
+
+| Ayar (yürürlük filtresi, reranker kapalı) | R@1 | R@5 | R@10 | MRR@10 | nDCG@10 |
+|---|---|---|---|---|---|
+| Önceki servis (eski tokenizer + 0.33/0.33/0.34) | 0.568 | 0.783 | 0.835 | 0.660 | 0.703 |
+| **Güncel servis (Türkçe tokenizer + ilk 5 harf + 0.65/0.20/0.15)** | **0.643** | **0.828** | **0.871** | **0.718** | **0.755** |
+| Yalnız dense | 0.604 | 0.796 | 0.857 | 0.690 | 0.731 |
+| Yalnız BGE-sparse | 0.412 | 0.613 | 0.667 | 0.499 | 0.540 |
+| Yalnız BM25 (güncel tokenizer; eski tokenizer R@10 0.563) | 0.432 | 0.645 | 0.697 | 0.527 | 0.568 |
+
+- Önceki servise göre fark (eşli bootstrap, %95 GA): MRR +0.036…+0.079, R@10 +0.016…+0.059. Kazanç çoğunlukla vatandaş
+  dilinde (R@10 0.773 → 0.822); hukukçu dilinde R@10 0.910 → 0.930.
+- Hybrid, sorguların %90'ında hedef kanunun bir maddesini ilk 10'a getiriyor (kanun düzeyi isabet).
+- ⚠️ Bu sayılar eski R@10 = 0.6885 ile karşılaştırılamaz (farklı set, farklı index). Sızıntı süzgeci sözcüksel bacakları
+  dezavantajlı ölçer; ayrıntı ADR-0022.
 
 ## Sistem mimarisi (ölçülen)
 

@@ -645,6 +645,62 @@ Güncel mimari görünümü: [`arch.md`](arch.md). Kapsam: [`mevzuat-mvp-kapsam.
   - ⚠️ Servis belleği: ikinci tam-korpus haritası (`payloadlar`) — sentetik tahmin eski `kanun_adlari`'dan ~16 MB
     fazla (31.419 satır); gerçek korpusta ölçülmedi.
 
+## ADR-0022 — BM25 Türkçe tokenizer (İ/I + ilk 5 harf) ve WSUM ağırlıkları 0.65 / 0.20 / 0.15
+- **Durum:** Kabul edildi (2026-10-18) — kodda; ölçüm seti v2 ile ölçüldü
+- **Bağlam:**
+  - Eski ölçüm seti (altınset; ADR-0015'teki R@10 0.6885) bu çalışma kopyasında yok. 2026-10-18'de sızıntısız
+    **ölçüm seti v2** kuruldu: 442 soru, 276 tek chunk'lı yürürlükteki madde, 205 kanun. 220 hedef kanunlara yayılmış,
+    97 hedef atıf setine göre en çok atıf alan 20 kanundan. DeepSeek her madde için vatandaş ve hukukçu dilinde birer
+    soru yazdı; kanun no, madde no, kanun adı ya da maddeden ≥4 kelimelik birebir kopya içeren sorular elendi; Clef
+    cevaplanabilirliği doğruladı (p ≥ 0.7). Set ve üretim script'i `data/` altında (git dışı).
+  - Qdrant index'i güncel korpusla yeniden embed edildi: 31.611 chunk'tan 213 boş metinli yönlendirme chunk'ı hariç
+    31.398 nokta (Colab T4, BGE-M3 fp16). Boş metinliler aynı vektöre düşüp ilk 10'u doldurabilirdi; atıf modu onları
+    korpus dosyasından okur.
+  - `search.tokenize` `str.lower()` kullanıyordu: `'İ'` → `'i'` + U+0307, regex kelimeyi böler
+    ("İş Kanunu" → `i`, `ş`, …); `'I'` → `'i'` (Türkçede `'ı'`). BM25 eklemeli Türkçede kök/ek de ayırmıyordu.
+  - WSUM ağırlıkları eşitti (0.33 / 0.33 / 0.34, ÖLÇÜM 5); altınsete aşırı uyum kaygısıyla ayar yapılmamıştı.
+- **Karar:**
+  1. `tokenize`: Türkçe küçük harf (`tr_kucuk`: İ → i, I → ı, sonra `lower()`), ardından harfli kelimelerde ilk 5
+     harf (`GOVDE_UZUNLUK`); sayılar kesilmez. Korpus ve sorgu aynı fonksiyondan geçer. BM25 index'i servis
+     açılışında bellekte kurulduğu için yeniden embed/ingest gerekmez.
+  2. Servis varsayılanı (`config.Ayarlar`) W_DENSE / W_SPARSE / W_BM25 = 0.65 / 0.20 / 0.15; ortam
+     değişkenleriyle ezilebilir. `HybridArama` kurucu varsayılanı eşit taban çizgisi olarak kalır (testler, eski
+     ölçümler); servis ve fabrika config değerini geçirir.
+  3. Seçim yöntemi (aşırı uyuma karşı): 231 ağırlık üçlüsü (0.05 adımlı simpleks) × 4 tokenizer sürümü; hedef
+     maddeye göre gruplanmış 5 katlı çapraz doğrulama, 20 tekrar; eğitim katlarında en yüksek MRR@10 seçilir, test
+     katında ölçülür (`scripts/kanun/retrieval/metrik_agirlik_cv.py`). Servis ayarının uçtan uca ölçümü:
+     `scripts/kanun/retrieval/metrik_v2.py`.
+- **Ölçüm** (set v2, 442 soru, yürürlük filtresi, reranker kapalı):
+
+  | Ayar | R@1 | R@10 | MRR@10 | nDCG@10 |
+  |---|---|---|---|---|
+  | Eski tokenizer + 0.33 / 0.33 / 0.34 (önceki servis) | 0.568 | 0.835 | 0.660 | 0.703 |
+  | Yeni tokenizer + eşit ağırlık | 0.593 | 0.848 | 0.679 | 0.720 |
+  | **Yeni tokenizer + 0.65 / 0.20 / 0.15** | **0.643** | **0.871** | **0.718** | **0.755** |
+  | Yalnız dense | 0.604 | 0.857 | 0.690 | 0.731 |
+
+  - Eşli bootstrap (5.000): önceki servise göre fark %95 GA — MRR +0.036…+0.079, R@10 +0.016…+0.059.
+  - Çapraz doğrulama (eğitimde seçilen ağırlığın test sonucu): MRR 0.713–0.717, R@10 0.863–0.869; tokenizer
+    sürümleri arasındaki fark gürültü düzeyinde (±0.003). 0.65 / 0.20 / 0.15 eski, İ düzeltmeli ve ilk-6-harf
+    sürümlerinde en çok seçilen ağırlık; ilk-5-harfte en çok seçilen 0.65 / 0.15 / 0.20 (tam veride MRR 0.721 —
+    gönderilen ayarla fark gürültü düzeyinde).
+  - BM25 tek başına R@10: 0.563 (eski) → 0.575 (İ düzeltmesi) → 0.697 (ilk 5 harf); MRR 0.405 → 0.409 → 0.527.
+  - Stil kırılımı: vatandaş R@10 0.773 → 0.822, MRR 0.568 → 0.638; hukukçu R@10 0.910 → 0.930, MRR 0.771 → 0.815.
+- **Reddedilen:**
+  - Yalnız dense: bu sette ağırlıklı 3 bacağın altında (MRR 0.690 / 0.718).
+  - İlk 6 harf: BM25 tek başına ilk 5 harften biraz zayıf (R@10 0.692), birleşimde fark yok.
+  - Snowball Türkçe gövdeleyici: yeni bağımlılık; ilk-5-harf Türkçe bilgi erişiminde bilinen, bağımlılıksız bir
+    yöntem.
+- **Sonuç:**
+  - ✅ Önceki servise göre R@1 +7.5, R@10 +3.6, MRR +5.8 puan (set v2).
+  - ⚠️ Set v2'nin sızıntı süzgeci maddeden kelime kopyalayan soruları eler; bu, sözcüksel bacakları (BM25, sparse)
+    sistematik olarak dezavantajlı ölçer. Resmî dilli ya da terim içeren gerçek sorgularda BM25 ağırlığı daha değerli
+    olabilir. İlk-5-harf BM25'i tek başına ~12 puan güçlendirdiği için bu dağılımlarda da koruyucudur. Eski altınset
+    bulunursa ağırlıklar onunla da doğrulanmalı.
+  - ⚠️ Sayılar eski R@10 = 0.6885 (ADR-0015) ile karşılaştırılamaz: set ve index farklı.
+  - ℹ️ İlk-5-harf aşırı birleştirme yapabilir (ör. farklı kökler aynı 5 harfle başlıyorsa); ölçülen etki net pozitif.
+  - ℹ️ Tarihî `metrik_*.py` script'leri kendi tokenizer kopyalarını taşır (geçmiş ölçümlerin protokolü), değiştirilmedi.
+
 ---
 
 ## Karar Şablonu (yeni ADR için kopyala)
