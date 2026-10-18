@@ -401,6 +401,24 @@ def test_nitelemeli_korpus_adi_ve_numarali_yazim():
     assert "numarasıyla" in ayristir("eski TCK m. 141").tani()
 
 
+# Madde sözünden hemen önce kanun DIŞI bir belge (yönetmelik, tebliğ, KHK, sözleşme ...) geliyorsa madde o
+# belgenindir; sorgunun başka yerindeki kanuna bağlanıp o kanunun maddesi diye dönüyordu.
+@pytest.mark.parametrize("sorgu", [
+    "Yıllık Ücretli İzin Yönetmeliği'nin 5. maddesi İş Kanunu",
+    "İş Kanunu'na dayanılarak çıkarılan yönetmeliğin 5. maddesi",
+    "657 sayılı DMK ve 375 sayılı KHK'nın ek 9. maddesi",
+    "TCK ve Avrupa İnsan Hakları Sözleşmesi'nin 6. maddesi",
+    "KDVK ve KDV Genel Uygulama Tebliğinin 3. maddesi",
+    "Anayasa değişikliği teklifinin 5. maddesi",
+])
+def test_baska_belgenin_maddesi_kanuna_baglanmaz(sorgu):
+    assert atif_ayristir(sorgu) == []
+
+
+def test_belge_sozu_maddeden_sonra_gelirse_atif_kalir():
+    assert _ozet(_tek("TCK'nın 5. maddesi ve yönetmelik")) == (("5237",), "5", None, None)
+
+
 def test_tani_neden_atif_olmadigini_soyler():
     assert "kanun tanındı (5237)" in ayristir("5237 sayılı kanun").tani()
     assert "kanun tanınmadı" in ayristir("madde 5").tani()

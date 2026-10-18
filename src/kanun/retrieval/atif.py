@@ -33,6 +33,8 @@ ATIF = KANUN + MADDE (ikisi birden şart). Yalnız kanun ('5237 sayılı Kanun')
     (`_MADDE_DEGIL_SONRA`).
   - 'NNNN sayılı' ardından KHK / Cumhurbaşkanlığı Kararnamesi / karar / yönetmelik / tebliğ / liste /
     cetvel / Resmî Gazete gelirse kanun değildir ('375 sayılı KHK', '2023/15 sayılı karar').
+  - Madde sözünden hemen önce kanun dışı belge geliyorsa ('Yönetmeliğin 5. maddesi', "KHK'nın ek 9.
+    maddesi", 'Sözleşmenin 6. maddesi') madde o belgenindir, sorgudaki bir kanuna bağlanmaz.
   - 'Anayasa Mahkemesi', 'anayasal' kanun sayılmaz; 'AY' yalnız büyük harfle yazılmışsa Anayasa'dır
     ('ay' = ay/süre). 'İş K.' 'iş kazası'nda tetiklenmez; 'Deniz İş Kanunu' (854) ve 'Basın İş Kanunu'
     (5953) İş Kanunu (4857) sayılmaz.
@@ -297,6 +299,10 @@ _DEGISIK_SOZ = r"(?:degisik|degistiril|eklen|ihdas|yapilan\sdegisiklik)"
 _VASITA_EKI = re.compile(r"'?(?:yla|yle|la|le)$")
 _DEGISIK_SONRA = re.compile(r"\s" + _DEGISIK_SOZ)
 _ILE_DEGISIK_SONRA = re.compile(r"\sile\s" + _DEGISIK_SOZ)
+# Madde sözünden HEMEN önce kanun dışı bir belge ('Yönetmeliğin 5. maddesi', "KHK'nın ek 9. maddesi",
+# 'Sözleşmenin 6. maddesi', 'teklifinin 5. maddesi') → madde o belgenindir, hiçbir kanuna bağlanmaz.
+_BELGE_MADDESI = re.compile(r"(?<![a-z0-9])(?:yonetmeli[gk]|teblig|tuzu[gk]|genelge|yonerge|karar|khk|cbk"
+                            r"|sozlesme|anlasma|protokol|sartname|aihs|teklif|tasari)[a-z']*[\s,]*$")
 
 
 # ---- veri sınıfları ---------------------------------------------------------------------------
@@ -572,7 +578,8 @@ def _madde_tokenleri(k, sorgu, kanunlar):
         t = _MaddeTok(m.start(), m.end(), "asil", m.group("no"))
         if _slash_uygula(m, sorgu, t):                          # '48/A maddesi', '220/6. maddesi', '4/1-a'
             adaylar.append(t)
-    secilen = [t for t in _sec(adaylar) if not _cakisir(t, kanunlar) and int(t.no) > 0]
+    secilen = [t for t in _sec(adaylar) if not _cakisir(t, kanunlar) and int(t.no) > 0
+               and not _BELGE_MADDESI.search(k[max(0, t.bas - 40):t.bas])]
     # kanundan hemen sonra yalın numara: 'TCK 141', "TCK'nın 141/2", 'HMK 119/1-ğ'
     for kt in kanunlar:
         m = _M_YALIN.match(k, kt.son)
