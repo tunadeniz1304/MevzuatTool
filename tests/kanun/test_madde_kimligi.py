@@ -506,6 +506,34 @@ def test_rerank_skorlama_metni_madde_idden_eski_dosyada_ciftten(tmp_path, monkey
         assert [json.loads(l) for l in f] == [[len(metinler[0]), len(metinler[1])], [len(metinler[2])]]
 
 
+P1, P2, P3 = ("1", "1"), ("1", "2"), ("1", "3")
+_SINIF_PAYLOAD = {"A": {"kanun_no": "1", "madde_no": "1"}, "B": {"kanun_no": "1", "madde_no": "2"},
+                  "C": {"kanun_no": "1", "madde_no": "3"},
+                  "400-5": {"kanun_no": "6551", "madde_no": "5"}, "401-5": {"kanun_no": "6551", "madde_no": "5"}}
+
+
+@pytest.mark.parametrize("eski, sirali, k, beklenen", [
+    ([(P1, 0.9), (P2, 0.5)], [("A", 0.9), ("B", 0.5)], 10, "ayni"),
+    # yalnız eşit puanlıların sırası farklı (eski set birleşimi bu sırayı hash'e bağlıyordu)
+    ([(P1, 0.5), (P2, 0.5)], [("B", 0.5), ("A", 0.5)], 10, "esit_puan"),
+    # eşit-puan grubu top-k sınırında bölünüyor: k içinde başka aday, adaylar ve puanlar aynı
+    ([(P1, 0.9), (P2, 0.5), (P3, 0.5)], [("A", 0.9), ("C", 0.5), ("B", 0.5)], 2, "esit_puan"),
+    # sıra aynı ama puan değişmiş
+    ([(P1, 0.9), (P2, 0.5)], [("A", 0.9), ("B", 0.4)], 10, "fark"),
+    # yeni yolda eşitlenen puan, sıra farkını eşit-puan farkı gibi gösteremez
+    ([(P1, 0.6), (P2, 0.5)], [("B", 0.5), ("A", 0.5)], 10, "fark"),
+    # eski aday yeni listede yok
+    ([(P1, 0.9), (P2, 0.5), (P3, 0.1)], [("A", 0.9), ("B", 0.5)], 10, "fark"),
+    # top-k birebir aynıysa k dışındaki fark sonucu değiştirmez
+    ([(P1, 0.9), (P2, 0.5), (P3, 0.1)], [("A", 0.9), ("B", 0.5)], 2, "ayni"),
+    # iki kanunun aynı numaralı maddesi artık iki aday — eski kod tek adaya çökertiyordu
+    ([(("6551", "5"), 0.9)], [("400-5", 0.9), ("401-5", 0.8)], 10, "cakisma"),
+])
+def test_esdeger_kontrol_sinifi(eski, sirali, k, beklenen):
+    """eski: eski algoritmanın tüm adayları [((kanun_no, madde_no), puan)]; sirali: yeni `adaylar()`."""
+    assert _script("esdeger_kontrol").sinifla(eski, sirali, _SINIF_PAYLOAD, k=k) == beklenen
+
+
 # =================================================================================================
 # 4. Eski index — Qdrant'taki madde_id korpusta yoksa korpus kimliğine bağlanır (yalnız tek aday varsa)
 # =================================================================================================
