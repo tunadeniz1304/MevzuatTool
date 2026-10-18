@@ -262,7 +262,7 @@ Tüm script'ler `scripts/kanun/retrieval/` altında; kütüphane `src/kanun/retr
 | `src/kanun/api/app.py` | FastAPI `/ara` (`mod`: otomatik \| atif \| dogal), `/saglik` (ADR-0017/0019) |
 | `ingest_qdrant.py` | Colab vektörlerini Qdrant'a yükle (+ `yurutluk` payload index) |
 | `search_qdrant.py` | Arama CLI (kütüphanenin ince sarmalayıcısı) |
-| `esdeger_kontrol.py` | Kütüphane = eski script (50 sorgu, birebir) |
+| `esdeger_kontrol.py` | Kütüphane = eski script (50 sorgu, puanlarla): ayni / esit_puan / cakisma (beklenen) / fark (ADR-0021) |
 | `metrik_bm25.py` · `metrik_bm25_agirlik.py` | ÖLÇÜM 4 (3. bacak) · ÖLÇÜM 5 (ağırlık taraması) |
 | `metrik_olc.py` · `metrik_egri.py` · `metrik_ablasyon.py` | R@k/MRR/nDCG · recall eğrisi · ablasyon (eski 2-bacak) |
 | `metrik_rerank_3bacak.py` | Reranker çapa + ADAY×max_len taraması (ADR-0015) |
@@ -272,6 +272,13 @@ Tüm script'ler `scripts/kanun/retrieval/` altında; kütüphane `src/kanun/retr
 | `colab/bge_m3_embed.ipynb` | Korpus embed (Colab) |
 
 ## Sonraki adımlar (açık)
+
+- **ADR-0021 sonrası yeniden ölçüm (önce bu):** doğal dil adayları artık `madde_id` ile anahtarlanıyor; bu
+  sayfadaki bütün doğal dil sayıları (taban 0.6885 dahil) eski `(kanun_no, madde_no)` anahtarıyla ölçüldü. Gerçek
+  index + korpusla: (1) `esdeger_kontrol.py` — beklenen FARK 0 (yalnız ayni / esit_puan / cakisma); (2)
+  `metrik_rerank_3bacak.py --aday-cikar` → `--rapor` taban satırı (aday dosyası `madde_idler` ile yeniden yazılır;
+  eski `rerank_skor_*` dosyaları eski aday sırasına hizalı, silinip yeniden puanlanmalı). Fark yalnız çakışan
+  maddelerde (14 kanun_no; aynı kanunda tekrarlı madde no) ve TAM eşit puanlıların sırasında beklenir.
 
 - **Atıf modu sanity ölçümü (önerilen, ADR-0019):** `unique_atiflar.json` (8.290 atıf) → her kayıt için atıf sorgusu
   (varsa ham atıf metni, yoksa kanun_no + madde_no [+ fıkra/bent] alanlarından kurulan metin) atıf modundan

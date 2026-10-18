@@ -59,6 +59,8 @@ Kararların **gerekçesi/tarihçesi**: [`decisions.md`](decisions.md). Kapsam: [
 ```
 
 Doğal dil araması tek yerde (`HybridArama`); `search_qdrant.py` CLI'ı, ölçüm script'leri ve servis onu çağırır.
+Adayın kimliği `madde_id`'dir (korpus chunk id'si): bacaklar, reranker metni ve `/ara` `metin`'i bu kimlikle
+çalışır; (kanun_no, madde_no) yalnız gold eşleştirme çiftidir (ADR-0021).
 Servis her sorguyu `atif_getir.modlu_ara` üzerinden geçirir: atıf ayrıştırılamayan sorguda doğal dil çağrısı
 `HybridArama.ara` ile birebir aynıdır. Atıf indeksi ve BM25 aynı `korpus.jsonl`'den servis açılışında bir kez
 kurulur; Qdrant ve embedder atıf modunda çağrılmaz.
@@ -166,10 +168,11 @@ pydantic/ABI kırılganlığından muaf. (Kaynak: `fetch.py` modül docstring'i.
    atıf), açılıştaki ikinci korpus taraması ve indeks belleği ölçülmedi.
 6. **Atıf ayrıştırıcı sınırları:** alt-bent okunmaz ('359/a-1'in '1'i); aralık açılmaz ('TCK m. 141-145' yalnız
    141'i getirir); 'TMK' → 4721 eşlenir (ceza hukukunda 3713 için de kullanılır).
-7. **Doğal dil modunda (kanun_no, madde_no) anahtarı:** `BM25Index` sözlükleri ve WSUM füzyonu bu anahtarla
-   çalışır → çakışan kanun_no'larda (ör. 6551) iki kanunun aynı numaralı maddesi tek adaya çöker, `metin` / ad
-   yanlış kanundan gelebilir; yalnız BM25'ten gelen adaya sentetik payload verilir. Çözüm yönü: `madde_id`
-   anahtarı / payload'a `mevzuat_id`. (Atıf modu bu sorunu taşımaz: indeks `mevzuat_id`'yi tutar.)
+7. **Doğal dil aday kimliği madde_id'ye geçti, gerçek veriyle yeniden ölçülmedi** (ADR-0021): eskiden
+   (kanun_no, madde_no) anahtarı çakışan kanun_no'larda (ör. 6551) iki maddeyi tek adaya çökertiyor, `metin` / ad
+   yanlış kanundan gelebiliyordu. Çakışmayan kanunlarda sonuç birebir aynı (sahte Qdrant/BM25 eşdeğerlik
+   testleri); `esdeger_kontrol.py` ve R@10 gerçek index + korpusla yeniden koşulmalı. Qdrant index'i korpusun
+   gerisinde kaldıkça korpusta olmayan index id'si aynı kanundaki tek eş maddeye bağlanır (`BM25Index.kimlik`).
 
 ---
 
