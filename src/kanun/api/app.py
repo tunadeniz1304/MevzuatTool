@@ -217,9 +217,10 @@ def uygulama_olustur(arama_fabrika=None, ayar=None, atif_fabrika=None):
             rerank, sure_ms = False, sonuc.sure_ms
         else:
             dogal = sonuc.dogal
+            # metin madde_id ile (benzersiz): (kanun_no, madde_no) çakışan kanunlarda başka maddeyi verirdi
             sonuclar = [SonucModel(sira=i, madde_id=s.madde_id, kanun_no=s.kanun_no, kanun_ad=s.kanun_ad,
                                    madde_no=s.madde_no, skor=s.skor, rerank_skor=s.rerank_skor,
-                                   metin=arama.bm25.metinler.get(s.anahtar) if metin else None)
+                                   metin=arama.bm25.metinler.get(s.madde_id) if metin else None)
                         for i, s in enumerate(dogal, 1)]
             rerank, sure_ms = dogal.rerank, dogal.sure_ms
         config = {**_config(ayar, arama, rerank), "mod": sonuc.mod, "istenen_mod": istek.mod}

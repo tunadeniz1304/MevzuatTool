@@ -11,10 +11,15 @@ bu maddeleri TEK adaya çökertir: skorlar karışır, `metin` / `kanun_ad` yanl
    eşit puanlılar grup olarak (sırasız) karşılaştırılır. Sahte Qdrant + sahte BM25 skorları, rastgele senaryolar.
 2. Çakışma: iki ayrı aday, doğru `metin`, doğru `kanun_ad`, reranker'a doğru metin, BM25-only adayda
    korpustan gerçek payload.
+3. Ölçüm script'leri: gold eşleştirmesi (kanun_no, madde_no) ile kalır (metrik tanımı); iç anahtarın
+   madde_id olması dosya biçimini ve değerlerini değiştirmez.
 """
 import functools
+import importlib.util
 import json
 import operator
+import os
+import pathlib
 import random
 from types import SimpleNamespace
 
@@ -322,15 +327,12 @@ CAKISMA = [
     _chunk("100", "5237", TCK, "141", text="hırsızlık suçu"),
 ]
 R = {r["id"]: r for r in CAKISMA}
-BILINEN_HATA = pytest.mark.xfail(strict=True, reason="iç anahtar (kanun_no, madde_no): çakışan maddeler "
-                                                    "tek adaya çöküyor (BM25Index + WSUM)")
 
 
 def _pl(cid, skor):
     return _qdrant_payload(R[cid]), skor
 
 
-@BILINEN_HATA
 def test_cakisan_kanun_no_dense_adaylari_ayri(tmp_path):
     arama = _yeni(tmp_path, CAKISMA, dense=[_pl("400-5", 0.9), _pl("401-5", 0.8), _pl("100-141", 0.1)])
     sonuc = [(s.madde_id, s.kanun_ad, s.madde_no, s.skor) for s in arama.ara("soru")]
@@ -339,7 +341,6 @@ def test_cakisan_kanun_no_dense_adaylari_ayri(tmp_path):
                      ("100-141", TCK, "141", 0.0)]
 
 
-@BILINEN_HATA
 def test_cakisan_kanun_no_bm25_adaylari_ayri_ve_kanun_adi_dogru(tmp_path):
     arama = _yeni(tmp_path, CAKISMA, dense=[_pl("100-141", 0.9), _pl("400-6", 0.2)],
                   bm25={"400-5": 3.0, "401-5": 2.0, "100-141": 1.0})
@@ -350,7 +351,6 @@ def test_cakisan_kanun_no_bm25_adaylari_ayri_ve_kanun_adi_dogru(tmp_path):
                      ("400-6", "6551", MAHALLI, "6", 0.0)]
 
 
-@BILINEN_HATA
 def test_ayni_kanunda_tekrarli_madde_no_ayri_aday(tmp_path):
     arama = _yeni(tmp_path, CAKISMA, dense=[_pl("100-Gecici1-2", 0.7), _pl("100-141", 0.6)],
                   bm25={"100-Gecici1-1": 2.0, "100-Gecici1-2": 1.5, "100-141": 0.5})
@@ -359,7 +359,6 @@ def test_ayni_kanunda_tekrarli_madde_no_ayri_aday(tmp_path):
                      "100-Gecici1-1": pytest.approx(0.34), "100-141": 0.0}
 
 
-@BILINEN_HATA
 def test_cakisan_maddelerde_reranker_her_adayin_kendi_metnini_alir(tmp_path):
     rk = SahteReranker({R["400-5"]["text"]: 1.0, R["401-5"]["text"]: 2.0})
     arama = _yeni(tmp_path, CAKISMA, dense=[_pl("400-5", 0.9), _pl("401-5", 0.8)], reranker=rk)
@@ -368,7 +367,6 @@ def test_cakisan_maddelerde_reranker_her_adayin_kendi_metnini_alir(tmp_path):
     assert sorted(rk.gelen[0]) == sorted([R["400-5"]["text"], R["401-5"]["text"]])
 
 
-@BILINEN_HATA
 def test_ara_cakisan_kanunlarda_metin_ve_kanun_adi_dogru_maddeden(tmp_path):
     arama = _yeni(tmp_path, CAKISMA, dense=[_pl("400-5", 0.9), _pl("401-5", 0.8)],
                   bm25={"401-5": 1.0, "100-141": 0.5})
@@ -386,3 +384,77 @@ def test_bm25_only_adayin_payloadi_korpustan_gercek_alanlar(tmp_path):
     pl = next(p for p in payload.values() if p["madde_id"] == "400-6")   # anahtar türünden bağımsız
     assert pl == _qdrant_payload(R["400-6"])                   # Qdrant payload'ıyla aynı şema ve değerler
     assert pl["kanun_ad"] == MAHALLI and pl["yurutluk"] == YUR
+
+
+# =================================================================================================
+# 3. Ölçüm script'leri — gold eşleştirmesi (kanun_no, madde_no) değişmez, iç anahtardan etkilenmez
+# =================================================================================================
+_KOK = pathlib.Path(__file__).resolve().parent.parent.parent
+
+
+def _script(ad):
+    spec = importlib.util.spec_from_file_location(ad, str(_KOK / "scripts" / "kanun" / "retrieval" / f"{ad}.py"))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def _aday_cikar(tmp_path, monkeypatch, arama):
+    import kanun.retrieval.fabrika as fabrika
+    m = _script("metrik_rerank_3bacak")
+    monkeypatch.setattr(fabrika, "arama_kur", lambda ayar, reranker=None: arama)
+    monkeypatch.setattr(m, "gold_sorgular", lambda n, yol: [("soru", ("6551", "5"))])
+    monkeypatch.setattr(m, "OLCUM", str(tmp_path / "olcum"))
+    m.aday_cikar(SimpleNamespace(embed="torch", n=1))
+    with open(m.aday_dosya("torch"), encoding="utf-8") as f:
+        return json.loads(f.readline())
+
+
+@pytest.mark.parametrize("seed", range(10))
+def test_rerank_aday_dosyasi_cakisma_yokken_eski_ciktiyla_ayni(tmp_path, monkeypatch, seed):
+    korpus, dense, sparse, bm25, _, kw = _senaryo(seed)
+    yeni = _yeni(tmp_path, korpus, dense, sparse, bm25, **kw)
+    satir = _aday_cikar(tmp_path, monkeypatch, yeni)
+    y_sirali, y_payload, _ = yeni.adaylar("soru")
+    e_sirali, _ = _eski(korpus, dense, sparse, bm25, **kw).adaylar("soru")
+    puanlar = [p for _, p in y_sirali[:50]]
+    # "adaylar" eski biçimde ([kanun_no, madde_no]) ve eski değerlerle (eşit puan grupları içinde sırasız)
+    assert _gruplar([(tuple(a), p) for a, p in zip(satir["adaylar"], puanlar)], lambda x: x[1]) == \
+        _gruplar([(k, p) for k, p in e_sirali[:50]], lambda x: x[1])
+    assert satir["madde_idler"] == [k for k, _ in y_sirali[:50]]
+    assert satir["adaylar"] == [list(_cift(y_payload, k)) for k in satir["madde_idler"]]
+
+
+def test_rerank_aday_dosyasi_cakisan_maddeleri_ayri_yazar(tmp_path, monkeypatch):
+    arama = _yeni(tmp_path, CAKISMA, dense=[_pl("400-5", 0.9), _pl("401-5", 0.8), _pl("100-141", 0.1)])
+    satir = _aday_cikar(tmp_path, monkeypatch, arama)
+    assert satir["madde_idler"] == ["400-5", "401-5", "100-141"]
+    assert satir["adaylar"] == [["6551", "5"], ["6551", "5"], ["5237", "141"]]    # gold çifti (metrik tanımı)
+    assert satir["dogru"] == ["6551", "5"]
+
+
+def test_rerank_skorlama_metni_madde_idden_eski_dosyada_ciftten(tmp_path, monkeypatch):
+    m = _script("metrik_rerank_3bacak")
+    monkeypatch.setenv("KORPUS_YOL", _korpus_yaz(tmp_path, CAKISMA))
+    monkeypatch.setattr(m, "OLCUM", str(tmp_path / "olcum"))
+    os.makedirs(m.OLCUM)
+    with open(m.aday_dosya("torch"), "w", encoding="utf-8") as f:
+        f.write(json.dumps({"sorgu": "q", "dogru": ["6551", "5"], "adaylar": [["6551", "5"], ["6551", "5"]],
+                            "madde_idler": ["400-5", "401-5"]}) + "\n")
+        f.write(json.dumps({"sorgu": "q", "dogru": ["5237", "141"], "adaylar": [["5237", "141"]]}) + "\n")
+
+    class RR:                                   # skor = metin uzunluğu; gelen metinleri kaydeder
+        def __init__(self):
+            self.ciftler = []
+
+        def skorla_ciftler(self, ciftler):
+            self.ciftler += ciftler
+            return [float(len(t)) for _, t in ciftler]
+
+    rr = RR()
+    monkeypatch.setattr(m, "_reranker", lambda *a, **k: rr)
+    m.skorla(SimpleNamespace(embed="torch", backend="torch", max_len=512, aday=50, n=10, cihaz="cpu", batch=8))
+    metinler = [R["400-5"]["text"], R["401-5"]["text"], R["100-141"]["text"]]
+    assert [t for _, t in rr.ciftler] == metinler     # çakışan çiftte her aday kendi metni; eski satır çiftten
+    with open(m.skor_dosya("torch", "torch", 512), encoding="utf-8") as f:
+        assert [json.loads(l) for l in f] == [[len(metinler[0]), len(metinler[1])], [len(metinler[2])]]

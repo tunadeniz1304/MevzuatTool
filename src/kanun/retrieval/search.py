@@ -3,14 +3,18 @@
 
 Eskiden aynı mantık `scripts/kanun/retrieval/search_qdrant.py` ve 8 ölçüm script'inde kopya halindeydi.
 Bu modül tek kaynak: CLI, FastAPI servisi, gecikme ölçümü ve reranker ölçümü buradan arar.
-Davranış `search_qdrant.ara` (main, 2026-07) ile birebir aynıdır — `esdeger_kontrol.py` 50/50 doğrular.
+Davranış `search_qdrant.ara` (main, 2026-07) ile birebir aynıdır — `esdeger_kontrol.py` 50/50 doğrular —
+tek bilinçli fark: aday kimliği madde_id'dir (korpus chunk id'si, mevzuatId tabanlı), (kanun_no, madde_no)
+değil. kanun_no globalde benzersiz değil (tertip çakışması, ör. 6551 iki kanun) ve aynı kanunda iki 'Geçici 1'
+olabilir (ids.py -1/-2); bu maddeler artık tek adaya çökmez. Çakışmasız korpusta sonuçlar birebir aynı
+(tests/kanun/test_madde_kimligi.py, eski davranışın dondurulmuş kopyasına karşı).
 
 Akış (`HybridArama.ara`):
   1. embed    : sorgu → (dense 1024, sparse {token-id: ağırlık})   [enjekte edilen embedder]
   2. dense    : Qdrant `query_points(using="dense")`  top-ADAY_K, yürürlük filtresi arama SIRASINDA
   3. sparse   : Qdrant `query_points(using="sparse")` top-ADAY_K, aynı filtre
   4. bm25     : rank_bm25 korpus `text` (yalnız yürürlükte), top-ADAY_K, skor ≤ 0 atılır
-  5. fuzyon   : her bacak min-max normalize → ağırlıklı toplam (WSUM) → azalan sıra
+  5. fuzyon   : her bacak min-max normalize → ağırlıklı toplam (WSUM) → azalan sıra; bacaklar madde_id'de birleşir
   6. rerank   : (ops.) WSUM sırasının ilk RERANK_ADAY adayı cross-encoder ile yeniden sıralanır
 Her aşamanın süresi `sure_ms`'e yazılır (time.perf_counter, ms).
 
@@ -121,8 +125,10 @@ def korpus_payload(r):
 class BM25Index:
     """Klasik BM25 index'i + korpus haritaları (reranker metni, servis `metin`i, BM25-only aday payload'ı).
 
+    Haritaların anahtarı madde_id (korpus chunk id'si — globalde benzersiz). (kanun_no, madde_no) anahtar
+    olamaz: tertip çakışan iki kanunun (6551) ya da aynı kanundaki iki 'Geçici 1'in değeri birbirini ezer.
     maddeler[i] = (kanun_no, madde_no, madde_id) — BM25 doküman i ile hizalı (yalnız yürürlükte).
-    metinler   : TÜM korpus (mülga dahil) (kanun_no, madde_no) → text
+    metinler   : TÜM korpus (mülga dahil) madde_id → text
     payloadlar : TÜM korpus (mülga dahil) madde_id → `korpus_payload` (Qdrant payload şeması)
     """
     bm25: object                # get_scores(tokenler) sunan nesne (HizliBM25 ya da BM25Okapi)
@@ -148,13 +154,12 @@ def bm25_kur(korpus_yol="data/kanun/korpus.jsonl"):
         for line in f:
             r = json.loads(line)
             m = r["metadata"]
-            key = (str(m["kanun_no"]), str(m["madde_no"]))
             mid = str(r["id"])
-            metinler[key] = r.get("text") or ""
+            metinler[mid] = r.get("text") or ""
             payloadlar[mid] = korpus_payload(r)
             if m["yurutluk"] != YURURLUKTE:
                 continue
-            maddeler.append((key[0], key[1], mid))
+            maddeler.append((str(m["kanun_no"]), str(m["madde_no"]), mid))
             dokumanlar.append(tokenize(r["text"]))
     return BM25Index(HizliBM25(BM25Okapi(dokumanlar)), maddeler, metinler, payloadlar)
 
@@ -170,6 +175,8 @@ class Sonuc:
 
     @property
     def anahtar(self):
+        """(kanun_no, madde_no) — gold/ölçüm eşleştirme çifti. Benzersiz DEĞİL (tertip çakışması, tekrarlı
+        madde no): adayın kimliği `madde_id`'dir; madde metni ve aday birleştirme madde_id ile yapılır."""
         return (self.kanun_no, self.madde_no)
 
 
@@ -222,9 +229,9 @@ class HybridArama:
         return models.SparseVector(indices=[int(k) for k in sparse.keys()],
                                    values=list(sparse.values()))
 
-    def metin(self, anahtar):
+    def metin(self, madde_id):
         """Reranker'a giden madde metni (RERANK_MAX_KRK karaktere kesili)."""
-        return (self.bm25.metinler.get(anahtar) or "")[: self.rerank_max_krk]
+        return (self.bm25.metinler.get(madde_id) or "")[: self.rerank_max_krk]
 
     def rerank_acik_mi(self, rerank):
         """İstek değeri None ise ayar varsayılanı; True ama reranker yüklü değilse hata."""
@@ -236,7 +243,11 @@ class HybridArama:
     # -- ana akış -----------------------------------------------------------
     def adaylar(self, sorgu, yururlukte_only=True):
         """Reranker ÖNCESİ tüm WSUM adayları (azalan puan) + payload haritası + süreler.
-        Ölçüm script'leri adayları bir kez çıkarıp reranker'ı ayrı aşamada koşmak için kullanır."""
+        → (sirali [(madde_id, puan)], payload {madde_id: payload}, sure_ms).
+
+        Aday anahtarı madde_id: Qdrant noktasında payload `madde_id`'si, BM25'te korpus id'si. Ölçüm
+        script'leri adayları bir kez çıkarıp reranker'ı ayrı aşamada koşmak için kullanır; gold eşleştirmesi
+        için (kanun_no, madde_no) payload'dan okunur."""
         sure = {}
         t0 = time.perf_counter()
         dense, sparse = self.embedder(sorgu)
@@ -255,7 +266,7 @@ class HybridArama:
         sure["sparse"] = _ms(t)
 
         def anahtar(p):
-            return (str(p.payload["kanun_no"]), str(p.payload["madde_no"]))
+            return str(p.payload["madde_id"])
 
         d_skor = {anahtar(p): p.score for p in dres.points}
         s_skor = {anahtar(p): p.score for p in sres.points}
@@ -272,9 +283,9 @@ class HybridArama:
         for i in en_iyi:
             if bm_skorlar[i] <= 0:
                 continue
-            kn, mn, _ = self.bm25.maddeler[i]
-            b_skor[(kn, mn)] = float(bm_skorlar[i])
-            payload.setdefault((kn, mn), self.bm25.payload(i))   # yalnız BM25'te: korpustan gerçek alanlar
+            mid = str(self.bm25.maddeler[i][2])
+            b_skor[mid] = float(bm_skorlar[i])
+            payload.setdefault(mid, self.bm25.payload(i))   # yalnız BM25'te: korpustan gerçek alanlar
         sure["bm25"] = _ms(t)
 
         t = time.perf_counter()
@@ -283,13 +294,12 @@ class HybridArama:
         sure["fuzyon"] = _ms(t)
         return sirali, payload, sure
 
-    def _sonuc(self, anahtar, payload, skor, rerank_skor=None):
-        pl = payload.get(anahtar, {})
-        mid = str(pl.get("madde_id", ""))
-        korpus = self.bm25.payloadlar.get(mid) or {}     # Qdrant payload'ında kanun_ad boşsa korpustan
-        return Sonuc(madde_id=mid, kanun_no=anahtar[0],
+    def _sonuc(self, madde_id, payload, skor, rerank_skor=None):
+        pl = payload.get(madde_id) or {}
+        korpus = self.bm25.payloadlar.get(madde_id) or {}   # Qdrant payload'ında kanun_ad boşsa korpustan
+        return Sonuc(madde_id=madde_id, kanun_no=str(pl.get("kanun_no", "")),
                      kanun_ad=pl.get("kanun_ad") or korpus.get("kanun_ad") or "",
-                     madde_no=anahtar[1], skor=float(skor),
+                     madde_no=str(pl.get("madde_no", "")), skor=float(skor),
                      rerank_skor=None if rerank_skor is None else float(rerank_skor))
 
     def ara(self, sorgu, top_k=10, yururlukte_only=True, rerank=None):

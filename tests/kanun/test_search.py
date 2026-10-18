@@ -75,15 +75,16 @@ def _embedder(sorgu):
 
 def _arama(dense, sparse, bm_skor, maddeler, **kw):
     bm25 = BM25Index(SahteBM25(bm_skor), maddeler,
-                     metinler={(m[0], m[1]): f"metin {m[0]}/{m[1]}" for m in maddeler})
+                     metinler={m[2]: f"metin {m[0]}/{m[1]}" for m in maddeler})
     client = SahteClient(dense, sparse)
     return HybridArama(_embedder, client, bm25, **kw), client
 
 
 def _temel():
+    # Qdrant payload'ındaki madde_id = korpus chunk id'si (bacaklar madde_id'de birleşir)
     dense = [_nokta("1", "1", 0.9), _nokta("1", "2", 0.5), _nokta("2", "1", 0.1)]
     sparse = [_nokta("1", "2", 12.0), _nokta("2", "1", 2.0)]
-    maddeler = [("1", "1", "m11"), ("3", "7", "m37"), ("2", "1", "m21")]
+    maddeler = [("1", "1", "1-1"), ("3", "7", "3-7"), ("2", "1", "2-1")]
     return dense, sparse, [4.0, 0.0, 1.0], maddeler
 
 
@@ -137,11 +138,11 @@ def test_sure_ms_anahtarlari():
 def test_sadece_bm25_adayinin_kanun_adi_korpustan():
     dense, sparse, _, maddeler = _temel()
     bm25 = BM25Index(SahteBM25([0.0, 9.0, 0.0]), maddeler,
-                     payloadlar={"m37": {"madde_id": "m37", "kanun_no": "3", "kanun_ad": "Üç Kanunu",
+                     payloadlar={"3-7": {"madde_id": "3-7", "kanun_no": "3", "kanun_ad": "Üç Kanunu",
                                          "madde_no": "7", "yurutluk": "yürürlükte"}})
     arama = HybridArama(_embedder, SahteClient(dense, sparse), bm25)
     s = next(s for s in arama.ara("soru", top_k=10) if s.anahtar == ("3", "7"))
-    assert s.kanun_ad == "Üç Kanunu" and s.madde_id == "m37"
+    assert s.kanun_ad == "Üç Kanunu" and s.madde_id == "3-7"
 
 
 def test_bos_sonuc():
