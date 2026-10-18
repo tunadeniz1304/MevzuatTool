@@ -831,6 +831,15 @@ def test_basin_is_kanunu_5953_is_kanunu_sayilmaz(indeks):
     assert _coz("Basın İş Kanunu m. 5", indeks).durum == "kanun_yok"       # 952-5 (İş K.) DÖNMEZ
 
 
+def test_tireli_deniz_is_ve_basin_is_kanunu_is_kanunu_sayilmaz(indeks):
+    # 'Basın-İş' / 'Deniz-İş' yaygın tireli yazım: 'deniz ' / 'basin ' dışlaması ve uzun ad eşleşmesi kaçıyordu
+    adlar = indeks.kanun_adlari
+    assert _tek("Basın-İş Kanunu m. 5").kanun_nolari == ("5953",)
+    assert _tek("Basın-İş Kanunu m. 5", kanun_adlari=adlar).kanun_nolari == ("5953",)
+    assert atif_ayristir("Deniz-İş Kanunu m. 5") == []                      # korpus adı yokken tanınmaz
+    assert _tek("Deniz-İş Kanunu m. 5", kanun_adlari=adlar).kanun_nolari == ("854",)
+
+
 # ---- dosya ofsetli indeks (servis yolu) --------------------------------------------------------
 def _korpus_yaz(yol, satirlar):
     with open(yol, "w", encoding="utf-8", newline="\n") as f:

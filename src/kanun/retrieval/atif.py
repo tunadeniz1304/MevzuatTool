@@ -227,6 +227,7 @@ _AD_DESENLERI = tuple(
 _AY_GUCLU = re.compile(r"\s?(?:m\.|md\.?|mad\.|madde)")
 _IS_KANUNU = re.compile(r"(?<![a-z0-9])(?<!deniz )(?<!basin )is\s?k(?:anun[a-z']*|\.|(?![a-z]))")
 _ANAYASA = re.compile(r"(?<![a-z0-9])anayasa(?!l)[a-z']*")
+_AD_TIRESI = re.compile(r"(?<=[a-z])-(?=[a-z])")
 
 _M_ONCE = re.compile(r"(?<![a-z0-9])(?:(?P<tip>gecici|gec\.|ek|mukerrer|muk\.)\s?)?"
                      r"(?P<kw>madde(?:si)?|md\.?|mad\.?|m\.?)\s?(?:no\s?[.:]?\s?)?" + _NO + _SLASH)
@@ -529,18 +530,19 @@ def _kanun_tokenleri(k, sorgu, kanun_adlari):
         if kisa == "ay" and sorgu.isupper() and not _AY_GUCLU.match(k, m.end()):
             continue                                            # 'HER AY 1 TARİHİNDE': büyük harf sinyal değil
         toklar.append(_KanunTok(m.start(), m.end(), (_KISA_NO[kisa],), "kisaltma", _KISA_AD[kisa]))
+    ka = _AD_TIRESI.sub(" ", k)         # adlarda tire = boşluk ('Basın-İş Kanunu'); uzunluk/konum aynı
     for desen, no in _AD_DESENLERI:
-        toklar += [_KanunTok(m.start(), m.end(), (no,), "ad", m.group()) for m in desen.finditer(k)]
-    toklar += [_KanunTok(m.start(), m.end(), ("4857",), "ad", "is kanunu") for m in _IS_KANUNU.finditer(k)]
+        toklar += [_KanunTok(m.start(), m.end(), (no,), "ad", m.group()) for m in desen.finditer(ka)]
+    toklar += [_KanunTok(m.start(), m.end(), ("4857",), "ad", "is kanunu") for m in _IS_KANUNU.finditer(ka)]
     for m in _ANAYASA.finditer(k):
         if not re.match(r"\s*mahkeme", k[m.end():]):
             toklar.append(_KanunTok(m.start(), m.end(), ("2709",), "ad", "anayasa"))
     for ad, nolar in (kanun_adlari or ()):
-        i = k.find(ad)
+        i = ka.find(ad)
         while i != -1:
-            if i == 0 or not k[i - 1].isalnum():
-                toklar.append(_KanunTok(i, _ek_sonu(k, i + len(ad)), tuple(nolar), "korpus_adi", ad, 1))
-            i = k.find(ad, i + 1)
+            if i == 0 or not ka[i - 1].isalnum():
+                toklar.append(_KanunTok(i, _ek_sonu(ka, i + len(ad)), tuple(nolar), "korpus_adi", ad, 1))
+            i = ka.find(ad, i + 1)
     for t in toklar:
         if t.kaynak != "numara":
             m = _SON_SOZCUK.search(k[max(0, t.bas - 24):t.bas])
