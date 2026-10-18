@@ -32,13 +32,20 @@ from dataclasses import dataclass, field
 import numpy as np
 
 _TOKEN = re.compile(r"[0-9a-zçğıöşü]+", re.UNICODE)
+_TR_KUCUK = str.maketrans({"İ": "i", "I": "ı"})
 YURURLUKTE = "yürürlükte"
 SURE_ANAHTARLARI = ("embed", "dense", "sparse", "bm25", "fuzyon", "rerank", "toplam")
 
 
+def tr_kucuk(metin):
+    """Türkçe küçük harf: 'İ' -> 'i', 'I' -> 'ı', sonra lower(). Python'un lower()'ı 'İ'yi 'i' + U+0307
+    (birleşik nokta) yapar; regex o noktada kelimeyi böler ("İş" -> "i", "ş")."""
+    return metin.translate(_TR_KUCUK).lower()
+
+
 def tokenize(metin):
-    """BM25 klasik: lower + kelime ayır (Türkçe harfler dahil)."""
-    return _TOKEN.findall(metin.lower())
+    """BM25 klasik: Türkçe küçük harf + kelime ayır (Türkçe harfler dahil)."""
+    return _TOKEN.findall(tr_kucuk(metin))
 
 
 def norm(skor):
