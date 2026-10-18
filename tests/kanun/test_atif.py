@@ -270,6 +270,15 @@ def test_ayni_atif_tekrari_tekillesir():
     assert len(atif_ayristir("TCK m. 141 (TCK m. 141)")) == 1
 
 
+def test_ardisik_bosluklar_atifi_bozmaz():
+    # PDF / Word'den kopyalanan metinde çift boşluk ya da NBSP+boşluk olağan; desenler tek '\s?' bekliyordu
+    assert _ozet(_tek("TCK m.  141")) == (("5237",), "141", None, None)
+    assert _ozet(_tek("5237  sayılı  Kanun  m. 141")) == (("5237",), "141", None, None)
+    assert _ozet(_tek("TCK m. 141  f.  2")) == (("5237",), "141", 2, None)
+    assert atif_ayristir("Deniz  İş  Kanunu  m. 5") == []          # İş Kanunu (4857) SANILMAZ
+    assert _tek("TCK  m.  141").ham == "TCK m. 141"
+
+
 def test_tarih_madde_sonrasinda_atifi_bozmaz():
     assert _ozet(_tek("TCK 141, 2/3/2024 tarihli")) == (("5237",), "141", None, None)
 

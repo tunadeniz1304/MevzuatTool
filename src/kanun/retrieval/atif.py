@@ -668,6 +668,7 @@ def ayristir(sorgu, kanun_adlari=None):
 
     kanun_adlari: ops. [(katlanmış resmî ad, (kanun_no, ...)), ...] — korpustaki adlarla tanıma
     (`AtifIndeks.kanun_adlari`). Verilmezse yalnız numara + kısaltma + ADLAR tablosu kullanılır."""
+    sorgu = " ".join(sorgu.split())     # çift boşluk / NBSP / satır sonu tek boşluk: desenler '\s?' bekler
     k = katla(sorgu)
     kanunlar = _kanun_tokenleri(k, sorgu, kanun_adlari)
     maddeler = _madde_tokenleri(k, sorgu, kanunlar)
