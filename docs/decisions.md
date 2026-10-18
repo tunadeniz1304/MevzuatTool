@@ -612,9 +612,14 @@ Güncel mimari görünümü: [`arch.md`](arch.md). Kapsam: [`mevzuat-mvp-kapsam.
     puanlıların kendi aralarındaki sırası): `tests/kanun/test_madde_kimligi.py` eski kodun dondurulmuş kopyasına
     karşı rastgele sahte Qdrant/BM25 senaryolarında (güncel ve eski index) doğrular. `/ara` şeması değişmez; eski
     index köprüsünden geçen adayın `madde_id`'si artık korpustaki id'dir.
+  - ⚠️ Eski index'e özgü ikinci fark: bir maddenin Qdrant payload'ındaki (kanun_no, madde_no) korpustaki kaydından
+    farklıysa (aynı madde_id), eski kod maddenin dense/sparse ve BM25 puanını iki adaya bölüyordu; yeni kod
+    birleştirir (sonuçta payload alanları Qdrant'tan gelir, eskisi gibi). Dokümanlarda böyle bir ayrışma kaydı yok;
+    gerçek veride varsa `esdeger_kontrol.py` `ayrisma` diye sayar.
   - ✅ Ölçüm script'leri: `metrik_rerank_3bacak.py` aday dosyası `adaylar` çiftlerini aynen yazar, aynı sırayla
-    `madde_idler` ekler (reranker metni bundan; `madde_idler`'siz eski dosyada çiftten). `esdeger_kontrol.py`
-    farkları puanlarıyla sınıflar: ayni / esit_puan / cakisma (beklenen) / fark (çıkış 1).
+    `madde_idler` ekler (reranker metni bundan; `madde_idler`'siz eski dosyada çiftten). Gold eşleştirmesi (`sira`,
+    ilk eşleşen çift) değişmez; çakışan iki madde listede artık iki yer tutar. `esdeger_kontrol.py` farkları
+    puanlarıyla sınıflar: ayni / esit_puan / cakisma / ayrisma (beklenen) / fark (çıkış 1).
   - ⚠️ **Gerçek veriyle doğrulanmadı** (geliştirme makinesinde `data/` ve Qdrant yok). Koşulacaklar:
     `esdeger_kontrol.py` (beklenen FARK 0) ve R@10 yeniden ölçümü (`metrik_rerank_3bacak.py --aday-cikar` →
     `--rapor` taban satırı, 0.6885'e karşı). Gold (kanun_no, madde_no) çiftidir; çakışan 14 kanun_no'da ayrışan

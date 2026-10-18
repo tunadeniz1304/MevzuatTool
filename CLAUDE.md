@@ -63,7 +63,7 @@ scripts/kanun/            build_corpus.py · eval_*.py · fetch_*.py
 scripts/kanun/retrieval/  ingest_qdrant · search_qdrant · metrik_* · onnx_export/quantize · esdeger_kontrol
 scripts/teblig/           yapi_olc.py (park; build script'i YOK) · scripts/yonetmelik/ (boş)
 
-tests/kanun/      25 dosya, 949 test (+3 `-m model`)
+tests/kanun/      25 dosya, 951 test (+3 `-m model`)
 tests/teblig/     2 dosya, 53 test (park edilmiş kodu kilitler)    · tests/yonetmelik/ (boş)
 
 data/kanun/       raw/ (cache) · korpus.jsonl · unique_atiflar.json
@@ -83,7 +83,7 @@ tebliği yeniden açmanın ilk adımları: `decisions.md` ADR-0020.
 - **Retrieval:** kütüphane `src/kanun/retrieval/search.py` (`HybridArama`), BGE-M3 + Qdrant, 3-bacak hybrid. **R@10 = 0.6885** (bugünkü index; eski 0.700 index/korpus yürürlük uyuşmazlığından düştü — ADR-0015). +reranker 20/512 (istek başına) R@10 0.711 ama R@1 0.481→0.465 → varsayılan kapalı. ONNX int8 sorgu embed'i R@10 0.688, embed gecikmesi ~3× düşük. (Eski "+reranker 0.706" 2-bacak RRF tabanındaydı.) Aday kimliği `madde_id` (ADR-0021; çakışan kanun_no'lar ayrı aday) — bu sayılar ondan önce ölçüldü, gerçek veriyle yeniden ölçülmedi.
 - **Atıf modu** (ADR-0019): `atif.py` (deterministik ayrıştırıcı) + `atif_getir.py` (korpus üzerinde bayt-ofsetli bellek içi indeks) — "TCK m. 141/2" → kesin madde/fıkra/bent; fıkra→bent toleransı, kanun_no çakışmasında `coklu_mevzuat`, eşleşme yoksa doğal dile düşüş. Gerçek korpusla doğrulanmadı.
 - **Servis:** FastAPI `POST /ara` (`mod`: `otomatik` varsayılan | `atif` | `dogal`), `GET /saglik` (+ `atif_indeks`) (`src/kanun/api/app.py`); ayarlar ortam değişkeninden (`config.py`).
-- **Testler:** 1002 test geçiyor (`pytest -q`: `tests/kanun/` 949 + `tests/teblig/` 53); 3 gerçek-model parity testi ayrıca `pytest -m model`. CI: her PR'da ve `main`'e push'ta GitHub Actions `test` check'i aynı paketi koşar (ubuntu, Python 3.11).
+- **Testler:** 1004 test geçiyor (`pytest -q`: `tests/kanun/` 951 + `tests/teblig/` 53); 3 gerçek-model parity testi ayrıca `pytest -m model`. CI: her PR'da ve `main`'e push'ta GitHub Actions `test` check'i aynı paketi koşar (ubuntu, Python 3.11).
 - **Docker:** `docker compose up -d qdrant api` + `--profile ingest run --rm ingest` (ön koşul: `colab/outputs/`, `models/onnx/`, korpus).
 - **Eksik:** atıf modunun gerçek korpusla doğrulanması (`unique_atiflar.json`, 8.290 atıf) · ADR-0021 sonrası `esdeger_kontrol.py` + R@10 yeniden ölçümü · korpusun yeni alanlarla yeniden build'i + Qdrant index'inin güncel korpusla yeniden embed/ingest'i.
 

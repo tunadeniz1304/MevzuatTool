@@ -23,7 +23,7 @@ Yapısal düzeltme fazları: [`yapisal-sadakat-master-plan.md`](yapisal-sadakat-
 | 6 | Sorgu + Retrieval | ✅ | `HybridArama` + atıf modu (ADR-0019) + reranker (ops.) + ONNX int8 + FastAPI servisi (ADR-0015/16/17) |
 | 7 | Dockerize | ✅ | `docker-compose.yml` + `Dockerfile` (ADR-0018); compose üzerinden `/ara` R@10 = in-process |
 
-**Test durumu:** 1002 test geçiyor (`pytest -q`): `tests/kanun/` 25 dosya 949 test (364'ü `test_madde_kimligi.py` — çoğu rastgele eşdeğerlik senaryosu parametresi) + `tests/teblig/` 2 dosya 53 test; 3 gerçek-model parity testi `pytest -m model` ile ayrı (ağ/model indirmez varsayılan koşu). CI: her PR'da ve `main`'e push'ta GitHub Actions `test` check'i aynı paketi koşar (ubuntu-latest, Python 3.11).
+**Test durumu:** 1004 test geçiyor (`pytest -q`): `tests/kanun/` 25 dosya 951 test (366'ü `test_madde_kimligi.py` — çoğu rastgele eşdeğerlik senaryosu parametresi) + `tests/teblig/` 2 dosya 53 test; 3 gerçek-model parity testi `pytest -m model` ile ayrı (ağ/model indirmez varsayılan koşu). CI: her PR'da ve `main`'e push'ta GitHub Actions `test` check'i aynı paketi koşar (ubuntu-latest, Python 3.11).
 
 ---
 
@@ -175,9 +175,9 @@ Oturum başı ~%59.7 → **%75.3**. Kırılım: kanun %98 · madde %86 · fıkra
    (önce `(kanun_no, madde_no)`). Çakışan kanun_no'larda (14 kanun_no, ör. 6551) ve aynı kanundaki iki 'Geçici
    1'de maddeler ayrı aday; `metin` ve kanun adı doğru maddeden; yalnız BM25'ten gelen adayın payload'ı korpustan
    (gerçek `kanun_ad`, `yurutluk`, ...). Çakışmayan kanunlarda sonuç birebir aynı — sahte Qdrant/BM25 eşdeğerlik
-   testleri eski kodun dondurulmuş kopyasına karşı kilitliyor (tek istisna: TAM eşit puanlıların kendi aralarındaki
-   sırası, eskiden hash'e bağlıydı). **Bekleyen (bu makinede `data/` ve Qdrant yok):** `esdeger_kontrol.py`
-   (beklenen FARK 0) ve R@10 yeniden ölçümü — `metrik_rerank_3bacak.py --aday-cikar` → `--rapor` taban satırı,
+   testleri eski kodun dondurulmuş kopyasına karşı kilitliyor. İstisnalar: TAM eşit puanlıların kendi aralarındaki
+   sırası (eskiden hash'e bağlıydı) ve eski index'te payload'ı korpustan ayrışan madde (eskiden iki aday, artık tek).
+   **Bekleyen (bu makinede `data/` ve Qdrant yok):** `esdeger_kontrol.py` (beklenen FARK 0) ve R@10 yeniden ölçümü — `metrik_rerank_3bacak.py --aday-cikar` → `--rapor` taban satırı,
    0.6885'e karşı (eski `rerank_skor_*` dosyaları eski aday sırasına hizalı: silinip yeniden puanlanmalı).
    Servis belleği (`payloadlar` haritası, sentetik tahmin +~16 MB) gerçek korpusta ölçülmedi.
 8. **Atıf modu sınırları** (ADR-0019): alt-bent okunmaz ('359/a-1'in '1'i); aralık açılmaz ('TCK m. 141-145'
