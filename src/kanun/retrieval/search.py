@@ -144,6 +144,28 @@ class BM25Index:
         kn, mn, mid = self.maddeler[i]
         return self.payloadlar.get(mid) or {"madde_id": mid, "kanun_no": kn, "madde_no": mn}
 
+    def kimlik(self, madde_id, madde_no=None):
+        """Qdrant payload'ındaki madde_id → korpus madde_id'si (aday anahtarı).
+
+        Index bu korpustan üretildiyse id korpusta vardır, aynen döner. Index korpusun gerisindeyse (eski
+        Colab embed'i, status.md açık konu 7) yeniden üretilen korpusta id değişmiş olabilir — ör. bleed
+        temizliği sahte bir '5'i silince 'MID-5-1' → 'MID-5'. Eski (kanun_no, madde_no) anahtarı bunları
+        birleştiriyordu; burada aynı kanunda (mevzuat_id = id öneki) o madde_no'lu TEK korpus maddesi varsa
+        ona bağlanır. Birden çoksa (aynı kanunda iki 'Geçici 1') ya da hiç yoksa id olduğu gibi kalır:
+        belirsizlik sessizce çözülmez (aday ayrı durur, korpus metni yoktur)."""
+        if madde_id in self.payloadlar or madde_no is None:
+            return madde_id
+        eslesen = self._kanun_maddeleri.get((madde_id.split("-")[0], str(madde_no)), ())
+        return eslesen[0] if len(eslesen) == 1 else madde_id
+
+    @functools.cached_property
+    def _kanun_maddeleri(self):
+        """(mevzuat_id, madde_no) → [madde_id]; yalnız korpusta olmayan bir index id'si görülünce kurulur."""
+        ters = {}
+        for mid, pl in self.payloadlar.items():
+            ters.setdefault((mid.split("-")[0], str(pl.get("madde_no"))), []).append(mid)
+        return ters
+
 
 def bm25_kur(korpus_yol="data/kanun/korpus.jsonl"):
     """Korpus 'text' üzerine BM25 index (yalnız yürürlükte maddeler), ~3-5 sn."""
@@ -245,9 +267,10 @@ class HybridArama:
         """Reranker ÖNCESİ tüm WSUM adayları (azalan puan) + payload haritası + süreler.
         → (sirali [(madde_id, puan)], payload {madde_id: payload}, sure_ms).
 
-        Aday anahtarı madde_id: Qdrant noktasında payload `madde_id`'si, BM25'te korpus id'si. Ölçüm
-        script'leri adayları bir kez çıkarıp reranker'ı ayrı aşamada koşmak için kullanır; gold eşleştirmesi
-        için (kanun_no, madde_no) payload'dan okunur."""
+        Aday anahtarı madde_id: BM25'te korpus id'si, Qdrant noktasında payload `madde_id`'si — korpusta yoksa
+        (index korpusun gerisinde) `BM25Index.kimlik` ile korpus id'sine bağlanır; payload Qdrant'ın döndürdüğü
+        haliyle kalır. Ölçüm script'leri adayları bir kez çıkarıp reranker'ı ayrı aşamada koşmak için
+        kullanır; gold eşleştirmesi için (kanun_no, madde_no) payload'dan okunur."""
         sure = {}
         t0 = time.perf_counter()
         dense, sparse = self.embedder(sorgu)
@@ -266,7 +289,7 @@ class HybridArama:
         sure["sparse"] = _ms(t)
 
         def anahtar(p):
-            return str(p.payload["madde_id"])
+            return self.bm25.kimlik(str(p.payload["madde_id"]), p.payload.get("madde_no"))
 
         d_skor = {anahtar(p): p.score for p in dres.points}
         s_skor = {anahtar(p): p.score for p in sres.points}

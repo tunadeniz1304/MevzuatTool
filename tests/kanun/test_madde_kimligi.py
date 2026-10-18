@@ -220,18 +220,32 @@ def _istemci(arama):
 # =================================================================================================
 # 1. Eşdeğerlik — çakışma yokken eski davranışla birebir
 # =================================================================================================
-def _senaryo(seed):
-    """Rastgele, ÇAKIŞMASIZ korpus (her kanun_no tek kanun, kanunda her madde_no tek) + bacak skorları."""
+def _senaryo(seed, eski_index=False):
+    """Rastgele, ÇAKIŞMASIZ korpus (her kanun_no tek kanun, kanunda her madde_no tek) + bacak skorları.
+
+    eski_index: Qdrant index'i korpusun gerisinde (status.md açık konu 7) — noktaların bir kısmı eski id
+    taşır ('MID-5' yerine 'MID-5-1'), bir kısmı korpusta artık yoktur (silinmiş '99', aynı madde no'lu sahte
+    kopya). Eski (kanun_no, madde_no) anahtarı bunları birleştiriyordu; yeni anahtar da aynı sonucu vermeli."""
     rnd = random.Random(seed)
-    korpus = []
+    kanunlar = []
     for i in range(rnd.randint(2, 6)):
         mid, kn, ad = str(1000 + i), str(5000 + i), f"ÖRNEK {i} KANUNU"
-        for no in [str(j) for j in range(1, rnd.randint(3, 9))] + ["Geçici 1", "Ek 2", "12/A"]:
-            korpus.append(_chunk(mid, kn, ad, no, MULGA if rnd.random() < 0.15 else YUR,
-                                 text=f"{ad} m.{no} metni {rnd.random():.12f}"))
-    korpus[0]["metadata"]["yurutluk"] = YUR                     # BM25 index'i boş kalmasın
-    dense = [(_qdrant_payload(r), rnd.random()) for r in rnd.sample(korpus, rnd.randint(0, len(korpus)))]
-    sparse = [(_qdrant_payload(r), rnd.uniform(0, 30)) for r in rnd.sample(korpus, rnd.randint(0, len(korpus)))]
+        kanunlar.append([_chunk(mid, kn, ad, no, MULGA if rnd.random() < 0.15 else YUR,
+                                text=f"{ad} m.{no} metni {rnd.random():.12f}")
+                         for no in [str(j) for j in range(1, rnd.randint(3, 9))] + ["Geçici 1", "Ek 2", "12/A"]])
+    kanunlar[0][0]["metadata"]["yurutluk"] = YUR               # BM25 index'i boş kalmasın
+    korpus = [r for kanun in kanunlar for r in kanun]
+    noktalar = [_qdrant_payload(r) for r in korpus]
+    if eski_index:
+        # nokta başına (iki bacakta aynı payload): id'si embed anındaki halinde kalanlar ...
+        noktalar = [dict(pl, madde_id=pl["madde_id"] + "-1") if rnd.random() < 0.3 else pl for pl in noktalar]
+        for kanun in kanunlar:                                  # ... ve korpusta artık olmayanlar
+            m = kanun[0]["metadata"]
+            noktalar.append(_qdrant_payload(_chunk(m["mevzuat_id"], m["kanun_no"], m["kanun_ad"], "99")))
+            kopya = rnd.choice(kanun)                           # aynı madde no'lu sahte kopya (bleed)
+            noktalar.append(_qdrant_payload(kopya, madde_id=kopya["id"] + "-9"))
+    dense = [(pl, rnd.random()) for pl in rnd.sample(noktalar, rnd.randint(0, len(noktalar)))]
+    sparse = [(pl, rnd.uniform(0, 30)) for pl in rnd.sample(noktalar, rnd.randint(0, len(noktalar)))]
     bm25 = {r["id"]: rnd.choice([0.0, -1.0, rnd.uniform(0, 20), rnd.uniform(0, 20)]) for r in korpus}
     rerank = {r["text"]: rnd.uniform(-5, 5) for r in korpus}
     kw = {"aday_k": rnd.randint(1, 15),
@@ -239,8 +253,24 @@ def _senaryo(seed):
     return korpus, dense, sparse, bm25, rerank, kw
 
 
-def _kayit(s):
-    return (s.madde_id, s.kanun_no, s.kanun_ad, s.madde_no, s.skor, s.rerank_skor)
+def _beklenen_kimlik(korpus):
+    """Beklenen aday kimliği: korpustaki id aynen; korpusta olmayan (eski index) id, aynı kanunda
+    (mevzuat_id) o madde_no'lu TEK madde varsa onun id'si, yoksa kendisi. Eski çıktının madde_id'si
+    (Qdrant payload'ından) bununla eşlenip karşılaştırılır."""
+    idler = {r["id"] for r in korpus}
+    kanun_madde = {}
+    for r in korpus:
+        kanun_madde.setdefault((r["metadata"]["mevzuat_id"], r["metadata"]["madde_no"]), []).append(r["id"])
+
+    def kimlik(madde_id, madde_no):
+        tek = kanun_madde.get((madde_id.split("-")[0], madde_no), [])
+        return madde_id if madde_id in idler or len(tek) != 1 else tek[0]
+    return kimlik
+
+
+def _kayit(s, kimlik=None):
+    mid = kimlik(s.madde_id, s.madde_no) if kimlik else s.madde_id
+    return (mid, s.kanun_no, s.kanun_ad, s.madde_no, s.skor, s.rerank_skor)
 
 
 def _gruplar(kayitlar, puan):
@@ -264,9 +294,11 @@ def _cift(payload, k):
     return (str(payload[k]["kanun_no"]), str(payload[k]["madde_no"]))
 
 
+@pytest.mark.parametrize("eski_index", [False, True], ids=["index-guncel", "index-eski"])
 @pytest.mark.parametrize("seed", range(150))
-def test_cakisma_yokken_eski_davranisla_birebir(tmp_path, seed):
-    korpus, dense, sparse, bm25, rerank, kw = _senaryo(seed)
+def test_cakisma_yokken_eski_davranisla_birebir(tmp_path, seed, eski_index):
+    korpus, dense, sparse, bm25, rerank, kw = _senaryo(seed, eski_index)
+    kimlik = _beklenen_kimlik(korpus)
     yeni = _yeni(tmp_path, korpus, dense, sparse, bm25, **kw)
     eski = _eski(korpus, dense, sparse, bm25, **kw)
     assert yeni.bm25.maddeler == eski.maddeler                 # BM25 doküman hizası aynı
@@ -277,11 +309,11 @@ def test_cakisma_yokken_eski_davranisla_birebir(tmp_path, seed):
         e_sirali, e_payload = eski.adaylar("soru", yururlukte_only)
         assert _gruplar([(_cift(y_payload, k), p) for k, p in y_sirali], lambda x: x[1]) == \
             _gruplar(e_sirali, lambda x: x[1])
-        for k, _ in y_sirali:                                   # madde kimliği ve Qdrant payload'ı aynı
-            e_pl = e_payload[_cift(y_payload, k)]
-            assert y_payload[k]["madde_id"] == e_pl["madde_id"]
+        for k, _ in y_sirali:                                   # payload aynı; anahtar = korpus kimliği
+            pl, e_pl = y_payload[k], e_payload[_cift(y_payload, k)]
+            assert pl["madde_id"] == e_pl["madde_id"] and k == kimlik(pl["madde_id"], pl["madde_no"])
             if e_pl.get("kanun_ad"):                            # eski sentetik BM25-only payload'ı hariç
-                assert y_payload[k] == e_pl
+                assert pl == e_pl
 
         sinirlar = _sinirlar(y_sirali) or [1]
         rnd = random.Random(seed)
@@ -293,14 +325,17 @@ def test_cakisma_yokken_eski_davranisla_birebir(tmp_path, seed):
             y = HybridArama(_embedder, yeni.client, yeni.bm25, reranker=rk, rerank_aday=aday, **kw)
             e = _eski(korpus, dense, sparse, bm25, reranker=SahteReranker(rerank), rerank_aday=aday, **kw)
             y_son = [_kayit(s) for s in y.ara("soru", top_k=top_k, yururlukte_only=yururlukte_only, rerank=rr)]
-            e_son = [_kayit(s) for s in e.ara("soru", top_k=top_k, yururlukte_only=yururlukte_only, rerank=rr)]
+            e_son = [_kayit(s, kimlik)
+                     for s in e.ara("soru", top_k=top_k, yururlukte_only=yururlukte_only, rerank=rr)]
             assert _gruplar(y_son, lambda x: (x[5], x[4])) == _gruplar(e_son, lambda x: (x[5], x[4]))
 
 
+@pytest.mark.parametrize("eski_index", [False, True], ids=["index-guncel", "index-eski"])
 @pytest.mark.parametrize("seed", range(12))
-def test_cakisma_yokken_ara_yaniti_eski_semayla_birebir(tmp_path, seed):
+def test_cakisma_yokken_ara_yaniti_eski_semayla_birebir(tmp_path, seed, eski_index):
     """/ara (mod=dogal, metin=true): alanlar ve metin eski yanıtla aynı (çakışma yok)."""
-    korpus, dense, sparse, bm25, rerank, kw = _senaryo(seed)
+    korpus, dense, sparse, bm25, rerank, kw = _senaryo(seed, eski_index)
+    kimlik = _beklenen_kimlik(korpus)
     yeni = _yeni(tmp_path, korpus, dense, sparse, bm25, **kw)
     eski = _eski(korpus, dense, sparse, bm25, **kw)
     sinirlar = [n for n in _sinirlar(yeni.adaylar("soru")[0]) if n <= 50] or [1]
@@ -310,7 +345,8 @@ def test_cakisma_yokken_ara_yaniti_eski_semayla_birebir(tmp_path, seed):
     assert [s["sira"] for s in j["sonuclar"]] == list(range(1, len(j["sonuclar"]) + 1))
     alanlar = ("madde_id", "kanun_no", "kanun_ad", "madde_no", "skor", "rerank_skor", "metin")
     y = [tuple(s[a] for a in alanlar) for s in j["sonuclar"]]
-    e = [tuple(getattr(s, a) for a in alanlar) for s in eski.ara("soru", top_k=top_k)]
+    e = [(kimlik(s.madde_id, s.madde_no),) + tuple(getattr(s, a) for a in alanlar[1:])
+         for s in eski.ara("soru", top_k=top_k)]
     assert _gruplar(y, lambda x: x[4]) == _gruplar(e, lambda x: x[4])
 
 
@@ -410,9 +446,10 @@ def _aday_cikar(tmp_path, monkeypatch, arama):
         return json.loads(f.readline())
 
 
+@pytest.mark.parametrize("eski_index", [False, True], ids=["index-guncel", "index-eski"])
 @pytest.mark.parametrize("seed", range(10))
-def test_rerank_aday_dosyasi_cakisma_yokken_eski_ciktiyla_ayni(tmp_path, monkeypatch, seed):
-    korpus, dense, sparse, bm25, _, kw = _senaryo(seed)
+def test_rerank_aday_dosyasi_cakisma_yokken_eski_ciktiyla_ayni(tmp_path, monkeypatch, seed, eski_index):
+    korpus, dense, sparse, bm25, _, kw = _senaryo(seed, eski_index)
     yeni = _yeni(tmp_path, korpus, dense, sparse, bm25, **kw)
     satir = _aday_cikar(tmp_path, monkeypatch, yeni)
     y_sirali, y_payload, _ = yeni.adaylar("soru")
@@ -458,3 +495,35 @@ def test_rerank_skorlama_metni_madde_idden_eski_dosyada_ciftten(tmp_path, monkey
     assert [t for _, t in rr.ciftler] == metinler     # çakışan çiftte her aday kendi metni; eski satır çiftten
     with open(m.skor_dosya("torch", "torch", 512), encoding="utf-8") as f:
         assert [json.loads(l) for l in f] == [[len(metinler[0]), len(metinler[1])], [len(metinler[2])]]
+
+
+# =================================================================================================
+# 4. Eski index — Qdrant'taki madde_id korpusta yoksa korpus kimliğine bağlanır (yalnız tek aday varsa)
+# =================================================================================================
+def test_bm25index_kimlik(tmp_path):
+    idx = bm25_kur(_korpus_yaz(tmp_path, CAKISMA))
+    assert idx.kimlik("400-5", "5") == "400-5"                       # korpusta var → aynen
+    assert idx.kimlik("400-5-1", "5") == "400-5"                     # eski id → kanunda tek '5'
+    assert idx.kimlik("401-5-2", "5") == "401-5"                     # tertip çakışması: kendi kanunu
+    assert idx.kimlik("100-Gecici1", "Geçici 1") == "100-Gecici1"    # kanunda iki 'Geçici 1' → belirsiz
+    assert idx.kimlik("400-99", "99") == "400-99"                    # korpusta o madde yok
+    assert idx.kimlik("400-5-1", None) == "400-5-1"                  # madde_no bilinmiyor → dokunulmaz
+
+
+def test_eski_index_idsi_korpus_maddesiyle_birlesir_ve_metni_doner(tmp_path):
+    eski_pl = _qdrant_payload(R["400-5"], madde_id="400-5-1")       # embed anındaki id
+    arama = _yeni(tmp_path, CAKISMA, dense=[(eski_pl, 0.9), _pl("100-141", 0.1)],
+                  bm25={"400-5": 2.0, "401-5": 1.0})
+    sonuc = {s.madde_id: (s.kanun_ad, s.skor) for s in arama.ara("soru")}
+    assert sonuc == {"400-5": (MAHALLI, pytest.approx(0.33 + 0.34)), "401-5": (ENERJI, 0.0),
+                     "100-141": (TCK, 0.0)}                          # '400-5-1' ayrı aday değil
+    with _istemci(arama) as c:
+        j = c.post("/ara", json={"sorgu": "soru", "mod": "dogal", "metin": True}).json()
+    assert {s["madde_id"]: s["metin"] for s in j["sonuclar"]}["400-5"] == R["400-5"]["text"]
+
+
+def test_eski_index_idsi_belirsizse_ayri_aday_kalir(tmp_path):
+    eski_pl = _qdrant_payload(R["100-Gecici1-1"], madde_id="100-Gecici1")   # iki 'Geçici 1'den hangisi?
+    arama = _yeni(tmp_path, CAKISMA, dense=[(eski_pl, 0.9), _pl("100-141", 0.1)], bm25={"100-Gecici1-1": 1.0})
+    assert {s.madde_id for s in arama.ara("soru")} == {"100-Gecici1", "100-Gecici1-1", "100-141"}
+    assert arama.metin("100-Gecici1") == ""                         # korpusta yok → metin yok
