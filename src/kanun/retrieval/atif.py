@@ -8,16 +8,18 @@ YAPILMAZ — `atif_getir.py` korpus indeksinde çözer.
 
 Tanınan biçimler — büyük/küçük harf, İ/I/ı/i ve Türkçe karakter duyarsız (`katla`):
   Kanun : '5237 sayılı Kanun', '5237 sayılı Türk Ceza Kanunu', '5237 sayılı TCK', '5237 s. K.',
-          '5237 numaralı Kanun', 'Kanun No: 5237', kısaltma (TCK, İİK, KVKK ... — `KISALTMALAR`),
+          '5237 numaralı Kanun', 'Kanun No: 5237', kısaltma (TCK, İİK, KVKK ... — `KISALTMALAR`;
+          noktalı 'İ.İ.K.', 'T.M.K.', 'TMK.' de),
           yaygın ad ('Türk Ceza Kanunu', 'Medeni Kanun', 'İş K.' — `ADLAR`), 'Anayasa' / 'AY';
           verilirse korpustaki 916 resmî kanun adı (`kanun_adlari`, ör. 'İmar Kanunu').
   Madde : 'm. 141', 'md. 141', 'mad. 141', 'madde 141', '141. madde', '141 inci maddesi',
-          '48/A maddesi', 'Geçici 1' / 'geçici madde 1' / 'geçici 1 inci madde', 'Ek 3' / 'ek madde 3',
+          '48/A maddesi', '220/6. maddesi', '4/1-a maddesi', 'Geçici 1' / 'geçici madde 1' /
+          'geçici 1 inci madde', 'Ek 3' / 'ek madde 3',
           'Mükerrer 298', kanundan hemen sonra yalın numara ('TCK 141', 'HMK 119/1-ğ').
   Fıkra : 'f. 2', 'fıkra 2', '2. fıkra', '2 nci fıkrası', 'ikinci fıkrası', 'son fıkrası',
           '(2) numaralı fıkrası', madde/fıkra '141/2', Roma rakamı '166/II'.
   Bent  : 'b. a', 'bent a', '(a) bendi', 'a bendi', 'a) bendi', '(1) numaralı bendi', '3. bendi',
-          satır içi '141/2-a', '119/1(ğ)'.
+          satır içi '141/2-a', '119/1(ğ)', Roma fıkradan sonra '25/I-b', '25/II-e'.
 
 ATIF = KANUN + MADDE (ikisi birden şart). Yalnız kanun ('5237 sayılı Kanun') ya da yalnız madde
 ('madde 5') atıf DEĞİLDİR → doğal dil modu. Yanlış-pozitif kapıları (doğal dil sorgusu atıf sanılmasın):
@@ -26,12 +28,23 @@ ATIF = KANUN + MADDE (ikisi birden şart). Yalnız kanun ('5237 sayılı Kanun')
     ('141 maddesi') şart.
   - Numaradan hemen sonra başka bir belge numarası ('5 sayılı', '2/3/2024', '1.5', '%') gelirse madde
     değildir; yalın numarada ('TCK 2') ve önekli numarada ('ek 3') süre/sayım sözcüğü de ('2 yıl', '3 ay',
-    '4 çocuk'), 'madde 3' biçiminde fiziksel miktar da ('3 ton') madde numarasını düşürür. Açık 'm.' /
-    'md.' kısaltması güçlü sinyaldir: 'İş K. m. 53 yıllık izin' atıftır (`_MADDE_DEGIL_SONRA`).
+    '4 çocuk', '18 yaşındaki') ve miktar/tarih devamı da ('1 Haziran 2005', '2-5 yıl', "30'dan fazla",
+    '1/3 oranında', '2. kitap', '18 m2'), bağlamlı özkesir de ('1/6 indirim', `_KESIR_BAGLAMI`), 'madde 3'
+    biçiminde fiziksel miktar da ('3 ton', '10 gramdan') madde numarasını düşürür. Açık 'm.' / 'md.'
+    kısaltması güçlü sinyaldir: 'İş K. m. 53 yıllık izin' atıftır (`_MADDE_DEGIL_SONRA`).
   - 'NNNN sayılı' ardından KHK / Cumhurbaşkanlığı Kararnamesi / karar / yönetmelik / tebliğ / liste /
-    cetvel / Resmî Gazete gelirse kanun değildir ('375 sayılı KHK', '2023/15 sayılı karar').
+    cetvel / Resmî Gazete gelirse kanun değildir ('375 sayılı KHK', '2023/15 sayılı karar'); adında
+    'Kanun' sözcüğü hiç geçmeyen uzun başlıkta kararname/tebliğ sonradan gelse de ('1 sayılı
+    Cumhurbaşkanlığı Teşkilatı Hakkında Cumhurbaşkanlığı Kararnamesi').
+  - Madde sözünden hemen önce kanun dışı belge geliyorsa ('Yönetmeliğin 5. maddesi', "KHK'nın ek 9.
+    maddesi", 'Sözleşmenin 6. maddesi') madde o belgenindir, sorgudaki bir kanuna bağlanmaz.
   - 'Anayasa Mahkemesi', 'anayasal' kanun sayılmaz; 'AY' yalnız büyük harfle yazılmışsa Anayasa'dır
-    ('ay' = ay/süre). 'İş K.' 'iş kazası'nda tetiklenmez; 'Deniz/Basın İş Kanunu' İş Kanunu sayılmaz.
+    ('ay' = ay/süre); tümü büyük harfli sorguda ('HER AY 1 TARİHİNDE') yalnız ardından açık madde sözü
+    gelirse ('AY M. 10'). 'İş K.' 'iş kazası'nda tetiklenmez; 'Deniz İş Kanunu' (854) ve 'Basın İş Kanunu'
+    (5953) İş Kanunu (4857) sayılmaz.
+  - 'eski/mülga/önceki' ya da yabancı ülke ('İsviçre', 'Alman' ...) nitelemeli ad/kısaltma bugünkü kanun
+    değildir ('eski İş Kanunu' 1475'tir, 4857 değil; 'İsviçre Borçlar Kanunu' 6098 değil) → atıf çıkmaz,
+    maddesi başka kanuna da bağlanmaz (`_NITELEME`). Numarayla yazım geçerlidir ('765 sayılı eski TCK').
 
 Belirsiz slash eki: '359/a' hem harfli madde (359/A) hem 359. maddenin (a) bendi; '166/I' hem harfli
 madde hem Roma rakamıyla 1. fıkra olabilir. Ayrıştırıcı birincil yorumu (harfli madde) + alternatifleri
@@ -42,7 +55,7 @@ Bilinen sınırlar: alt-bent ('359/a-1'nin '1'i) okunmaz; aralık açılmaz ('TC
 önce geliyorsa ('TCK'nın 141 ve 142. maddeleri', 'TCK m. 141 ve m. 142') ikisi de, sonra geliyorsa
 ('141 ve 142. maddeler TCK') yalnız son numara yakalanır; kanunun
 maddeden SONRA geldiği yazım ('m. 141 TCK') tek atıfta çalışır ama karışık sırada en yakın ÖNCEKİ
-kanun seçilir.
+kanun seçilir; değiştiren kanun ('TCK'nın 6545 sayılı Kanunla değişik 141. maddesi') sahip sayılmaz.
 """
 import re
 from dataclasses import dataclass, field
@@ -179,6 +192,9 @@ ADLAR = (
     (("devlet", "memurlari"), "657"),
     (("kisisel", "verilerin", "korunmasi"), "6698"),
     (("idari", "yargilama", "usulu"), "2577"),
+    # resmî adı 'Basın Mesleğinde Çalışanlarla Çalıştıranlar ... Hakkında Kanun'; korpus adı 'İŞ KANUNU'
+    # (4857) bu yaygın adın içinde geçer → burada olmasa korpus adı yolu 4857'ye eşlerdi
+    (("basin", "is"), "5953"),
 )
 
 _ROMA = {"i": 1, "ii": 2, "iii": 3, "iv": 4, "v": 5, "vi": 6, "vii": 7, "viii": 8, "ix": 9, "x": 10,
@@ -199,21 +215,25 @@ _SAYILI = re.compile(r"(?<![0-9/.,])(?P<no>[0-9]{1,4})(?![0-9])\s?"
                      r"(?P<tur>sayili|sy\.|s\s?\.|numarali|no\.?\s?'?\s?l[iu]|nolu)")
 _KANUN_NO = re.compile(r"(?<![a-z0-9])(?:kanun|k\.)\s?(?:no|numarasi|numara|nr)\.?\s?:?\s?"
                        r"(?P<no>[0-9]{1,4})(?![0-9/])")
+# Noktalı yazım da tanınır: 'İ.İ.K.', 'T.M.K.', kısaltmadan sonra nokta 'TMK. 166' ('ay' hariç: 'a.y.' belirsiz)
 _KISA = re.compile(r"(?<![a-z0-9])(?P<kisa>"
-                   + "|".join(sorted(map(re.escape, _KISA_NO), key=len, reverse=True))
+                   + "|".join(k if k == "ay" else r"\.?".join(k) + r"\.?"
+                              for k in sorted(_KISA_NO, key=len, reverse=True))
                    + r")(?:'[a-z]{1,6}|nin|nun|in|un|da|de|ta|te|ya|ye|den|dan|ten|tan)?(?![a-z0-9])")
 _AD_DESENLERI = tuple(
     (re.compile(r"(?<![a-z0-9])" + r"\s+".join(map(re.escape, sozcukler)) + r"\s+k(?:anun[a-z']*|\.)"),
      no) for sozcukler, no in ADLAR)
+# Tümü büyük harfli sorguda 'AY' ancak ardından açık madde sözü gelirse Anayasa'dır ('AY M. 10')
+_AY_GUCLU = re.compile(r"\s?(?:m\.|md\.?|mad\.|madde)")
 _IS_KANUNU = re.compile(r"(?<![a-z0-9])(?<!deniz )(?<!basin )is\s?k(?:anun[a-z']*|\.|(?![a-z]))")
 _ANAYASA = re.compile(r"(?<![a-z0-9])anayasa(?!l)[a-z']*")
+_AD_TIRESI = re.compile(r"(?<=[a-z])-(?=[a-z])")
 
 _M_ONCE = re.compile(r"(?<![a-z0-9])(?:(?P<tip>gecici|gec\.|ek|mukerrer|muk\.)\s?)?"
                      r"(?P<kw>madde(?:si)?|md\.?|mad\.?|m\.?)\s?(?:no\s?[.:]?\s?)?" + _NO + _SLASH)
 _M_ONEK = re.compile(r"(?<![a-z0-9])(?P<tip>gecici|ek|mukerrer)\s" + _NO + _SLASH
                      + r"(?P<ord>" + _ORD + r")?(?P<kw>\s?madde[a-z]*)?")
-_M_SONRA = re.compile(r"(?<![0-9/.,a-z])" + _NO + r"(?:\s?/\s?(?P<harf>[a-z])(?![a-z]))?"
-                      r"(?P<ord>" + _ORD + r")?\s?madde(?P<ek>[a-z]*)")
+_M_SONRA = re.compile(r"(?<![0-9/.,a-z])" + _NO + _SLASH + r"(?P<ord>" + _ORD + r")?\s?madde(?P<mek>[a-z]*)")
 _M_YALIN = re.compile(r"(?:'[a-z]{1,6})?[\s,:]{1,3}" + _NO + _SLASH)
 
 _F_SOZ = re.compile(r"(?<![a-z])(?P<on>on\s?)?(?P<s>birinci|ikinci|ucuncu|dorduncu|besinci|altinci|"
@@ -236,22 +256,42 @@ _B_ONCE = re.compile(r"(?<![a-z])(?:bent|bendi|bnt\.?|b\.)\s?\(?\s?(?P<h>[a-z]|[
 #         gerçek atıftır (53. madde tam da yıllık izin).
 #   madde ('madde 3' — 'madde' aynı zamanda 'cisim' demek): + fiziksel miktar ('madde 3 ton', '5 kg').
 #   zayif (kanundan sonra yalın numara 'TCK 2', önekli 'ek 3'): + süre/sayım sözcükleri ('TCK'da 2 yıl',
-#         'ek 3 ay', 'TMK 4 çocuk', 'TCK 18 yaşından').
+#         'ek 3 ay', 'TMK 4 çocuk', 'TCK 18 yaşından') + miktar/tarih ifadesinin devamı (`_MIKTAR_DEVAMI`):
+#         tarih ('TCK 1 Haziran 2005'), birimli aralık ('TCK 2-5 yıl', 'İş K. 30 ila 50 işçi'), kıyas
+#         ("İş K. 30'dan fazla", '100 ve daha fazla'), oran ('TCK 1/3 oranında'). Birimsiz aralık madde
+#         aralığıdır ('TCK 141 ila 145' → 141).
 # Sözcükler AÇIK çekim listesiyle yazıldı: önek eşleşmesi 'güncel' / 'kişisel' / 'evlilik' gibi sözcükleri
 # birim sanıp gerçek atfı düşürürdü ('TMK 24 kişilik hakkı' atıftır, 'kişilik' listede yok).
 _BELGE_DEVAMI = r"%|sayili|sy\.|s\s?\.\s?k|numarali|nolu|no\s?'?\s?lu"
-_FIZIKSEL = r"tl|lira(?:si|ya|lik)?|kurus|adet|metre|km|kg|ton|gram|litre|yuzde|bin|milyon|milyar"
+_FIZIKSEL = (r"tl|lira(?:si|ya|lik)?|kurus|adet|metre|km|kg|ton|(?:kilo|mili)?gram(?:dan|a|i|lik)?|litre"
+             r"|m2|m3|m²|m³|metrekare|metrekup|dekar|donum|hektar|yuzde|bin|milyon|milyar")
 _SURE_SAYIM = (r"yil(?:a|i|in|ina|inda|da|dan|lik|lar[a-z]*)?|sene(?:si|ye|de|den|lik)?"
                r"|gun(?:u|un|e|de|den|luk|ler[a-z]*)?|hafta(?:si|ya|da|dan|lik)?|saat(?:i|e|te|ten|lik)?"
                r"|dakika(?:si|ya|da|dan|lik)?|saniye(?:si|ye|de|den|lik)?|ay(?:a|da|dan|i|in|lik)?"
-               r"|kez|defa|kere|kat|kati|tane|kisi(?:ye|nin|den|de|ler[a-z]*)?|cocuk(?:lu|u|un|a|lar[a-z]*)?"
-               r"|kardes(?:i|ler[a-z]*)?|isci(?:ye|nin|den|ler[a-z]*)?|taksit(?:le|li|te)?|donem(?:de|lik)?"
-               r"|yas(?:i|ini|inda|indan|ina)?|puan|derece|sayfa")
+               r"|is\s?gun(?:u|un|e|de|den|luk|ler[a-z]*)?"
+               r"|kez|defa|kere|kat(?:i|ina|ini|inda|indan|lik)?|tane|kisi(?:ye|yle|nin|den|de|ler[a-z]*)?"
+               r"|cocuk(?:lu|u|un|a|lar[a-z]*)?|kardes(?:i|ler[a-z]*)?|isci(?:ye|nin|den|ler[a-z]*)?"
+               r"|taksit(?:le|li|te)?|donem(?:de|lik)?"
+               r"|yas(?:i|ini|inin|inda|indaki[a-z]*|indan|ina)?|puan|derece|sayfa")
+_AY_ADLARI = r"ocak|subat|mart|nisan|mayis|haziran|temmuz|agustos|eylul|ekim|kasim|aralik"
+_MIKTAR_DEVAMI = (r"(?:\s?(?:" + _AY_ADLARI + r")(?![a-z])"
+                  r"|(?:\s?-\s?|\s(?:ila|ile|veya|ya da)\s)[0-9]+(?:[.,][0-9]+)?\s?(?:" + _FIZIKSEL + "|"
+                  + _SURE_SAYIM + r")(?![a-z])"
+                  r"|'?\s?(?:dan|den|tan|ten)\s(?:daha\s)?(?:fazla|az|cok|ziyade|buyuk|kucuk|yuksek|dusuk"
+                  r"|uzun|kisa)(?![a-z])"
+                  r"|\s(?:ve|veya|ya da)\s(?:daha\s)?(?:fazla|az|uzeri|ustu|alti)(?![a-z])"
+                  r"|\s?(?:oran|nispet)[a-z]*"
+                  r"|" + _ORD + r"\s?(?:kitap|kitab|kisim|kism|bolum|ayirim|fasil|derece|sinif|kusak|daire"
+                  r"|donem)[a-z]*)")
+# Özkesir (pay < payda) + kesir bağlamı: 'TCK 1/6 indirim', 'KDVK 9/10 tevkifat', "İİK 1/4'ü haczedilir".
+# Bağlamsız özkesir atıftır ('TMK 1/2' = m.1 f.2); pay > payda ('TCK 62/1 indirim') kesir değildir.
+_KESIR_BAGLAMI = re.compile(r"(?:'?(?:u|i|si|su|unu|ini|sini|sunu)(?![a-z]))?\s(?:[a-z]+\s)?"
+                            r"(?:indiri|artiri|tevkifat|cogunlu|pay|hisse|hacz|haciz|kesinti)")
 _MADDE_DEGIL_SONRA = {
     "guclu": re.compile(r"\s?(?:" + _BELGE_DEVAMI + r")|[.,/][0-9]"),
     "madde": re.compile(r"\s?(?:" + _BELGE_DEVAMI + r"|(?:" + _FIZIKSEL + r")(?![a-z]))|[.,/][0-9]"),
     "zayif": re.compile(r"\s?(?:" + _BELGE_DEVAMI + r"|(?:" + _FIZIKSEL + "|" + _SURE_SAYIM
-                        + r")(?![a-z]))|[.,/][0-9]"),
+                        + r")(?![a-z]))|[.,/][0-9]|" + _MIKTAR_DEVAMI),
 }
 _MADDE_SOZU = re.compile(r"\s?madde")
 _KELIME = re.compile(r"[a-z0-9'][a-z0-9']*\.?")
@@ -264,6 +304,27 @@ _SAYILI_RET_ON = ("khk", "cbk", "karar", "yonetmelik", "teblig", "genelge", "tuz
                   "ozelge", "protokol", "sozlesme", "anlasma", "dosya")
 _SAYILI_RET_TAM = ("ek", "eki", "ekli", "ekte", "alt", "esas")
 _SAYILI_RET_IKI = (("kanun", "hukmunde"), ("resmi", "gazete"), ("cumhurbaskanligi", "karar"))
+# Uzun resmî başlıkta ilk sözcük bir şey söylemez ('1 sayılı Cumhurbaşkanlığı Teşkilatı Hakkında
+# Cumhurbaşkanlığı Kararnamesi'): adda 'Kanun' sözcüğü HİÇ yoksa ve bu sözcüklerden biri geçiyorsa kanun değil.
+# ('Kanun Hükmünde Kararnamenin ... Kabul Edilmesine Dair Kanun' sonda 'Kanun'u bulduğu için kanundur.)
+_SAYILI_BELGE = ("karar", "khk", "cbk", "teblig", "yonetmeli", "genelge", "tuzu", "yonerge")
+# Ad/kısaltmadan hemen önce gelince onu BUGÜNKÜ Türk kanunu olmaktan çıkaran nitelemeler: 'eski İş Kanunu'
+# (1475), 'mülga TCK' (765), 'İsviçre Borçlar Kanunu' (OR). Numaralı tanımaya uygulanmaz.
+_NITELEME = ("eski", "mulga", "onceki", "evvelki", "isvicre", "alman", "fransiz", "italyan", "avusturya")
+_SON_SOZCUK = re.compile(r"([a-z]+)[\s,]*$")
+_SON_YIL = re.compile(r"(?<![0-9])(1[89][0-9]{2}|20[0-9]{2})[\s,]*$")    # '1961 Anayasası' (1982 = bugünkü)
+# Vasıta hâlindeki kanun ('Kanunla' / "Kanun'la" / 'Kanun ile') + 'değişik | değiştirilen | eklenen ...' →
+# DEĞİŞTİREN kanun: ardından gelen madde onun değil, daha önce anılan kanunundur ('TCK'nın 6545 sayılı
+# Kanunla değişik 141. maddesi'). Tamlayan hâli ('TCK'nın değişik 141. maddesi') sahibin kendisidir.
+_DEGISIK_SOZ = r"(?:degisik|degistiril|eklen|ihdas|yapilan\sdegisiklik)"
+_VASITA_EKI = re.compile(r"'?(?:yla|yle|la|le)$")
+_DEGISIK_SONRA = re.compile(r"\s" + _DEGISIK_SOZ)
+_ILE_DEGISIK_SONRA = re.compile(r"\sile\s" + _DEGISIK_SOZ)
+# Madde sözünden HEMEN önce kanun dışı bir belge ('Yönetmeliğin 5. maddesi', "KHK'nın ek 9. maddesi",
+# 'Sözleşmenin 6. maddesi', 'teklifinin 5. maddesi') → madde o belgenindir, hiçbir kanuna bağlanmaz.
+_BELGE_MADDESI = re.compile(r"(?<![a-z0-9])(?:yonetmeli[gk]|teblig|tuzu[gk]|genelge|yonerge|karar|khk|cbk"
+                            r"|sozlesme|anlasma|protokol|sartname|aihs|teklif|tasari)[a-z']*"
+                            r"(?:\s(?:ilgili|anilan|soz konusu|ayni|bu|mezkur))?[\s,]*$")
 
 
 # ---- veri sınıfları ---------------------------------------------------------------------------
@@ -329,6 +390,8 @@ class _KanunTok:
     kaynak: str
     ipucu: str | None = None
     oncelik: int = 0                  # aynı açıklıkta: tablo/numara (0) > korpus adı (1)
+    nitelik: str | None = None        # 'eski' / 'mülga' / 'isvicre' ...: bugünkü kanun değil (atıf üretmez)
+    degistiren: bool = False          # 'N sayılı Kanunla değişik ...': sonraki maddenin sahibi değil
 
 
 @dataclass
@@ -341,6 +404,7 @@ class _MaddeTok:
     roma_tek: bool = False            # harf aynı zamanda tek harfli Roma rakamı (I, V, X)
     fikra: int | None = None          # satır içi fıkra ('/2', '/II')
     bent: str | None = None           # satır içi bent ('/2-a', '/1(ğ)')
+    belge: bool = False               # 'Yönetmeliğin 5. maddesi': kanun dışı belgenin maddesi (atıf değil)
 
 
 @dataclass
@@ -356,11 +420,18 @@ class Ayristirma:
     atiflar: list = field(default_factory=list)
     kanunlar: list = field(default_factory=list)
     kanunsuz_maddeler: list = field(default_factory=list)
+    nitelikli_maddeler: list = field(default_factory=list)   # 'eski TCK m. 141' gibi: kanunu belirsiz
+    belge_maddeleri: list = field(default_factory=list)      # 'Yönetmeliğin 5. maddesi': kanun dışı
 
     def tani(self):
         """Atıf çıkmadıysa nedenini söyle (yanıttaki açıklama için)."""
         if self.atiflar:
             return ""
+        if self.nitelikli_maddeler:
+            return ("kanun adı eski/mülga ya da yabancı nitelemeli — bugünkü kanuna eşlenmedi; kanunu "
+                    "numarasıyla yazın ('765 sayılı Kanun')")
+        if self.belge_maddeleri:
+            return "madde kanun dışı bir belgeye ait (yönetmelik, tebliğ, KHK, sözleşme ...)"
         if self.kanunlar:
             nolar = sorted({n for t in self.kanunlar for n in t.nolar})
             return f"kanun tanındı ({', '.join(nolar)}) ama madde numarası bulunamadı"
@@ -430,7 +501,7 @@ def _sayili_tokenleri(k):
         asil = [w.rstrip(".") for w, _ in kelimeler if not w.startswith("'")]
         if asil and _sayili_ret(asil):
             continue                                            # KHK, karar, liste, Resmî Gazete ...
-        son, ipucu = m.end(), []
+        son, ipucu, tasarim = m.end(), [], False
         for i, (w, w_son) in enumerate(kelimeler[:16]):
             if w[0].isdigit():                                  # madde numarası başladı → ad bitti
                 break
@@ -439,9 +510,11 @@ def _sayili_tokenleri(k):
                     son = w_son
                 continue
             if _tasarim_mi(w, sonraki(i)):
-                son = w_son
+                son, tasarim = w_son, True
                 break
             ipucu.append(w.rstrip("."))
+        if not tasarim and any(w.startswith(_SAYILI_BELGE) for w in ipucu):
+            continue                    # tam başlıklı CB kararnamesi / KHK / tebliğ: adda 'Kanun' sözcüğü yok
         out.append(_KanunTok(m.start(), son, (no,), "numara", " ".join(ipucu) or None))
     return out
 
@@ -451,22 +524,35 @@ def _kanun_tokenleri(k, sorgu, kanun_adlari):
     toklar += [_KanunTok(m.start(), m.end(), (kanun_no_norm(m.group("no")),), "numara")
                for m in _KANUN_NO.finditer(k)]
     for m in _KISA.finditer(k):
-        kisa = m.group("kisa")
+        kisa = m.group("kisa").replace(".", "")
         if kisa == "ay" and sorgu[m.start():m.start() + 2] != "AY":
             continue                                            # küçük 'ay' = süre birimi
+        if kisa == "ay" and sorgu.isupper() and not _AY_GUCLU.match(k, m.end()):
+            continue                                            # 'HER AY 1 TARİHİNDE': büyük harf sinyal değil
         toklar.append(_KanunTok(m.start(), m.end(), (_KISA_NO[kisa],), "kisaltma", _KISA_AD[kisa]))
+    ka = _AD_TIRESI.sub(" ", k)         # adlarda tire = boşluk ('Basın-İş Kanunu'); uzunluk/konum aynı
     for desen, no in _AD_DESENLERI:
-        toklar += [_KanunTok(m.start(), m.end(), (no,), "ad", m.group()) for m in desen.finditer(k)]
-    toklar += [_KanunTok(m.start(), m.end(), ("4857",), "ad", "is kanunu") for m in _IS_KANUNU.finditer(k)]
+        toklar += [_KanunTok(m.start(), m.end(), (no,), "ad", m.group()) for m in desen.finditer(ka)]
+    toklar += [_KanunTok(m.start(), m.end(), ("4857",), "ad", "is kanunu") for m in _IS_KANUNU.finditer(ka)]
     for m in _ANAYASA.finditer(k):
         if not re.match(r"\s*mahkeme", k[m.end():]):
             toklar.append(_KanunTok(m.start(), m.end(), ("2709",), "ad", "anayasa"))
     for ad, nolar in (kanun_adlari or ()):
-        i = k.find(ad)
+        i = ka.find(ad)
         while i != -1:
-            if i == 0 or not k[i - 1].isalnum():
-                toklar.append(_KanunTok(i, _ek_sonu(k, i + len(ad)), tuple(nolar), "korpus_adi", ad, 1))
-            i = k.find(ad, i + 1)
+            if i == 0 or not ka[i - 1].isalnum():
+                toklar.append(_KanunTok(i, _ek_sonu(ka, i + len(ad)), tuple(nolar), "korpus_adi", ad, 1))
+            i = ka.find(ad, i + 1)
+    for t in toklar:
+        if t.kaynak != "numara":
+            m = _SON_SOZCUK.search(k[max(0, t.bas - 24):t.bas])
+            if m and m.group(1) in _NITELEME:
+                t.nitelik = m.group(1)
+            y = _SON_YIL.search(k[max(0, t.bas - 12):t.bas]) if t.nolar == ("2709",) else None
+            if y and y.group(1) != "1982":
+                t.nitelik = y.group(1)
+        t.degistiren = bool(_ILE_DEGISIK_SONRA.match(k, t.son)
+                            or (_VASITA_EKI.search(k, t.bas, t.son) and _DEGISIK_SONRA.match(k, t.son)))
     return _sec(toklar)
 
 
@@ -476,6 +562,7 @@ def _slash_uygula(m, sorgu, tok):
     ek = m.group("ek")
     if ek is None:
         return True
+    grup = "eb1" if m.group("eb1") is not None else ("eb2" if m.group("eb2") is not None else None)
     if ek.isdigit():
         tok.fikra = int(ek)
     elif len(ek) > 1:
@@ -485,8 +572,10 @@ def _slash_uygula(m, sorgu, tok):
     else:
         tok.harf = sorgu[m.start("ek")]
         tok.roma_tek = ek in ("i", "v", "x")
-        return True                                             # harf ekinden sonraki '-1' (alt-bent) okunmaz
-    grup = "eb1" if m.group("eb1") is not None else ("eb2" if m.group("eb2") is not None else None)
+        # harf ekinden sonraki '-1' alt-bent sayılır, okunmaz ('359/a-1'); tek harfli Roma rakamından
+        # sonraki HARF ise benttir ('İş K. 25/I-b' = I. fıkra (b) bendi)
+        if not (tok.roma_tek and grup and not m.group(grup).isdigit()):
+            return True
     if grup:
         b = m.group(grup)
         tok.bent = str(int(b)) if b.isdigit() else tr_kucuk(sorgu[m.start(grup)])
@@ -518,14 +607,14 @@ def _madde_tokenleri(k, sorgu, kanunlar):
             continue
         adaylar.append(t)
     for m in _M_SONRA.finditer(k):
-        if not (m.group("ord") or m.group("harf") or m.group("ek").startswith("si")):
+        if not (m.group("ord") or m.group("ek") or m.group("mek").startswith("si")):
             continue                                            # 'N madde(de)' = sayım, atıf değil
         t = _MaddeTok(m.start(), m.end(), "asil", m.group("no"))
-        if m.group("harf"):
-            t.harf = sorgu[m.start("harf")]
-            t.roma_tek = m.group("harf") in ("i", "v", "x")
-        adaylar.append(t)
+        if _slash_uygula(m, sorgu, t):                          # '48/A maddesi', '220/6. maddesi', '4/1-a'
+            adaylar.append(t)
     secilen = [t for t in _sec(adaylar) if not _cakisir(t, kanunlar) and int(t.no) > 0]
+    for t in secilen:                   # belge maddesi atıf üretmez ama SINIR kalır: ardındaki fıkra onundur
+        t.belge = bool(_BELGE_MADDESI.search(k[max(0, t.bas - 40):t.bas]))
     # kanundan hemen sonra yalın numara: 'TCK 141', "TCK'nın 141/2", 'HMK 119/1-ğ'
     for kt in kanunlar:
         m = _M_YALIN.match(k, kt.son)
@@ -534,8 +623,11 @@ def _madde_tokenleri(k, sorgu, kanunlar):
         if _MADDE_SOZU.match(k, m.end("no")) or _madde_degil(k, m.end(), "zayif") or int(m.group("no")) == 0:
             continue
         t = _MaddeTok(m.start("no"), m.end(), "asil", m.group("no"))
-        if _slash_uygula(m, sorgu, t):
-            secilen.append(t)
+        if not _slash_uygula(m, sorgu, t):
+            continue
+        if t.fikra and int(t.no) < t.fikra and _KESIR_BAGLAMI.match(k, m.end()):
+            continue                                            # 'TCK 1/6 indirim': kesir, madde/fıkra değil
+        secilen.append(t)
     return sorted(secilen, key=lambda t: t.bas)
 
 
@@ -579,11 +671,13 @@ def _bent_tokenleri(k, sorgu):
 
 # ---- eşleştirme -------------------------------------------------------------------------------
 def _kanun_sec(kanunlar, mt):
-    """Maddeye en yakın ÖNCEKİ kanun; yoksa en yakın SONRAKİ ('141. madde TCK')."""
-    onceki = [t for t in kanunlar if t.son <= mt.bas]
+    """Maddeye en yakın ÖNCEKİ kanun; yoksa en yakın SONRAKİ ('141. madde TCK'). Değiştiren kanun
+    ('6545 sayılı Kanunla değişik') sahip sayılmaz; asıl kanun anılmamışsa madde kanunsuz kalır."""
+    adaylar = [t for t in kanunlar if not t.degistiren]
+    onceki = [t for t in adaylar if t.son <= mt.bas]
     if onceki:
         return onceki[-1]
-    return next((t for t in kanunlar if t.bas >= mt.son), None)
+    return next((t for t in adaylar if t.bas >= mt.son), None)
 
 
 def _yorumlar(mt, fikra, bent):
@@ -604,6 +698,7 @@ def ayristir(sorgu, kanun_adlari=None):
 
     kanun_adlari: ops. [(katlanmış resmî ad, (kanun_no, ...)), ...] — korpustaki adlarla tanıma
     (`AtifIndeks.kanun_adlari`). Verilmezse yalnız numara + kısaltma + ADLAR tablosu kullanılır."""
+    sorgu = " ".join(sorgu.split())     # çift boşluk / NBSP / satır sonu tek boşluk: desenler '\s?' bekler
     k = katla(sorgu)
     kanunlar = _kanun_tokenleri(k, sorgu, kanun_adlari)
     maddeler = _madde_tokenleri(k, sorgu, kanunlar)
@@ -614,11 +709,20 @@ def ayristir(sorgu, kanun_adlari=None):
     sonuc = Ayristirma(kanunlar=kanunlar)
     gorulen = set()
     for i, mt in enumerate(maddeler):
+        if mt.belge:                    # 'Yönetmeliğin 5. maddesi': hiçbir kanuna bağlanmaz
+            sonuc.belge_maddeleri.append(mt)
+            continue
         kt = _kanun_sec(kanunlar, mt)
         if kt is None:
             sonuc.kanunsuz_maddeler.append(mt)
             continue
-        sinir = min([t.bas for t in maddeler[i + 1:]] + [t.bas for t in kanunlar if t.bas >= mt.son] + [len(k)])
+        if kt.nitelik:                  # 'eski TCK m. 491': madde o (belirsiz) kanuna ait → atıf değil
+            sonuc.nitelikli_maddeler.append(mt)
+            continue
+        # fıkra/bent sınırı: sonraki madde ya da kanun (değiştiren kanun sınır değil: '141. maddesinin 6545
+        # sayılı Kanunla değişik 2. fıkrası')
+        sinir = min([t.bas for t in maddeler[i + 1:]] + [len(k)]
+                    + [t.bas for t in kanunlar if t.bas >= mt.son and not t.degistiren])
         ft = bt = None
         fikra = mt.fikra
         if fikra is None:

@@ -216,6 +216,24 @@ def test_eslesmeyen_atif_dogal_dile_duser_ve_belirtir():
     assert a["atiflar"][0]["durum"] == "madde_yok"
 
 
+@pytest.mark.parametrize("sorgu", [
+    "TCK 2-5 yıl hapis cezası",
+    "TCK 1 Haziran 2005 tarihinde yürürlüğe girdi",
+    "TCK 1/3 oranında indirim",
+    "eski TCK'nın 2. maddesi",
+])
+def test_otomatik_mod_dogal_dil_sorgusunu_ilgisiz_maddeye_kacirmaz(sorgu):
+    # TCK m.1 / m.2 korpusta VAR: ayrıştırıcı bu sorguları atıf sansa otomatik mod tek bir ilgisiz maddeyi
+    # skor 1.0 ile döndürürdü; doğal dil yanıtı eski şemada (atif anahtarı yok) gelmeli
+    korpus = ATIF_KORPUS + [_chunk("100", "5237", "1", "TÜRK CEZA KANUNU"),
+                            _chunk("100", "5237", "2", "TÜRK CEZA KANUNU")]
+    arama = SahteArama()
+    with _atif_istemci(arama, korpus=korpus) as c:
+        j = c.post("/ara", json={"sorgu": sorgu}).json()
+    assert j["config"]["mod"] == "dogal" and set(j) == {"sonuclar", "sure_ms", "config"}
+    assert len(arama.cagrilar) == 1
+
+
 def test_atif_modu_ayristirilamazsa_dogal_dile_duser():
     with _atif_istemci(SahteArama()) as c:
         j = c.post("/ara", json={"sorgu": "kira artışı", "mod": "atif"}).json()
@@ -311,6 +329,18 @@ def test_korpus_degisirse_503(tmp_path):
     ix = atif_indeks_kur(str(yol))
     yol.write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in reversed(ATIF_KORPUS)),
                    encoding="utf-8")
+    with _atif_istemci(SahteArama(), atif_fabrika=lambda: ix) as c:
+        r = c.post("/ara", json={"sorgu": "TCK m. 141"})
+    assert r.status_code == 503 and "yeniden başlatın" in r.json()["detail"]
+
+
+def test_korpus_dosyasi_silinirse_503(tmp_path):
+    import json
+    from kanun.retrieval.atif_getir import atif_indeks_kur
+    yol = tmp_path / "korpus.jsonl"
+    yol.write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in ATIF_KORPUS), encoding="utf-8")
+    ix = atif_indeks_kur(str(yol))
+    yol.unlink()                                               # FileNotFoundError 500 olarak sızmamalı
     with _atif_istemci(SahteArama(), atif_fabrika=lambda: ix) as c:
         r = c.post("/ara", json={"sorgu": "TCK m. 141"})
     assert r.status_code == 503 and "yeniden başlatın" in r.json()["detail"]

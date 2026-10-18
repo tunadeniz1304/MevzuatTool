@@ -110,6 +110,26 @@ def test_kanun_tanima(sorgu, kanun_no):
     assert a.kanun_nolari == (kanun_no,) and a.madde_no == "141"
 
 
+# İcra ve ceza pratiğinde yerleşik noktalı yazım ('İ.İ.K.', 'T.M.K.') ve kısaltmadan sonra nokta ('TMK. 166')
+# hiç tanınmıyordu → atıf sorgusu doğal dile gidiyordu.
+@pytest.mark.parametrize("sorgu, beklenen", [
+    ("İ.İ.K. m. 89", (("2004",), "89", None, None)),
+    ("İ.İ.K.'nın 89. maddesi", (("2004",), "89", None, None)),
+    ("T.M.K. m. 166", (("4721",), "166", None, None)),
+    ("T.C.K. 141. madde", (("5237",), "141", None, None)),
+    ("C.M.K. m. 231/5", (("5271",), "231", 5, None)),
+    ("H.M.K. 107", (("6100",), "107", None, None)),
+    ("TMK. 166", (("4721",), "166", None, None)),
+])
+def test_noktali_kisaltmalar_taninir(sorgu, beklenen):
+    assert _ozet(_tek(sorgu)) == beklenen
+
+
+def test_noktali_kisaltma_kimlik_numarasina_takilmaz():
+    assert atif_ayristir("T.C. Kimlik No 12345") == []
+    assert atif_ayristir("T.C.Kimlik 5. madde") == []
+
+
 def test_kanun_kaynagi_ve_ad_ipucu():
     assert _tek("5237 sayılı Kanun m. 1").kanun_kaynak == "numara"
     assert _tek("TCK m. 1").kanun_kaynak == "kisaltma"
@@ -198,6 +218,25 @@ def test_tek_harfli_roma_rakami_alternatif_uretir():
     assert _tek("TMK 166/II").alternatifler == ()             # çok harfli Roma rakamı belirsiz değil
 
 
+# 'İş K. 25/I-b' (haklı fesih atıflarının yerleşik yazımı): tek harfli Roma rakamından sonraki bent düşüyordu
+# (harf ekinden sonrası alt-bent sayılıp okunmuyordu) → yalnız fıkra ya da madde dönüyordu.
+@pytest.mark.parametrize("sorgu, birincil, alternatif", [
+    ("İş Kanunu 25/I-b", ("25/I", None, "b"), ("25", 1, "b")),
+    ("4857 sayılı Kanunun 25/I-b maddesi", ("25/I", None, "b"), ("25", 1, "b")),
+    ("İş K. m. 25/V (a)", ("25/V", None, "a"), ("25", 5, "a")),
+])
+def test_tek_harfli_roma_fikradan_sonraki_bent_okunur(sorgu, birincil, alternatif):
+    a = _tek(sorgu)
+    assert (a.madde_no, a.fikra, a.bent) == birincil
+    assert [(y.madde_no, y.fikra, y.bent, y.aciklama) for y in a.alternatifler] == [alternatif + ("roma->fikra",)]
+
+
+def test_roma_olmayan_harf_ekinden_sonrasi_alt_bent_kalir():
+    a = _tek("VUK 359/a-1")                                   # '1' alt-bent: okunmaz (bilinen sınır)
+    assert a.yorum == Yorum("asil", "359/A") and a.alternatifler == (Yorum("asil", "359", bent="a",
+                                                                           aciklama="harf->bent"),)
+
+
 def test_birden_cok_atif_sirasiyla():
     a = atif_ayristir("TCK m. 141 ve CMK m. 100")
     assert [_ozet(x) for x in a] == [(("5237",), "141", None, None), (("5271",), "100", None, None)]
@@ -210,8 +249,61 @@ def test_kanun_maddeden_sonra_gelebilir():
     assert _ozet(_tek("geçici madde 1, 6111 sayılı kanun")) == (("6111",), "Geçici 1", None, None)
 
 
+# Yargı kararlarındaki kalıp: '5237 sayılı TCK'nın 6545 sayılı Kanunla değişik 141. maddesi'. Madde en yakın
+# önceki kanuna bağlandığı için DEĞİŞTİREN kanuna (6545) gidiyordu: yanlış kanun ya da doğal dile düşüş.
+@pytest.mark.parametrize("sorgu", [
+    "TCK'nın 6545 sayılı Kanunla değişik 141. maddesi",
+    "5237 sayılı Kanunun 5560 sayılı Kanun ile değişik 141. maddesi",
+    "TCK'nın 6545 sayılı Kanun'la değiştirilen 141. maddesi",
+    "Türk Ceza Kanunu'nun 6545 sayılı Kanunla eklenen 141. maddesi",
+])
+def test_degistiren_kanun_maddenin_sahibi_sayilmaz(sorgu):
+    assert _ozet(_tek(sorgu)) == (("5237",), "141", None, None)
+
+
+def test_degistiren_kanun_fikra_ve_bent_sinirini_kesmez():
+    a = _tek("TCK'nın 141. maddesinin 6545 sayılı Kanunla değişik 2. fıkrası")
+    assert _ozet(a) == (("5237",), "141", 2, None)
+    b = _tek("KVKK'nın 11. maddesinin 7499 sayılı Kanunla değiştirilen (ç) bendi")
+    assert _ozet(b) == (("6698",), "11", None, "ç")
+
+
+def test_degistiren_kanun_kendi_maddesiyle_ve_tek_basina():
+    a = atif_ayristir("6545 sayılı Kanunun 68. maddesiyle değişik TCK'nın 141. maddesi")
+    assert [_ozet(x) for x in a] == [(("6545",), "68", None, None), (("5237",), "141", None, None)]
+    assert atif_ayristir("6545 sayılı Kanunla değişik 141. madde") == []      # asıl kanun anılmamış
+
+
+# 'N/M. maddesi', 'N/M-a maddesi' (fıkra/bent bölü işaretiyle + madde sözü) yalnız kanundan HEMEN sonra
+# (yalın numara yolu) okunuyordu; araya söz girince ('değişik', 'kapsamında') atıf kaçıyordu.
+@pytest.mark.parametrize("sorgu, beklenen", [
+    ("5237 sayılı TCK'nın 6352 sayılı Kanun ile değişik 220/6. maddesi", (("5237",), "220", 6, None)),
+    ("5510 sayılı Kanun kapsamında 4/1-a maddesi", (("5510",), "4", 1, "a")),
+    ("TCK'nın değişik 50/3. maddesi", (("5237",), "50", 3, None)),
+    ("50/3. madde TCK", (("5237",), "50", 3, None)),
+    ("İş Kanunu kapsamında 25/II-e maddesi", (("4857",), "25", 2, "e")),
+])
+def test_bolu_fikrali_madde_sozu_kanundan_uzakta_da_okunur(sorgu, beklenen):
+    assert _ozet(_tek(sorgu)) == beklenen
+
+
+def test_degisik_nitelemesi_tamlayan_kanunu_degistiren_yapmaz():
+    # yalnız vasıta hâli ('Kanunla', 'Kanun ile') değiştiren kanundur; 'TCK'nın değişik' sahibin kendisi
+    assert _ozet(_tek("TCK'nın değişik 141. maddesi")) == (("5237",), "141", None, None)
+    assert _ozet(_tek("5237 sayılı Kanunun değişik 141. maddesi")) == (("5237",), "141", None, None)
+
+
 def test_ayni_atif_tekrari_tekillesir():
     assert len(atif_ayristir("TCK m. 141 (TCK m. 141)")) == 1
+
+
+def test_ardisik_bosluklar_atifi_bozmaz():
+    # PDF / Word'den kopyalanan metinde çift boşluk ya da NBSP+boşluk olağan; desenler tek '\s?' bekliyordu
+    assert _ozet(_tek("TCK m.  141")) == (("5237",), "141", None, None)
+    assert _ozet(_tek("5237  sayılı  Kanun  m. 141")) == (("5237",), "141", None, None)
+    assert _ozet(_tek("TCK m. 141  f.  2")) == (("5237",), "141", 2, None)
+    assert atif_ayristir("Deniz  İş  Kanunu  m. 5") == []          # İş Kanunu (4857) SANILMAZ
+    assert _tek("TCK  m.  141").ham == "TCK m. 141"
 
 
 def test_tarih_madde_sonrasinda_atifi_bozmaz():
@@ -276,6 +368,167 @@ def test_konu_sozcugu_birim_sanilmaz(sorgu, madde_no):
 ])
 def test_dogal_dil_atif_sanilmaz(sorgu):
     assert atif_ayristir(sorgu) == []
+
+
+# Kanundan hemen sonraki yalın sayı bir MİKTARIN başı olabilir: tarih, aralık, kıyas, oran, yaş. Bu
+# sorgular otomatik modda ilgisiz tek bir maddeye (TCK m.1, m.2 ...) skor 1.0 ile kaçırılıyordu.
+@pytest.mark.parametrize("sorgu", [
+    "Türk Medeni Kanunu 1 Ocak 2002'de yürürlüğe girdi",
+    "TCK 1 Haziran 2005 tarihinde yürürlüğe girdi",
+    "6698 sayılı Kanun 7 Nisan 2016",
+    "TCK 2-5 yıl hapis cezası",
+    "TCK 2 ila 5 yıl hapis cezası gerektiren suçlar",
+    "TCK 3 ile 7 yıl arası",
+    "İş Kanunu 30 ila 50 işçi",
+    "İş Kanunu 30'dan fazla işçi çalıştıran işyeri",
+    "TCK 2'den fazla kişi",
+    "İş Kanunu 100 ve daha fazla işçi",
+    "İş Kanunu 30 veya daha fazla işçi",
+    "TCK 1/3 oranında indirim",
+    "İİK 1/4 oranında haciz",
+    "TCK 1/2 nispetinde artırılır",
+    "KDV Kanunu 20 oranında vergi",
+    "TMK 18 yaşındaki çocuk",
+    "TCK 15 yaşındaki çocuk cinsel istismar",
+    "TCK 3 kişiyle birlikte işlenen hırsızlık",
+    "uyuşturucu madde 10 gramdan fazla TCK",
+    "uyuşturucu madde 5 kilogram TCK",
+])
+def test_yalin_sayi_miktar_ifadesiyse_atif_sanilmaz(sorgu):
+    assert atif_ayristir(sorgu) == []
+
+
+# Aynı sınıfın ikinci dalgası: bağlamlı özkesir ('1/6 indirim' — pay < payda), kat, sıra + yapı sözcüğü
+# ('2. kitap', '3. derece'), alan birimi ('18 m2'), iş günü.
+@pytest.mark.parametrize("sorgu", [
+    "TCK 1/6 indirim",
+    "KDVK 9/10 tevkifat",
+    "TTK 2/3 çoğunlukla karar",
+    "TMK 1/4 saklı pay",
+    "İİK 1/4 maaş haczi",
+    "İİK 1/4'ü haczedilir",
+    "TCK 2 katına kadar artırılır",
+    "TCK 2. kitap",
+    "TCK'nın 2. kısmı",
+    "TMK 3. derece akraba",
+    "İmar Kanunu 18 m2",
+    "HMK 2 iş günü",
+])
+def test_yalin_sayi_kesir_kat_yapi_ve_alan_ifadesiyse_atif_sanilmaz(sorgu):
+    assert atif_ayristir(sorgu, kanun_adlari=[("imar kanunu", ("3194",))]) == []
+
+
+@pytest.mark.parametrize("sorgu, beklenen", [
+    ("TMK 1/2", ("1", 2)),                        # özkesir ama bağlam yok: m.1 f.2 (klasik atıf)
+    ("TCK 62/1 indirim", ("62", 1)),              # pay > payda: kesir değil
+    ("TMK 1/2 hâkim örf ve âdet hukukuna göre karar verir", ("1", 2)),
+])
+def test_kesir_kapisi_gercek_fikra_atfini_dusurmez(sorgu, beklenen):
+    a = _tek(sorgu)
+    assert (a.madde_no, a.fikra) == beklenen
+
+
+@pytest.mark.parametrize("sorgu, maddeler", [
+    ("TCK 141 ila 145", ["141"]),                 # birimsiz aralık madde aralığıdır (yalnız ilk uç)
+    ("TCK m. 141-145", ["141"]),
+    ("TCK 62 1/6 indirim", ["62"]),               # kesir maddeden SONRA: madde 62 kalır
+    ("TCK 141 ve 142", ["141"]),
+    ("İş Kanunu 17 ihbar süresi", ["17"]),
+])
+def test_miktar_kapisi_gercek_atifi_dusurmez(sorgu, maddeler):
+    assert [a.madde_no for a in atif_ayristir(sorgu)] == maddeler
+
+
+# 'eski/mülga/önceki' ya da yabancı ülke nitelemeli kanun adı BUGÜNKÜ Türk kanunu değildir: 'eski İş Kanunu'
+# 1475, 'eski TCK' 765, 'İsviçre Borçlar Kanunu' OR. Kısaltma/ad tablosu bunları 4857 / 5237 / 6098'e eşleyip
+# başka kanunun maddesini kesin atıf diye döndürüyordu.
+@pytest.mark.parametrize("sorgu", [
+    "eski TCK'nın 141. maddesi",
+    "mülga TCK m. 491",
+    "eski Borçlar Kanunu m. 18",
+    "mülga Borçlar Kanunu 18. madde",
+    "eski İş Kanunu'nun 14. maddesi",
+    "önceki Türk Ticaret Kanunu m. 18",
+    "İsviçre Borçlar Kanunu m. 41",
+    "Alman Medeni Kanunu m. 1",
+    "ESKİ TCK M. 141",
+])
+def test_nitelemeli_kanun_adi_guncel_kanuna_eslenmez(sorgu):
+    assert atif_ayristir(sorgu) == []
+
+
+def test_yil_nitelemeli_eski_anayasa_guncel_anayasaya_eslenmez():
+    assert atif_ayristir("1961 Anayasası m. 5") == []
+    assert atif_ayristir("1924 Anayasası'nın 5. maddesi") == []
+    assert _ozet(_tek("1982 Anayasası m. 5")) == (("2709",), "5", None, None)
+
+
+def test_nitelemeli_korpus_adi_ve_numarali_yazim():
+    adlar = [("imar kanunu", ("3194",))]
+    assert atif_ayristir("eski İmar Kanunu m. 18", kanun_adlari=adlar) == []
+    assert _ozet(_tek("765 sayılı eski TCK m. 491")) == (("765",), "491", None, None)   # numara açık
+    assert _ozet(_tek("yeni TCK m. 141")) == (("5237",), "141", None, None)
+    # eski kanunun maddesi sonraki (güncel) kanuna da bağlanmaz
+    assert [_ozet(a) for a in atif_ayristir("eski TCK m. 491 ve TCK m. 142")] == [(("5237",), "142", None, None)]
+    assert "numarasıyla" in ayristir("eski TCK m. 141").tani()
+
+
+# Madde sözünden hemen önce kanun DIŞI bir belge (yönetmelik, tebliğ, KHK, sözleşme ...) geliyorsa madde o
+# belgenindir; sorgunun başka yerindeki kanuna bağlanıp o kanunun maddesi diye dönüyordu.
+@pytest.mark.parametrize("sorgu", [
+    "Yıllık Ücretli İzin Yönetmeliği'nin 5. maddesi İş Kanunu",
+    "İş Kanunu'na dayanılarak çıkarılan yönetmeliğin 5. maddesi",
+    "657 sayılı DMK ve 375 sayılı KHK'nın ek 9. maddesi",
+    "TCK ve Avrupa İnsan Hakları Sözleşmesi'nin 6. maddesi",
+    "KDVK ve KDV Genel Uygulama Tebliğinin 3. maddesi",
+    "Anayasa değişikliği teklifinin 5. maddesi",
+])
+def test_baska_belgenin_maddesi_kanuna_baglanmaz(sorgu):
+    assert atif_ayristir(sorgu) == []
+
+
+# 'N sayılı' + TAM başlık: yalnız ilk sözcüğe bakan ret listesi ('KHK', 'Cumhurbaşkanlığı Kararnamesi')
+# uzun resmî başlıkları kaçırıyordu → CB kararnamesi / KHK / tebliğ numarası kanun numarası sanılıyordu.
+@pytest.mark.parametrize("sorgu", [
+    "1 sayılı Cumhurbaşkanlığı Teşkilatı Hakkında Cumhurbaşkanlığı Kararnamesi uyarınca 5. madde",
+    "696 sayılı Olağanüstü Hal Kapsamında Bazı Düzenlemeler Yapılması Hakkında Kanun Hükmünde Kararname "
+    "uyarınca 3. madde",
+    "5 sayılı Genel Tebliğ kapsamında 3. madde",
+])
+def test_sayili_tam_baslikli_kanun_disi_belge_kanun_sayilmaz(sorgu):
+    assert atif_ayristir(sorgu) == []
+
+
+def test_kararname_onaylayan_kanun_kanundur():
+    a = _tek("7071 sayılı Olağanüstü Hal Kapsamında Bazı Düzenlemeler Yapılması Hakkında Kanun Hükmünde "
+             "Kararnamenin Değiştirilerek Kabul Edilmesine Dair Kanun'un 3. maddesi")
+    assert (a.kanun_nolari, a.madde_no) == (("7071",), "3")
+
+
+@pytest.mark.parametrize("sorgu", [
+    "Yönetmeliğin ilgili 5. maddesi ve İş Kanunu",
+    "Tebliğin söz konusu 3. maddesi ile KDVK",
+    "anılan Yönetmeliğin anılan 7. maddesi TCK",
+])
+def test_belge_ile_madde_arasindaki_niteleyici_baglantiyi_kesmez(sorgu):
+    assert atif_ayristir(sorgu) == []
+
+
+def test_belge_sozu_maddeden_sonra_gelirse_atif_kalir():
+    assert _ozet(_tek("TCK'nın 5. maddesi ve yönetmelik")) == (("5237",), "5", None, None)
+
+
+def test_belge_maddesinin_fikra_ve_bendi_onceki_kanun_maddesine_gecmez():
+    assert _ozet(_tek("TCK m. 141 ve Yönetmeliğin 5. maddesinin 2. fıkrası")) == (("5237",), "141", None, None)
+    assert _ozet(_tek("TCK m. 141 ile Tebliğin 3. maddesi (a) bendi")) == (("5237",), "141", None, None)
+    assert "kanun dışı" in ayristir("Yönetmeliğin 5. maddesi").tani()
+
+
+def test_tumu_buyuk_harfli_sorguda_ay_yalniz_guclu_bicimle_anayasa():
+    # 'AY' Anayasa'dır kuralı büyük harfe dayanır; tümü büyük harfli sorguda bu sinyal yoktur
+    assert atif_ayristir("HER AY 1 TARİHİNDE KİRA ÖDENİR") == []
+    assert _ozet(_tek("AY M. 10")) == (("2709",), "10", None, None)
+    assert _ozet(_tek("AY 10'a göre eşitlik")) == (("2709",), "10", None, None)
 
 
 def test_tani_neden_atif_olmadigini_soyler():
@@ -542,6 +795,12 @@ def test_roma_fikra(indeks):
     assert c.yorum.aciklama == "roma->fikra" and c.eslesmeler[0].alt_parca.fikra == "(1)"
 
 
+def test_roma_fikra_alternatifi_benti_de_getirir(indeks):
+    c = _coz("KVKK 11/I-b", indeks)                           # 11/I harfli maddesi yok → (1) fıkra (b) bendi
+    assert c.yorum.aciklama == "roma->fikra"
+    assert (c.eslesmeler[0].alt_parca.fikra, c.eslesmeler[0].alt_parca.bent) == ("(1)", "b)")
+
+
 def test_tek_harf_roma_harfli_madde_varsa_harfli_kazanir(indeks):
     c = _coz("7000 sayılı Kanun m. 5/I", indeks)
     assert _idler(c) == ["810-5I"] and c.yorum.aciklama is None
@@ -561,6 +820,24 @@ def test_korpus_adiyla_cozum(indeks):
     assert _idler(_coz("İmar Kanunu 32. madde", indeks)) == ["950-32"]
     assert _idler(_coz("Deniz İş Kanunu m. 5", indeks)) == ["951-5"]       # İş Kanunu (952) değil
     assert _idler(_coz("İş Kanunu m. 5", indeks)) == ["952-5"]
+
+
+def test_basin_is_kanunu_5953_is_kanunu_sayilmaz(indeks):
+    # 'Basın İş Kanunu' = 5953 sayılı Kanun (resmî adı 'Basın Mesleğinde Çalışanlarla ...'); korpus adı
+    # 'İŞ KANUNU' (4857) içinde geçtiği için korpus adı yolunda 4857 sanılıyordu
+    for kw in ({}, {"kanun_adlari": indeks.kanun_adlari}):
+        assert _tek("Basın İş Kanunu m. 5", **kw).kanun_nolari == ("5953",)
+        assert _tek("Basın İş Kanunu'nun 6. maddesi", **kw).kanun_nolari == ("5953",)
+    assert _coz("Basın İş Kanunu m. 5", indeks).durum == "kanun_yok"       # 952-5 (İş K.) DÖNMEZ
+
+
+def test_tireli_deniz_is_ve_basin_is_kanunu_is_kanunu_sayilmaz(indeks):
+    # 'Basın-İş' / 'Deniz-İş' yaygın tireli yazım: 'deniz ' / 'basin ' dışlaması ve uzun ad eşleşmesi kaçıyordu
+    adlar = indeks.kanun_adlari
+    assert _tek("Basın-İş Kanunu m. 5").kanun_nolari == ("5953",)
+    assert _tek("Basın-İş Kanunu m. 5", kanun_adlari=adlar).kanun_nolari == ("5953",)
+    assert atif_ayristir("Deniz-İş Kanunu m. 5") == []                      # korpus adı yokken tanınmaz
+    assert _tek("Deniz-İş Kanunu m. 5", kanun_adlari=adlar).kanun_nolari == ("854",)
 
 
 # ---- dosya ofsetli indeks (servis yolu) --------------------------------------------------------
@@ -589,6 +866,15 @@ def test_dosya_degisirse_korpus_degisti(tmp_path):
     ix = atif_indeks_kur(str(yol))
     _korpus_yaz(yol, list(reversed(KORPUS)))                   # ofsetler artık başka satırları gösterir
     with pytest.raises(KorpusDegisti):
+        ix.chunk(ix.bul("5237", "asil", "141")[0])
+
+
+def test_dosya_okunamazsa_korpus_degisti(tmp_path):
+    yol = tmp_path / "korpus.jsonl"
+    _korpus_yaz(yol, KORPUS)
+    ix = atif_indeks_kur(str(yol))
+    yol.unlink()                                                # servis açıkken taşındı / silindi
+    with pytest.raises(KorpusDegisti, match="yeniden başlatın"):
         ix.chunk(ix.bul("5237", "asil", "141")[0])
 
 

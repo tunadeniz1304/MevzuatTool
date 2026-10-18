@@ -44,7 +44,8 @@ MULGA = "mülga"
 
 
 class KorpusDegisti(RuntimeError):
-    """İndeks kurulduktan sonra korpus dosyası değişmiş (ofsetler geçersiz) — servisi yeniden başlatın."""
+    """İndeks kurulduktan sonra korpus dosyası değişmiş (ofsetler geçersiz) ya da okunamıyor (taşındı /
+    silindi) — servisi yeniden başlatın."""
 
 
 # ---- indeks -----------------------------------------------------------------------------------
@@ -110,9 +111,13 @@ class AtifIndeks:
         """Kaydın tam korpus satırı (metin + metadata.fikralar). Dosyadan ofsetle okunur, id doğrulanır."""
         if kayit.chunk is not None:
             return kayit.chunk
-        with open(self.korpus_yol, "rb") as f:
-            f.seek(kayit.ofset)
-            satir = f.readline()
+        try:
+            with open(self.korpus_yol, "rb") as f:
+                f.seek(kayit.ofset)
+                satir = f.readline()
+        except OSError as e:                                    # taşındı / silindi: 500 değil, 503
+            raise KorpusDegisti(f"{self.korpus_yol} okunamadı ({e.__class__.__name__}) — korpus indeks "
+                                "kurulduktan sonra taşınmış/silinmiş; servisi yeniden başlatın") from e
         try:
             r = json.loads(satir)
         except ValueError:
