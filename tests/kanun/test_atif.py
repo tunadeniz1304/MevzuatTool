@@ -630,6 +630,15 @@ def test_korpus_adiyla_cozum(indeks):
     assert _idler(_coz("İş Kanunu m. 5", indeks)) == ["952-5"]
 
 
+def test_basin_is_kanunu_5953_is_kanunu_sayilmaz(indeks):
+    # 'Basın İş Kanunu' = 5953 sayılı Kanun (resmî adı 'Basın Mesleğinde Çalışanlarla ...'); korpus adı
+    # 'İŞ KANUNU' (4857) içinde geçtiği için korpus adı yolunda 4857 sanılıyordu
+    for kw in ({}, {"kanun_adlari": indeks.kanun_adlari}):
+        assert _tek("Basın İş Kanunu m. 5", **kw).kanun_nolari == ("5953",)
+        assert _tek("Basın İş Kanunu'nun 6. maddesi", **kw).kanun_nolari == ("5953",)
+    assert _coz("Basın İş Kanunu m. 5", indeks).durum == "kanun_yok"       # 952-5 (İş K.) DÖNMEZ
+
+
 # ---- dosya ofsetli indeks (servis yolu) --------------------------------------------------------
 def _korpus_yaz(yol, satirlar):
     with open(yol, "w", encoding="utf-8", newline="\n") as f:

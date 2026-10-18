@@ -33,7 +33,8 @@ ATIF = KANUN + MADDE (ikisi birden şart). Yalnız kanun ('5237 sayılı Kanun')
   - 'NNNN sayılı' ardından KHK / Cumhurbaşkanlığı Kararnamesi / karar / yönetmelik / tebliğ / liste /
     cetvel / Resmî Gazete gelirse kanun değildir ('375 sayılı KHK', '2023/15 sayılı karar').
   - 'Anayasa Mahkemesi', 'anayasal' kanun sayılmaz; 'AY' yalnız büyük harfle yazılmışsa Anayasa'dır
-    ('ay' = ay/süre). 'İş K.' 'iş kazası'nda tetiklenmez; 'Deniz/Basın İş Kanunu' İş Kanunu sayılmaz.
+    ('ay' = ay/süre). 'İş K.' 'iş kazası'nda tetiklenmez; 'Deniz İş Kanunu' (854) ve 'Basın İş Kanunu'
+    (5953) İş Kanunu (4857) sayılmaz.
   - 'eski/mülga/önceki' ya da yabancı ülke ('İsviçre', 'Alman' ...) nitelemeli ad/kısaltma bugünkü kanun
     değildir ('eski İş Kanunu' 1475'tir, 4857 değil; 'İsviçre Borçlar Kanunu' 6098 değil) → atıf çıkmaz,
     maddesi başka kanuna da bağlanmaz (`_NITELEME`). Numarayla yazım geçerlidir ('765 sayılı eski TCK').
@@ -184,6 +185,9 @@ ADLAR = (
     (("devlet", "memurlari"), "657"),
     (("kisisel", "verilerin", "korunmasi"), "6698"),
     (("idari", "yargilama", "usulu"), "2577"),
+    # resmî adı 'Basın Mesleğinde Çalışanlarla Çalıştıranlar ... Hakkında Kanun'; korpus adı 'İŞ KANUNU'
+    # (4857) bu yaygın adın içinde geçer → burada olmasa korpus adı yolu 4857'ye eşlerdi
+    (("basin", "is"), "5953"),
 )
 
 _ROMA = {"i": 1, "ii": 2, "iii": 3, "iv": 4, "v": 5, "vi": 6, "vii": 7, "viii": 8, "ix": 9, "x": 10,
