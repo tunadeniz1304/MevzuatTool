@@ -222,6 +222,7 @@ def _istemci(arama):
 # =================================================================================================
 def _senaryo(seed, eski_index=False):
     """Rastgele, ÇAKIŞMASIZ korpus (her kanun_no tek kanun, kanunda her madde_no tek) + bacak skorları.
+    Noktaların bir kısmının Qdrant payload'ında kanun_ad boştur (ad korpustan tamamlanır).
 
     eski_index: Qdrant index'i korpusun gerisinde (status.md açık konu 7) — noktaların bir kısmı eski id
     taşır ('MID-5' yerine 'MID-5-1'), bir kısmı korpusta artık yoktur (silinmiş '99', aynı madde no'lu sahte
@@ -235,7 +236,8 @@ def _senaryo(seed, eski_index=False):
                          for no in [str(j) for j in range(1, rnd.randint(3, 9))] + ["Geçici 1", "Ek 2", "12/A"]])
     kanunlar[0][0]["metadata"]["yurutluk"] = YUR               # BM25 index'i boş kalmasın
     korpus = [r for kanun in kanunlar for r in kanun]
-    noktalar = [_qdrant_payload(r) for r in korpus]
+    noktalar = [dict(_qdrant_payload(r), kanun_ad="") if rnd.random() < 0.2 else _qdrant_payload(r)
+                for r in korpus]
     if eski_index:
         # nokta başına (iki bacakta aynı payload): id'si embed anındaki halinde kalanlar ...
         noktalar = [dict(pl, madde_id=pl["madde_id"] + "-1") if rnd.random() < 0.3 else pl for pl in noktalar]
@@ -312,7 +314,7 @@ def test_cakisma_yokken_eski_davranisla_birebir(tmp_path, seed, eski_index):
         for k, _ in y_sirali:                                   # payload aynı; anahtar = korpus kimliği
             pl, e_pl = y_payload[k], e_payload[_cift(y_payload, k)]
             assert pl["madde_id"] == e_pl["madde_id"] and k == kimlik(pl["madde_id"], pl["madde_no"])
-            if e_pl.get("kanun_ad"):                            # eski sentetik BM25-only payload'ı hariç
+            if "yurutluk" in e_pl:                              # eski sentetik BM25-only payload'ı hariç
                 assert pl == e_pl
 
         sinirlar = _sinirlar(y_sirali) or [1]
@@ -412,6 +414,13 @@ def test_ara_cakisan_kanunlarda_metin_ve_kanun_adi_dogru_maddeden(tmp_path):
     assert sonuc == {"400-5": ("6551", MAHALLI, "5", R["400-5"]["text"]),
                      "401-5": ("6551", ENERJI, "5", R["401-5"]["text"]),
                      "100-141": ("5237", TCK, "141", R["100-141"]["text"])}
+
+
+def test_qdrant_payloadinda_bos_kanun_adi_kendi_maddesinin_korpus_adiyla_dolar(tmp_path):
+    # eski kod adı (kanun_no, madde_no) haritasından alıyordu → 400-5'e korpusta son gelen ENERJİ adı düşerdi
+    bos_ad = [(dict(_qdrant_payload(R[cid]), kanun_ad=""), skor) for cid, skor in (("400-5", 0.9), ("401-5", 0.8))]
+    arama = _yeni(tmp_path, CAKISMA, dense=bos_ad)
+    assert {s.madde_id: s.kanun_ad for s in arama.ara("soru")} == {"400-5": MAHALLI, "401-5": ENERJI}
 
 
 def test_bm25_only_adayin_payloadi_korpustan_gercek_alanlar(tmp_path):
